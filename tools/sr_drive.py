@@ -58,28 +58,40 @@ def scripted(ser):
         print(f"{'ok  ' if ok else 'FAIL'} {key:5s} expected '{expect}' got: {out.replace(chr(10), ' | ')}")
     ser.write(b"\x03"); read_for(ser, 0.5)
     print(f"{failures} failures")
-    return failures
+    return 1 if failures else 0
 
 
 def interactive(ser):
     print(start_watch(ser), end="")
     fd = sys.stdin.fileno()
     old = termios.tcgetattr(fd)
+    pending = b""
     try:
         tty.setcbreak(fd)
         while True:
             r, _, _ = select.select([fd, ser.fileno()], [], [], 0.05)
             if fd in r:
                 data = os.read(fd, 8)
-                if data == b"\x03":
-                    ser.write(b"\x03"); break
+                if b"\x03" in data:
+                    break
                 ser.write(data)
             if ser.fileno() in r or ser.in_waiting:
                 chunk = ser.read(ser.in_waiting or 1)
                 if chunk:
-                    sys.stdout.write(ANSI.sub(b"", chunk).decode(errors="replace")); sys.stdout.flush()
+                    pending += chunk
+                    # Hold back an unfinished escape sequence so it is never printed half stripped.
+                    cut = pending.rfind(b"\x1b")
+                    if cut != -1 and not ANSI.search(pending[cut:]):
+                        ready, pending = pending[:cut], pending[cut:]
+                    else:
+                        ready, pending = pending, b""
+                    sys.stdout.write(ANSI.sub(b"", ready).decode(errors="replace"))
+                    sys.stdout.flush()
+    except KeyboardInterrupt:
+        pass
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    ser.write(b"\x03")
     print(read_for(ser, 0.5))
 
 
