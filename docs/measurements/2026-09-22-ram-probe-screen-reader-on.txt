@@ -1,0 +1,24 @@
+port /dev/cu.usbmodemflip_R0skie1
+rebooting for a clean baseline
+Desktop idle: free before 106328, lowest sampled 106328, low-water mark 106256 -> 105808, after exit 106352, samples 65, app was running: False
+  note: loader said: Application "/ext/apps/Sub-GHz/subghz.fap" not found
+Sub-GHz: Read: free before 106336, lowest sampled 100144, low-water mark 105808 -> 100048, after exit 100224, samples 100, app was running: False
+  note: loader said: Application "/ext/apps/Sub-GHz/subghz.fap" not found
+Sub-GHz: Frequency Analyzer: free before 100216, lowest sampled 111760, low-water mark 100048 -> 98168, after exit 100080, samples 100, app was running: True
+NFC: Read: free before 100088, lowest sampled 37520, low-water mark 98168 -> 36968, after exit 108520, samples 91, app was running: True
+125 kHz RFID: Read: free before 100000, lowest sampled 94152, low-water mark 36968 -> 36968, after exit 123528, samples 90, app was running: True
+Infrared: Learn New Remote: free before 103024, lowest sampled 58072, low-water mark 36968 -> 36968, after exit 106744, samples 97, app was running: True
+Infrared: Universal Remotes, first category: free before 99848, lowest sampled 47976, low-water mark 36968 -> 36968, after exit 107528, samples 87, app was running: True
+iButton: Read: free before 99864, lowest sampled 101096, low-water mark 36968 -> 36968, after exit 113648, samples 97, app was running: True
+GPIO: Manual Control: free before 99752, lowest sampled 111872, low-water mark 36968 -> 36968, after exit 99840, samples 67, app was running: True
+Bad KB (file browser): free before 99872, lowest sampled 97752, low-water mark 36968 -> 36968, after exit 122704, samples 84, app was running: True
+Momentum settings, first section: free before 99904, lowest sampled 95472, low-water mark 36968 -> 36968, after exit 103784, samples 66, app was running: True
+Text to SAM (keyboard screen): free before 99848, lowest sampled 102360, low-water mark 36968 -> 36968, after exit 108544, samples 50, app was running: True
+TOTP (large app): free before 99856, lowest sampled 79176, low-water mark 36968 -> 36968, after exit 108296, samples 67, app was running: True
+  note: loader said: Preload failed, /ext/apps/Tools/upython.fap: Not enough memory
+uPython (largest app, expected to fail to load): free before 99792, lowest sampled 98072, low-water mark 36968 -> 36968, after exit 99696, samples 67, app was running: False
+Doom (game): free before 99736, lowest sampled 94424, low-water mark 36968 -> 36968, after exit 122640, samples 50, app was running: True
+
+Total heap 189632 bytes. Global low-water mark after all apps: 36968 bytes free.
+Lowest sampled free heap: 37520 bytes during 'NFC: Read'.
+probe exit 0
