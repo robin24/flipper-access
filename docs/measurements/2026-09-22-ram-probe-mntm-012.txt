@@ -1,0 +1,24 @@
+port /dev/cu.usbmodemflip_R0skie1
+rebooting for a clean baseline
+Desktop idle: free before 142480, lowest sampled 142480, low-water mark 142408 -> 141952, after exit 142480, samples 65, app was running: False
+Sub-GHz: Read: free before 142480, lowest sampled 83752, low-water mark 141952 -> 83664, after exit 142280, samples 77, app was running: True
+Sub-GHz: Frequency Analyzer: free before 142280, lowest sampled 81784, low-water mark 83664 -> 81256, after exit 142208, samples 97, app was running: True
+NFC: Read: free before 142200, lowest sampled 50696, low-water mark 81192 -> 50616, after exit 142112, samples 94, app was running: True
+125 kHz RFID: Read: free before 142112, lowest sampled 107440, low-water mark 50616 -> 50616, after exit 142016, samples 95, app was running: True
+Infrared: Learn New Remote: free before 142000, lowest sampled 71400, low-water mark 50616 -> 50616, after exit 141968, samples 99, app was running: True
+Infrared: Universal Remotes, first category: free before 141928, lowest sampled 61376, low-water mark 50616 -> 50616, after exit 141968, samples 91, app was running: True
+iButton: Read: free before 141952, lowest sampled 114360, low-water mark 50616 -> 50616, after exit 141944, samples 100, app was running: True
+GPIO: Manual Control: free before 141936, lowest sampled 125152, low-water mark 50616 -> 50616, after exit 141928, samples 66, app was running: True
+Bad KB (file browser): free before 141920, lowest sampled 110872, low-water mark 50616 -> 50616, after exit 141920, samples 83, app was running: True
+Momentum settings, first section: free before 141912, lowest sampled 108608, low-water mark 50616 -> 50616, after exit 141912, samples 66, app was running: True
+Text to SAM (keyboard screen): free before 141880, lowest sampled 115504, low-water mark 50616 -> 50616, after exit 141928, samples 50, app was running: True
+TOTP (large app): free before 141928, lowest sampled 96904, low-water mark 50616 -> 50616, after exit 141584, samples 66, app was running: True
+  note: app did not exit, continuing
+uPython (largest app, expected to fail to load): free before 141584, lowest sampled 38904, low-water mark 50616 -> 10504, after exit 38904, samples 67, app was running: True
+  note: loader said: Loader is locked, please close the "uPython" first
+  note: app did not exit, continuing
+Doom (game): free before 38904, lowest sampled 38888, low-water mark 10504 -> 10504, after exit 38888, samples 66, app was running: True
+
+Total heap 189648 bytes. Global low-water mark after all apps: 10504 bytes free.
+Lowest sampled free heap: 38888 bytes during 'Doom (game)'.
+probe exit 0

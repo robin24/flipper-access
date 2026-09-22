@@ -1,7 +1,6 @@
 # Flipper Zero screen reader for Momentum firmware: design
 
-Date: 2026-09-22. Status: approved in conversation, pending the RAM headroom measurement
-(section 11). Author: Claude, for Robin.
+Date: 2026-09-22. Status: approved by Robin on 2026-09-22, memory measurements in section 11. Author: Claude, for Robin.
 
 ## 1. Goal and scope
 
@@ -277,7 +276,29 @@ Estimated heap: service thread 2 KB, speech thread 2 KB, three frame buffers 9 K
 memory in the image. Estimated flash: about 40 KB of the 205 KB unused. The measured headroom
 of core apps is recorded here once the RAM probe (tools/ram_probe.py) has completed:
 
-- Measurement pending (see section 15).
+Measured on 2026-09-22 with tools/ram_probe.py on Momentum mntm-012, total heap 189648 bytes,
+raw log in docs/measurements/2026-09-22-ram-probe-mntm-012.txt. Free heap at the lowest point
+while each app was in its busy state:
+
+- Home screen idle: 142 KB on this boot; 116 KB on another boot with a larger animation.
+- NFC read: 51 KB. The heaviest core app by far.
+- Infrared universal remote (first category loaded): 61 KB.
+- Infrared learn: 71 KB.
+- Sub-GHz frequency analyzer: 81 KB. Sub-GHz read: 84 KB.
+- TOTP: 97 KB. RFID read: 107 KB. Momentum settings: 109 KB. Bad KB file browser: 111 KB.
+  iButton read: 114 KB. Text to SAM: 116 KB. GPIO manual control: 125 KB.
+- uPython: 10 KB. It sizes its interpreter heap to whatever is free, so it will simply get
+  less with the reader present; it is not a core feature.
+
+Conclusion: with the reader's estimated 19 KB of heap plus 4 KB of static memory, NFC read mode
+still keeps about 27 KB free, and every other core app keeps 37 KB or more. The home screen
+animation variance of about 26 KB is the largest single uncertainty, so the reader must stay
+within its budget and must not allocate on the fly while an app runs. All of the reader's
+buffers are allocated once at service start.
+
+Two firmware behaviours discovered during the probe, both avoided by the design: sending the
+loader's exit signal to the NFC app in read mode crashes and reboots the device, and uPython
+cannot be closed from the console at all, only by a reboot. The reader never sends exit signals.
 
 ## 12. Failure handling
 
@@ -316,8 +337,8 @@ of core apps is recorded here once the RAM probe (tools/ram_probe.py) has comple
 
 ## 15. Open items
 
-- RAM headroom numbers from the probe; the first run crashed the NFC app when the loader's
-  exit signal was sent during read mode, and a second run left the console unresponsive. Both
-  are recorded as findings about the firmware, not the design.
+- The second probe run left the console unresponsive at some point after the NFC crash; the
+  third run completed without it, so the cause was not identified. If it recurs, the emergency
+  reboot is Left and Back held for five seconds.
 - Whether Text to SAM stays as a separate app once lib/sam exists (likely yes, it can link the
   library).
