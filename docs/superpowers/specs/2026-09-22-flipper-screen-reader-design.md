@@ -1,6 +1,6 @@
 # Flipper Zero screen reader for Momentum firmware: design
 
-Date: 2026-09-22. Status: approved by Robin on 2026-09-22, memory measurements in section 11. Author: Claude, for Robin.
+Date: 2026-09-22. Status: approved by Robin on 2026-09-22; phase 1 implemented and reviewed on 2026-09-22 (see section 16 for the deviations made during implementation). Author: Claude, for Robin.
 
 ## 1. Goal and scope
 
@@ -342,3 +342,38 @@ cannot be closed from the console at all, only by a reboot. The reader never sen
   reboot is Left and Back held for five seconds.
 - Whether Text to SAM stays as a separate app once lib/sam exists (likely yes, it can link the
   library).
+
+## 16. Phase 1 as built: deliberate deviations from the sections above
+
+Recorded after the final review so that later phases build on what exists rather than on the
+original text.
+
+- Capture buffer: 32 records of 48 characters per frame (section 4 said 40). Rows are limited to
+  16 per screen with 64 characters each. Overflow is flagged and read as "and more".
+- Rows join by baseline only when the records agree on being focused or not, so a selected key
+  on the on screen keyboard is its own row. Buttons never join other records.
+- Screen change rule: fewer than half of the previous rows, ignoring roles and the status bar,
+  remain; plus layer, content and title changes. A list scrolling by one row is not a screen
+  change. Frames on the home screen never count as a screen change against a previous home
+  screen frame: bubble text arrives as a rate limited, non interrupting change, and "Home
+  screen" is announced only when arriving from another layer.
+- Buttons carry a side hint set by the three dialog button helpers; the x position rule remains
+  only as a fallback for third party drawing. The bottom row threshold for that fallback is
+  y 61.
+- The file browser's parent entry ". ." reads as "Parent folder"; rows made only of dashes are
+  loading placeholders and are dropped.
+- Focus hints exist in the submenu, settings list, file browser, Archive browser, button menu,
+  text input keyboard and the List style of the main menu. Other main menu styles are read by
+  inversion where possible and get hints in a later phase.
+- Latency: frames settle for 50 ms, with a 300 ms cap when frames keep coming.
+- Console: `sr watch` replaces the announcement ring of section 6 with a queue attached by the
+  watching command; Tab prints the whole screen description; a bare Escape is ignored and
+  unknown control sequences are consumed.
+- The full text hint set by the ellipsis helper is accepted only when the drawn string ends
+  with an ellipsis.
+- Test tooling lives in the project repository: tests/host and tools/run_host_tests.sh for the
+  model, tools/sr_drive.py for scripted and interactive device driving.
+- Known residuals, carried to phase 3: a home screen transition inside 1.5 s of a spontaneous
+  change without a key press can be dropped; desktop layer popups whose only new text is a
+  button label are silent; moving between keyboard rows is announced with kind "screen"
+  instead of "focus" with identical text.
