@@ -53,6 +53,13 @@ static void frame_init(SrFrame* f, uint8_t content_layer) {
     f->content_layer = content_layer;
 }
 
+/** An inverted secondary string that the dialog helpers marked as a button: 1 left, 2 center,
+ * 3 right. */
+static void add_button(SrFrame* f, int x, int y, uint8_t side, const char* text) {
+    add(f, x, y, SrLayerWindow, SrFontSecondary, true, false, 0, 0, text);
+    f->records[f->count - 1].button = side;
+}
+
 static void test_normalize(void) {
     char out[SR_TEXT_MAX];
     sr_normalize("  Hello   World ", out, sizeof(out));
@@ -204,6 +211,7 @@ static void test_focus_move_announces_focus_only(void) {
     size_t n = sr_model_process(&m, &f2, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 1);
     CHECK(out[0].kind == SrAnnFocus);
+    CHECK(out[0].interrupt);
     CHECK_STR(out[0].text, "NFC");
     // identical frame again: silence
     n = sr_model_process(&m, &f2, 1500, false, out, SR_MAX_ANNOUNCEMENTS);
@@ -218,6 +226,8 @@ static void test_verbose_focus_includes_position(void) {
     sr_model_process(&m, &f1, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
     SrFrame f2 = menu_frame("125 kHz RFID", "NFC", "Infrared");
     sr_model_process(&m, &f2, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(out[0].kind == SrAnnFocus);
+    CHECK(out[0].interrupt);
     CHECK_STR(out[0].text, "NFC, 2 of 9");
 }
 
@@ -279,30 +289,57 @@ static void test_spontaneous_changes_are_rate_limited(void) {
     CHECK(n == 1);
 }
 
-static SrFrame keyboard_frame(const char* typed) {
+/** One keyboard row as text_input draws it: the keys before the selected one, the selected key
+ * inverted with a focus hint, and the keys after it, all on the same baseline. */
+static SrFrame keyboard_frame(const char* typed, char selected) {
     SrFrame f;
     frame_init(&f, SrLayerFullscreen);
     add(&f, 2, 8, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Name");
     if(typed[0]) add(&f, 4, 22, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, typed);
-    add(&f, 1, 40, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "qwertyuiop");
-    add(&f, 20, 52, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, "s");
+    add(&f, 1, 40, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "q");
+    char key[2] = {selected, '\0'};
+    add(&f, 8, 40, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, key);
+    add(&f, 15, 40, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "ertyuiop");
     return f;
+}
+
+static void test_keyboard_focus_is_the_single_key(void) {
+    SrFrame f1 = keyboard_frame("", 'w');
+    SrScreen s;
+    sr_screen_build(&f1, &s);
+    char focus[SR_ANN_TEXT_MAX];
+    sr_screen_focus_text(&s, focus, sizeof(focus));
+    CHECK_STR(focus, "w");
+
+    SrModel m;
+    sr_model_init(&m, 1);
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_process(&m, &f1, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    SrFrame f2 = keyboard_frame("", 'e');
+    size_t n = sr_model_process(&m, &f2, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnFocus);
+    CHECK(out[0].interrupt);
+    CHECK_STR(out[0].text, "e");
 }
 
 static void test_typing_announces_the_character(void) {
     SrModel m;
     sr_model_init(&m, 1);
     SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
-    SrFrame f1 = keyboard_frame("ab");
+    SrFrame f1 = keyboard_frame("ab", 's');
     sr_model_process(&m, &f1, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
-    SrFrame f2 = keyboard_frame("abs");
+    SrFrame f2 = keyboard_frame("abs", 's');
     size_t n = sr_model_process(&m, &f2, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 1);
     CHECK(out[0].kind == SrAnnTyped);
+    CHECK(out[0].interrupt);
     CHECK_STR(out[0].text, "s");
-    SrFrame f3 = keyboard_frame("ab");
+    SrFrame f3 = keyboard_frame("ab", 's');
     n = sr_model_process(&m, &f3, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnTyped);
+    CHECK(out[0].interrupt);
     CHECK_STR(out[0].text, "deleted");
 }
 
@@ -322,9 +359,100 @@ static void test_home_screen_and_loading(void) {
     n = sr_model_process(&m, &home, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 1);
     CHECK(out[0].kind == SrAnnHome);
+    CHECK(out[0].interrupt);
     CHECK_STR(out[0].text, "Home screen");
     n = sr_model_process(&m, &home, 1300, false, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 0);
+}
+
+static void test_desktop_bubbles_do_not_reannounce_the_screen(void) {
+    SrModel m;
+    sr_model_init(&m, 1);
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame home;
+    frame_init(&home, SrLayerDesktop);
+    add(&home, 100, 8, SrLayerStatusRight, SrFontPrimary, false, false, 0, 0, "12:34");
+    size_t n = sr_model_process(&m, &home, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnHome);
+
+    // A speech bubble appears: a quiet change, not a new screen.
+    SrFrame bubble = home;
+    add(&bubble, 60, 20, SrLayerDesktop, SrFontSecondary, false, false, 0, 0, "I am happy");
+    n = sr_model_process(&m, &bubble, 3000, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnChange);
+    CHECK(!out[0].interrupt);
+    CHECK_STR(out[0].text, "I am happy");
+
+    // It vanishes again: nothing to say.
+    n = sr_model_process(&m, &home, 5000, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 0);
+
+    // Coming back from another screen does announce the home screen.
+    SrFrame menu;
+    frame_init(&menu, SrLayerFullscreen);
+    add(&menu, 22, 36, SrLayerFullscreen, SrFontPrimary, false, true, 2, 9, "NFC");
+    n = sr_model_process(&m, &menu, 6000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnScreen);
+    n = sr_model_process(&m, &home, 7000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnHome);
+    CHECK(out[0].interrupt);
+}
+
+static void test_last_list_row_is_not_a_button(void) {
+    SrFrame f;
+    SrScreen s;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 6, 60, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "Extra Actions");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK(s.rows[0].kind == SrRowFocus);
+    frame_init(&f, SrLayerWindow);
+    add(&f, 6, 61, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "Save");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK(s.rows[0].kind == SrRowButton);
+}
+
+static void test_button_side_comes_from_the_hint(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+
+    frame_init(&f, SrLayerWindow);
+    add_button(&f, 70, 61, 3, "Delete");
+    sr_screen_build(&f, &s);
+    CHECK(s.rows[0].kind == SrRowButton);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "buttons: right Delete");
+
+    frame_init(&f, SrLayerWindow);
+    add_button(&f, 64, 61, 2, "Continue");
+    sr_screen_build(&f, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "buttons: center Continue");
+
+    // No hint: the old geometric rule still applies, for third party apps.
+    frame_init(&f, SrLayerWindow);
+    add(&f, 100, 62, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "OK");
+    sr_screen_build(&f, &s);
+    CHECK(s.rows[0].kind == SrRowButton);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "buttons: right OK");
+}
+
+static void test_parent_folder_and_loading_rows(void) {
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 15, 24, SrLayerWindow, SrFontSecondary, false, false, 0, 0, ". .");
+    add(&f, 15, 36, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "---");
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK_STR(s.rows[0].text, "Parent folder");
 }
 
 static void test_overflow_is_mentioned(void) {
@@ -352,8 +480,13 @@ int main(void) {
     test_new_screen_announces_title_and_focus();
     test_dialog_without_focus_reads_everything();
     test_spontaneous_changes_are_rate_limited();
+    test_keyboard_focus_is_the_single_key();
     test_typing_announces_the_character();
     test_home_screen_and_loading();
+    test_desktop_bubbles_do_not_reannounce_the_screen();
+    test_last_list_row_is_not_a_button();
+    test_button_side_comes_from_the_hint();
+    test_parent_folder_and_loading_rows();
     test_overflow_is_mentioned();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;

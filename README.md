@@ -59,6 +59,9 @@ Screen reader console commands (firmware from the `screen-reader` branch):
 
 `sr watch` is interactive; use `tools/sr_drive.py --interactive`.
 
+Phase 1 marks the focused main menu item only in the List style; other menu styles are read by
+inversion where possible and will get hints in a later phase.
+
 ## Rolling back to official firmware
 
     .venv/bin/python Momentum-Firmware/scripts/selfupdate.py -p /dev/cu.usbmodemflip_R0skie1 firmware-packages/official-1.4.3/f7-update-1.4.3/update.fuf
