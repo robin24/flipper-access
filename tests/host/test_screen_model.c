@@ -97,10 +97,77 @@ static void test_status_rows_kept_apart(void) {
     CHECK(!s.has_content);
 }
 
+static void test_focus_by_hint_and_position(void) {
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 4, 24, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Settings");
+    add(&f, 6, 40, SrLayerWindow, SrFontSecondary, true, true, 3, 12, "Bluetooth");
+    add(&f, 6, 56, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Storage");
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    CHECK(s.title_row == 0);
+    CHECK(s.rows[1].kind == SrRowFocus);
+    CHECK(s.rows[1].index == 3 && s.rows[1].count == 12);
+    char focus[SR_ANN_TEXT_MAX];
+    sr_screen_focus_text(&s, focus, sizeof(focus));
+    CHECK_STR(focus, "Bluetooth");
+    char text[SR_ANN_TEXT_MAX];
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Settings. Storage. Bluetooth, 3 of 12");
+}
+
+static void test_focus_by_inversion_and_buttons(void) {
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 6, 30, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "Read");
+    add(&f, 6, 46, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Saved");
+    add(&f, 10, 62, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "Cancel");
+    add(&f, 100, 62, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "OK");
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 4);
+    CHECK(s.rows[0].kind == SrRowFocus);
+    CHECK(s.rows[2].kind == SrRowButton);
+    CHECK(s.rows[3].kind == SrRowButton);
+    CHECK(s.title_row == -1);
+    char text[SR_ANN_TEXT_MAX];
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Saved. Read. buttons: left Cancel, right OK");
+}
+
+static void test_primary_font_low_on_screen_is_not_title(void) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 20, 40, SrLayerFullscreen, SrFontPrimary, false, false, 0, 0, "Wrong PIN!");
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    CHECK(s.title_row == -1);
+    char text[SR_ANN_TEXT_MAX];
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Wrong PIN!");
+}
+
+static void test_describe_with_center_button_and_no_focus(void) {
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 64, 20, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Delete file?");
+    add(&f, 64, 34, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "key.sub");
+    add(&f, 60, 62, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "Delete");
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    char text[SR_ANN_TEXT_MAX];
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Delete file?. key.sub. buttons: center Delete");
+}
+
 int main(void) {
     test_normalize();
     test_rows_join_and_sort();
     test_status_rows_kept_apart();
+    test_focus_by_hint_and_position();
+    test_focus_by_inversion_and_buttons();
+    test_primary_font_low_on_screen_is_not_title();
+    test_describe_with_center_button_and_no_focus();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
