@@ -29,6 +29,11 @@ and the tools in this folder. Last updated 2026-09-22.
 - `firmware-packages/`: Momentum mntm-012 and official 1.4.3 update packages.
 - `backups/backup-stock-1.4.3.tar`: internal storage backup taken on official 1.4.3 before the
   Momentum install (settings, dolphin state, region data).
+- `tools/sr_drive.py`: scripted check of the screen reader console stream, and with
+  `--interactive` a tethered screen reader: arrows, Enter, Backspace drive the device, Tab
+  reads the screen, letters type into text fields, Ctrl-C ends.
+- `tools/run_host_tests.sh`: unit tests for the screen model, run with clang on the Mac.
+- `tests/host/`: the unit tests.
 
 ## Useful commands
 
@@ -46,6 +51,14 @@ Backspace is Back, Space before a key sends it as a real button press instead of
 Ctrl-C leaves keyboard mode. Single presses without a session:
 `tools/flipper_cli.py "input send ok short"`.
 
+Screen reader console commands (firmware from the `screen-reader` branch):
+
+    .venv/bin/python tools/flipper_cli.py "sr on"
+    .venv/bin/python tools/flipper_cli.py "sr screen"
+    .venv/bin/python tools/flipper_cli.py "sr status"
+
+`sr watch` is interactive; use `tools/sr_drive.py --interactive`.
+
 ## Rolling back to official firmware
 
     .venv/bin/python Momentum-Firmware/scripts/selfupdate.py -p /dev/cu.usbmodemflip_R0skie1 firmware-packages/official-1.4.3/f7-update-1.4.3/update.fuf
@@ -59,6 +72,6 @@ sending the backup file to the card.
 1. Done: terminal access, backup, Momentum install.
 2. Done: CLI explored, helper tools written.
 3. Done: source build environment set up, first app built and running.
-4. In progress: speech demo. Robin judges intelligibility and loudness of SAM on the piezo.
-5. Next: spec and build the screen-text capture hook with a CLI mirror, then the on-device
-   speech service.
+4. Done: speech demo; SAM default voice judged intelligible.
+5. Done: phase 1 of the screen reader: text capture, screen model, console mirror.
+6. Next: phase 2, on device speech (SAM in the firmware with DMA playback).
