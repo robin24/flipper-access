@@ -160,6 +160,19 @@ static void test_describe_with_center_button_and_no_focus(void) {
     CHECK_STR(text, "Delete file?. key.sub. buttons: center Delete");
 }
 
+static void test_describe_mentions_overflow(void) {
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 6, 40, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Read");
+    f.overflow = true;
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    char text[SR_ANN_TEXT_MAX];
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Read, and more");
+    CHECK(s.overflow);
+}
+
 int main(void) {
     test_normalize();
     test_rows_join_and_sort();
@@ -168,6 +181,7 @@ int main(void) {
     test_focus_by_inversion_and_buttons();
     test_primary_font_low_on_screen_is_not_title();
     test_describe_with_center_button_and_no_focus();
+    test_describe_mentions_overflow();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
