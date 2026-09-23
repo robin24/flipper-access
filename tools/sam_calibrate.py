@@ -56,7 +56,8 @@ def wait_no_app(ser, timeout=30.0):
 def demo_ms(ser, sentence):
     run(ser, "storage remove " + TIMING, 5)
     run(ser, 'loader open ' + DEMO + ' ' + sentence, 30)
-    wait_no_app(ser)
+    if not wait_no_app(ser):
+        raise SystemExit("the Text to SAM demo did not finish within 30 s; leave it with a Back press")
     out = run(ser, "storage read " + TIMING, 5)
     m = re.search(r"ms=(\d+)", out)
     if not m: raise SystemExit("demo timing missing; is the instrumented Text to SAM on the card?\n" + out)
@@ -93,11 +94,14 @@ def main():
     verify = "--verify" in sys.argv
     with serial.Serial(PORT, 230400, timeout=0.1) as ser:
         ser.write(b"\r"); time.sleep(0.4); ser.read(ser.in_waiting)
-        was_on = "enabled: yes" in run(ser, "sr status", 5)
+        status = run(ser, "sr status", 5)
+        speech_counters(status)  # fail fast when the device or the speech firmware is missing
+        was_on = "enabled: yes" in status
         run(ser, "sr off", 5)
         estimates = []
         raws = []
-        for sentence in SENTENCES:
+        try:
+          for sentence in SENTENCES:
             d = demo_ms(ser, sentence)
             played, subsamples, nominal = engine(ser, sentence)
             if verify:
@@ -111,7 +115,9 @@ def main():
                 overhead_ns = (d - nominal) * 1_000_000 / subsamples
                 print(f"demo {d} ms, nominal {nominal} ms, subsamples {subsamples}, overhead {overhead_ns:.0f} ns per value: {sentence[:40]}...")
                 estimates.append(overhead_ns)
-        if was_on: run(ser, "sr on", 5)
+        finally:
+          # the reader's enabled state is saved to the settings file, so restore it on every exit
+          if was_on: run(ser, "sr on", 5)
         if verify:
             worst = max(estimates)
             worst_raw = max(raws)
