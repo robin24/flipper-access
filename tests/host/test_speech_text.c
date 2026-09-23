@@ -222,7 +222,7 @@ static void test_rule5_digits_then_letters(void) {
     expect("1K", "one K");
 }
 
-// Rule 6: words up to six digits without a leading zero, digits otherwise, "point" for decimals.
+// Rule 6: words up to four digits without a leading zero, digits otherwise, "point" for decimals.
 static void test_rule6_numbers(void) {
     expect("19", "nineteen");
     expect("20", "twenty");
@@ -230,12 +230,16 @@ static void test_rule6_numbers(void) {
     expect("110", "one hundred ten");
     expect("1010", "one thousand ten");
     expect("1100", "one thousand one hundred");
-    expect("10000", "ten thousand");
-    expect("100000", "one hundred thousand");
-    expect("123456", "one hundred twenty three thousand four hundred fifty six");
-    expect("999999", "nine hundred ninety nine thousand nine hundred ninety nine");
+    expect("9999", "nine thousand nine hundred ninety nine");
+    expect("10000", "one zero zero zero zero");
+    expect("14443", "one four four four three");
+    expect("65535", "six five five three five");
+    expect("100000", "one zero zero zero zero zero");
+    expect("123456", "one two three four five six");
+    expect("999999", "nine nine nine nine nine nine");
+    expect("433920000", "four three three nine two zero zero zero zero");
     expect("1000000", "one zero zero zero zero zero zero");
-    expect("Use kHz values, like 433920", "Use kilohertz values, like four hundred thirty three thousand nine hundred twenty");
+    expect("Use kHz values, like 433920", "Use kilohertz values, like four three three nine two zero");
     expect("0.5", "zero point five");
     expect("3.14159", "three point one four one five nine");
     expect("10.0", "ten point zero");
@@ -243,6 +247,7 @@ static void test_rule6_numbers(void) {
     expect("007", "zero zero seven");
     expect("01.5", "zero one point five");
     expect("1234567.89", "one two three four five six seven point eight nine");
+    expect("12345.6", "one two three four five point six");
 }
 
 // Rule 7: upper case letters and digits, two or more with a letter, outside the stop list, are
@@ -489,7 +494,7 @@ static void test_rule11_minus(void) {
     expect("TX power -10dBm", "T X power minus ten dee bee em");
     expect("-", "dash");
     expect("- 90", "ninety");
-    expect("Ch-3", "Ch dash three");
+    expect("Ch-3", "Ch three");
     expect("(-5)", "minus five");
     expect("-0.5", "minus zero point five");
     expect("-5-3", "minus five to three");
@@ -497,8 +502,9 @@ static void test_rule11_minus(void) {
     expect("RSSI: -70", "R S S I, minus seventy");
 }
 
-// Rule 12: a hyphen with a digit on at least one side is "to" when it is the only hyphen of a
-// token made of digit runs and "dash" otherwise; hyphens between letters keep rule 4.
+// Rule 12: a hyphen with a digit on at least one side: "to" as the only hyphen between two digit
+// runs of the same length, a space between a digit run and two or more letters, "dash"
+// otherwise; hyphens between letters keep rule 4.
 static void test_rule12_ranges(void) {
     expect(
         "378-481, 749-962 MHz",
@@ -508,11 +514,26 @@ static void test_rule12_ranges(void) {
     expect("1-2", "one to two");
     expect("1-2-3", "one dash two dash three");
     expect("a-1-2", "a dash one dash two");
-    expect("20-MHz", "twenty dash megahertz");
+    expect("20-MHz", "twenty megahertz");
+    expect("14443-3", "one four four four three dash three");
+    expect("1-10", "one dash ten");
+    expect("100-99", "one hundred dash ninety nine");
+    expect("4-bytes", "four bytes");
+    expect("1-Day", "one Day");
+    expect("NFC-A 4-bytes UID", "N F C ay four bytes U I D");
+    expect("A-1", "ay dash one");
+    expect("100-200-A", "one hundred dash two hundred dash ay");
+    expect("ab-12", "ab twelve");
+    expect("a-12", "a dash twelve");
+    expect("1-A2", "one dash ay two");
+    expect("4-bytes-A", "four bytes ay");
     expect("ISO14443-3A", "I S O one four four four three dash three ay");
     expect(
         "Tech: ISO 14443-3A (NFC-A)",
-        "Tech, I S O fourteen thousand four hundred forty three dash three ay N F C ay");
+        "Tech, I S O one four four four three dash three ay N F C ay");
+    expect(
+        "Tech: ISO 14443-3 (NFC-A)",
+        "Tech, I S O one four four four three dash three N F C ay");
     expect("NFC-A", "N F C ay");
     expect("10-20%", "ten to twenty percent");
     expect("on-the-fly", "on the fly");
@@ -550,8 +571,27 @@ static void test_text_buffer(void) {
     size_t n = speech_text_expand(in, out, sizeof(out));
     CHECK(n == strlen(out));
     CHECK(strcmp(out, want) == 0);
-    CHECK(n > 400); // the previous 400 byte buffer would have cut this text
+    CHECK(n > 400); // a 400 byte buffer would have cut this text
     CHECK(n > strlen("three D") && strcmp(out + n - strlen("three D"), "three D") == 0);
+
+    // A dump of two digit pairs is the heaviest screen, about 4.7 times its length.
+    static const char* const digit_pairs[8] = {"77", "78", "87", "88", "33", "99", "66", "44"};
+    static const char* const digit_words[8] = {
+        "seventy seven", "seventy eight", "eighty seven", "eighty eight", "thirty three",
+        "ninety nine", "sixty six", "forty four"};
+    strcpy(in, "UID:");
+    strcpy(want, "U I D,");
+    for(int k = 0; k < 52; k++) {
+        strcat(in, " ");
+        strcat(in, digit_pairs[k % 8]);
+        strcat(want, " ");
+        strcat(want, digit_words[k % 8]);
+    }
+    CHECK(strlen(in) == 160);
+    n = speech_text_expand(in, out, sizeof(out));
+    CHECK(n == strlen(out));
+    CHECK(strcmp(out, want) == 0);
+    CHECK(n > 640); // a 640 byte buffer would have cut this text
 }
 
 // Behaviour the rule list does not decide. These pin what the code does today so a change is
