@@ -91,12 +91,14 @@ class Conn:
         self.ser.close()
 
 def exit_app(conn):
-    """Leave the current app the way a person would: Back presses, then the exit signal."""
-    for _ in range(8):
+    """Leave the current app the way a person would: Back presses only. The loader's exit
+    signal (loader close) crashes NFC in read mode and cannot close uPython, so it is never sent;
+    an app that survives twelve Back presses is reported and left alone."""
+    for _ in range(12):
         if "No application" in conn.run("loader info", 5): return True
         conn.run("input send back short", 5); time.sleep(0.35)
-    conn.run("loader close", 5); time.sleep(0.8)
-    return "No application" in conn.run("loader info", 5)
+    print("  warning: the app did not leave after twelve Back presses; not sending loader close")
+    return False
 
 def main():
     if not PORT: sys.exit("no Flipper port")
