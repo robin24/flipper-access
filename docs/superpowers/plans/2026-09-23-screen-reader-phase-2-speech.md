@@ -526,7 +526,7 @@ Rules the code implements (SAM's own behaviour was measured: isolated letters ar
 5. A token that starts with digits and continues with letters is split into the digits and the rest (125kHz reads as the number then kilohertz).
 6. A token of digits, optionally followed by a period and more digits, is a number. Up to six digits without a leading zero are spoken as words (zero, one .. nineteen, twenty .. ninety, hundred, thousand, no "and"); otherwise each digit is spoken as its word. The decimal part is "point" followed by its digits one by one.
 7. A token made only of upper case letters and digits, two to five characters long, containing at least one letter, that is not in the stop list, is spelled: characters separated by spaces, A written as "ay", digits written as digit characters. Stop list (upper case words that are real words): ON OFF NO YES NEW ADD ALL SET RUN SAVE SEND READ EXIT BACK MENU INFO TEST FILE EDIT OPEN LOCK DEMO HOLD PLAY STOP TIME DATE MODE AUTO EASY NONE MAX MIN RAW WARN FAIL DONE LOW HIGH FULL START RESET CLEAR ENTER EMPTY RETRY MORE FREE UP DOWN LEFT RIGHT HOME AND OR NOT THE GO BAD KEY CARD TAG APP APPS TAB SUB WAIT SCAN SKIP NEXT PREV ERROR OKAY LOAD COPY MOVE NAME TYPE SIZE PAGE LIST VIEW ZERO TEXT SAM.
-8. Any other token is copied unchanged.
+8. Any other token is copied unchanged, except that a token longer than 20 characters is written as pieces of at most 20 characters separated by spaces (the original synthesizer loops forever on words of about 30 letters).
 9. Between tokens: period, comma, question mark and exclamation mark are attached to the previous word (SAM pauses on them); a colon becomes a comma unless it sits between two digits, where it becomes a space; slash becomes the word "slash", percent "percent", ampersand "and", plus "plus", equals "equals", hash "number", at "at", star "star"; underscore, whitespace, quotes, brackets, bars, angle brackets and every byte outside printable ASCII become a single space. Runs of spaces collapse, leading and trailing spaces are dropped.
 10. Chunking: from the current position, skip spaces; if the rest fits in the limit take it all; otherwise cut at the last sentence end (period, question mark or exclamation mark followed by a space) within the limit, else at the last comma followed by a space, else at the last space, else hard at the limit. Trailing spaces are trimmed; the returned length is 0 when nothing is left.
 
@@ -592,6 +592,7 @@ static void test_acronyms_and_terms(void) {
     expect("Text to SAM", "Text to SAM");
     expect("MNTM", "momentum");
     expect("A", "ay");
+    expect("Supercalifragilisticexpialidocious", "Supercalifragilisti cexpialidocious");
 }
 
 static void test_punctuation(void) {
@@ -922,11 +923,16 @@ static void process_plain(Out* o, const char* s, size_t n) {
         spell(o, s, n);
         return;
     }
-    char word[64];
-    size_t m = n < sizeof(word) - 1 ? n : sizeof(word) - 1;
-    memcpy(word, s, m);
-    word[m] = '\0';
-    out_word(o, word);
+    // Pieces of at most 20 characters: the synthesizer never returns on very long words
+    while(n > 0) {
+        char word[21];
+        size_t m = n < 20 ? n : 20;
+        memcpy(word, s, m);
+        word[m] = '\0';
+        out_word(o, word);
+        s += m;
+        n -= m;
+    }
 }
 
 static void process_token(Out* o, const char* s, size_t n) {
@@ -1824,7 +1830,7 @@ struct Speech {
     uint32_t generation;
     uint8_t lut_volume;
     char expanded[SPEECH_TEXT_MAX];
-    char chunk[SPEECH_CHUNK_MAX + 1];
+    char chunk[SPEECH_CHUNK_MAX + 2]; /* room for an appended period */
 };
 
 static void speech_lock(Speech* speech) {
@@ -1997,6 +2003,12 @@ static void speech_speak_item(Speech* speech, const SpeechItem* item) {
           speech_text_next_chunk(speech->expanded, &pos, speech->chunk, sizeof(speech->chunk))) {
         for(char* p = speech->chunk; *p; p++) {
             if(*p >= 'a' && *p <= 'z') *p = (char)(*p - 'a' + 'A');
+        }
+        // The synthesizer reads past a table when text ends without punctuation
+        size_t len = strlen(speech->chunk);
+        if(len > 0 && len < sizeof(speech->chunk) - 1 && strchr(".?!,", speech->chunk[len - 1]) == NULL) {
+            speech->chunk[len] = '.';
+            speech->chunk[len + 1] = '\0';
         }
         sam_speak(speech->chunk, &voice, speech_sam_output, speech);
     }
