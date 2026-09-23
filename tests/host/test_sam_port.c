@@ -49,6 +49,7 @@ static const char hard_symbols[] =
     "&J-\"o41\361\\B(d ,Ew yi\262@   R";
 static char hard_spaced_letters[SAM_MAX_INPUT + 1]; // "A B C ...", filled in main
 static char hard_x_run[129 + 1]; // "x" 129 times, filled in main: the phoneme string wraps
+static char hard_x_run_jj[126 + 2 + 1]; // "x" 126 times then "jj", filled in main
 
 // The port's own output for one hard case, pinned as a regression golden
 typedef struct {
@@ -165,6 +166,8 @@ int main(void) {
         hard_spaced_letters[i] = (i % 2) ? ' ' : (char)('A' + (i / 2) % 26);
     }
     memset(hard_x_run, 'x', sizeof(hard_x_run) - 1);
+    memset(hard_x_run_jj, 'x', 126);
+    memcpy(hard_x_run_jj + 126, "jj", 2);
     static const PinnedCase hard_cases[] = {
         {"UUUUUUUUU.", true, 89640, 0xe31a564bb6cc1e55ULL},
         {"OOOOOOOOOOOOOOOOOOO.", true, 83880, 0x3a99ec69c3e44e29ULL},
@@ -178,6 +181,8 @@ int main(void) {
         {hard_english, true, 298920, 0x8d85843def1a1735ULL},
         {hard_spaced_letters, true, 248240, 0xd9e8d3f4bf5260aaULL},
         {hard_symbols, true, 576920, 0x67e5d6ca551b78fbULL},
+        // Pins Insert's guard for slot 255: the list is full when Parser2's J rule inserts at 254 + 1
+        {hard_x_run_jj, true, 807200, 0xf84d1359d5e6545eULL},
         {hard_x_run, false, 0, 0x14650fb0739d0383ULL},
         {"1234567890123456789012345678901234567890", false, 0, 0x14650fb0739d0383ULL},
     };
