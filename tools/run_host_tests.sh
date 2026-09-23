@@ -19,7 +19,11 @@ clang++ -std=c++17 -O1 -w -I "$TESTS/sam_ref" -I "$SAM_ORIG" -o "$OUT/sam_refere
 clang "${CFLAGS[@]}" -I "$SRC/sam" -I "$TESTS" -o "$OUT/test_sam_port" \
   "$TESTS/test_sam_port.c" "$SRC/sam/sam.c" -lm
 "$OUT/sam_reference" > "$OUT/sam_reference.txt"
-"$OUT/test_sam_port" > "$OUT/sam_port.txt"
+if ! "$OUT/test_sam_port" > "$OUT/sam_port.txt"; then
+  cat "$OUT/sam_port.txt"
+  echo "SAM port checks failed"
+  exit 1
+fi
 if ! diff <(grep '^case' "$OUT/sam_reference.txt") <(grep '^case' "$OUT/sam_port.txt"); then
   echo "SAM port output differs from the original synthesizer"
   exit 1
