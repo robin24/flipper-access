@@ -19,8 +19,12 @@ clang++ -std=c++17 -O1 -w -I "$TESTS/sam_ref" -I "$SAM_ORIG" -o "$OUT/sam_refere
 clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
   -I "$SRC/sam" -I "$TESTS" -o "$OUT/test_sam_port" \
   "$TESTS/test_sam_port.c" "$SRC/sam/sam.c" -lm
-"$OUT/sam_reference" > "$OUT/sam_reference.txt"
-if ! "$OUT/test_sam_port" > "$OUT/sam_port.txt"; then
+# perl's alarm ends a hung run after 120 seconds (macOS has no timeout command)
+if ! perl -e 'alarm 120; exec @ARGV' "$OUT/sam_reference" > "$OUT/sam_reference.txt"; then
+  echo "SAM reference failed or hung"
+  exit 1
+fi
+if ! perl -e 'alarm 120; exec @ARGV' "$OUT/test_sam_port" > "$OUT/sam_port.txt"; then
   cat "$OUT/sam_port.txt"
   echo "SAM port checks failed"
   exit 1

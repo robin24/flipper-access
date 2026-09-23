@@ -48,6 +48,15 @@ static const char hard_symbols[] =
     "A \"w ~&N+yVuP\247Z3-UL:aOHdl Z9|{X_:lmR[&OJbUYf*NW Y\\2l{%3'$. l\"t!J\?d-_H mgQo%D{"
     "&J-\"o41\361\\B(d ,Ew yi\262@   R";
 static char hard_spaced_letters[SAM_MAX_INPUT + 1]; // "A B C ...", filled in main
+static char hard_x_run[129 + 1]; // "x" 129 times, filled in main: the phoneme string wraps
+
+// The port's own output for one hard case, pinned as a regression golden
+typedef struct {
+    const char* text;
+    bool ok;
+    unsigned long long n;
+    unsigned long long hash;
+} PinnedCase;
 _Static_assert(sizeof(hard_english) - 1 == SAM_MAX_INPUT, "hard_english is SAM_MAX_INPUT long");
 _Static_assert(sizeof(hard_symbols) - 1 == SAM_MAX_INPUT, "hard_symbols is SAM_MAX_INPUT long");
 
@@ -149,29 +158,45 @@ int main(void) {
     }
 
     // Texts the original synthesizer never returns from, or overruns its tables or output arrays
-    // on; the port must finish and produce sound
+    // on. There is no original output to compare with, so these are the port's own outputs, pinned
+    // from the build that added each case. Regenerate them deliberately when a guard changes, never
+    // just to make a failure go away. The last two wrap the phoneme buffer and are refused.
     for(size_t i = 0; i < SAM_MAX_INPUT; i++) {
         hard_spaced_letters[i] = (i % 2) ? ' ' : (char)('A' + (i / 2) % 26);
     }
-    static const char* const hard_cases[] = {
-        "UUUUUUUUU.",
-        "OOOOOOOOOOOOOOOOOOO.",
-        "XXXXXXXXXXXXXXXXXXX.",
-        "ANTIDISESTABLISHMENTARIANISM.",
-        "SUPERCALIFRAGILISTICEXPIALIDOCIOUS.",
-        "READ",
-        "CAT",
-        "IT IS LATE",
-        "SAVED. READ",
-        hard_english,
-        hard_spaced_letters,
-        hard_symbols,
+    memset(hard_x_run, 'x', sizeof(hard_x_run) - 1);
+    static const PinnedCase hard_cases[] = {
+        {"UUUUUUUUU.", true, 89640, 0xe31a564bb6cc1e55ULL},
+        {"OOOOOOOOOOOOOOOOOOO.", true, 83880, 0x3a99ec69c3e44e29ULL},
+        {"XXXXXXXXXXXXXXXXXXX.", true, 242640, 0x0a2251e0dd9f566aULL},
+        {"ANTIDISESTABLISHMENTARIANISM.", true, 110440, 0xc6e3f180b05e3caeULL},
+        {"SUPERCALIFRAGILISTICEXPIALIDOCIOUS.", true, 159520, 0x685c264c47bb4290ULL},
+        {"READ", true, 9000, 0x15df2da4f503655fULL},
+        {"CAT", true, 9640, 0x60b82dab09a24ca1ULL},
+        {"IT IS LATE", true, 23680, 0x5a76a836d7da1f59ULL},
+        {"SAVED. READ", true, 45240, 0x42240c442b1a92e9ULL},
+        {hard_english, true, 298920, 0x8d85843def1a1735ULL},
+        {hard_spaced_letters, true, 248240, 0xd9e8d3f4bf5260aaULL},
+        {hard_symbols, true, 576920, 0x67e5d6ca551b78fbULL},
+        {hard_x_run, false, 0, 0x14650fb0739d0383ULL},
+        {"1234567890123456789012345678901234567890", false, 0, 0x14650fb0739d0383ULL},
     };
     for(size_t i = 0; i < sizeof(hard_cases) / sizeof(hard_cases[0]); i++) {
+        const PinnedCase* c = &hard_cases[i];
         n_values = 0;
-        bool ok = sam_speak(hard_cases[i], &voice, record, NULL, NULL);
-        if(!ok || n_values == 0) {
-            printf("FAIL hard case %zu: ok=%d values=%llu\n", i, ok, n_values);
+        sum_f = 0;
+        hash = 1469598103934665603ULL;
+        bool ok = sam_speak(c->text, &voice, record, NULL, NULL);
+        if(ok != c->ok || n_values != c->n || hash != c->hash) {
+            printf(
+                "FAIL hard case %zu: ok=%d n=%llu hash=%016llx, pinned ok=%d n=%llu hash=%016llx\n",
+                i,
+                ok,
+                n_values,
+                hash,
+                c->ok,
+                c->n,
+                c->hash);
             failures++;
         }
     }
