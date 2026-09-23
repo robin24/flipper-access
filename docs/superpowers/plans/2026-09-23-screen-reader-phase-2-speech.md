@@ -22,7 +22,7 @@
 - DMA: DMA2 channel 4, DMAMUX request `LL_DMAMUX_REQ_TIM16_UP`, circular, memory byte to peripheral half word into `TIM16->CCR1`, half and complete interrupts, `FuriHalInterruptIdDma2Ch4` registered only while playing. Ring buffer 4096 bytes in two halves of 2048 (41 ms each).
 - Speaker: acquired only by the speech worker thread, never while `furi_hal_bus_is_enabled(FuriHalBusTIM16)` reports the timer in use elsewhere (the NFC tag emulation path borrows TIM16), released after 200 ms without speech. Utterances that cannot get the speaker are dropped and counted.
 - Memory: everything allocated once at service start; the phase 2 additions may use at most 13 KB of heap plus the synthesizer's static tables. Speech worker: 3 KB stack, `FuriThreadPriorityHigh`.
-- Pronunciation output is ASCII, SAM receives chunks of at most 100 characters, upper cased.
+- Pronunciation output is ASCII, SAM receives chunks of at most 80 characters, upper cased. The reciter inside SAM drops everything after a word boundary once its phoneme string passes 120 characters (ordinary English expands about 1.25 times, spelled letters about twice); `sam_speak` reports how many input characters it used, and the worker speaks the rest with further calls, so no words are lost.
 - Commit messages end with a blank line and `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`. Do not push.
 
 ---
@@ -85,7 +85,7 @@ extern "C" {
 #endif
 
 /** Longest text sam_speak accepts, in characters. */
-#define SAM_MAX_INPUT 254
+#define SAM_MAX_INPUT 250
 
 typedef struct {
     uint8_t pitch; /**< 64 by default; smaller values give a higher voice */
@@ -105,10 +105,20 @@ typedef struct {
 typedef bool (*SamOutputCallback)(const uint8_t values[5], uint16_t delta, void* context);
 
 /**
- * Render text. Returns true when the whole text was rendered; false when the text was empty,
+ * Render text. Returns true when the text was rendered; false when the text was empty,
  * longer than SAM_MAX_INPUT, could not be converted to phonemes, or the callback aborted.
+ * `consumed` (may be NULL) receives the number of characters of `text` that were rendered:
+ * the whole length normally, less when the reciter ran out of room at a word boundary
+ * (its phoneme string holds 120 characters); call again with `text + consumed` for the rest.
+ * The port carries guards, marked "port guard", against the original's endless loops and
+ * table over-reads; all other arithmetic is the original's.
  */
-bool sam_speak(const char* text, const SamVoice* voice, SamOutputCallback callback, void* context);
+bool sam_speak(
+    const char* text,
+    const SamVoice* voice,
+    SamOutputCallback callback,
+    void* context,
+    size_t* consumed);
 
 #ifdef __cplusplus
 }
@@ -309,7 +319,7 @@ static unsigned long long run_case(const SamCase* c) {
     sum_f = 0;
     hash = 1469598103934665603ULL;
     SamVoice voice = {c->pitch, c->speed, c->mouth, c->throat};
-    sam_speak(c->text, &voice, record, NULL);
+    sam_speak(c->text, &voice, record, NULL, NULL);
     return hash;
 }
 
@@ -323,7 +333,7 @@ int main(void) {
     // Aborting stops rendering at the callback that said so
     SamVoice voice = SAM_VOICE_DEFAULT;
     abort_calls = 0;
-    bool completed = sam_speak(sam_cases[0].text, &voice, abort_after_1000, NULL);
+    bool completed = sam_speak(sam_cases[0].text, &voice, abort_after_1000, NULL, NULL);
     if(completed || abort_calls != 1000) {
         printf("FAIL abort: completed=%d calls=%u\n", completed, abort_calls);
         failures++;
@@ -332,7 +342,7 @@ int main(void) {
     // An aborted call leaves no trace: the next call renders exactly as a fresh one
     unsigned long long fresh = run_case(&sam_cases[1]);
     abort_calls = 0;
-    sam_speak(sam_cases[0].text, &voice, abort_after_1000, NULL);
+    sam_speak(sam_cases[0].text, &voice, abort_after_1000, NULL, NULL);
     unsigned long long after_abort = run_case(&sam_cases[1]);
     if(fresh != after_abort) {
         printf("FAIL state: fresh=%016llx after_abort=%016llx\n", fresh, after_abort);
@@ -340,14 +350,14 @@ int main(void) {
     }
 
     // Rejected inputs
-    if(sam_speak("", &voice, record, NULL)) {
+    if(sam_speak("", &voice, record, NULL, NULL)) {
         printf("FAIL empty text accepted\n");
         failures++;
     }
     char too_long[SAM_MAX_INPUT + 2];
     memset(too_long, 'a', sizeof(too_long) - 1);
     too_long[sizeof(too_long) - 1] = '\0';
-    if(sam_speak(too_long, &voice, record, NULL)) {
+    if(sam_speak(too_long, &voice, record, NULL, NULL)) {
         printf("FAIL over long text accepted\n");
         failures++;
     }
@@ -445,7 +455,7 @@ Start from a copy: `cp applications/external/text2sam/stm32_sam.cpp applications
 7. Make an abort stop the renderer promptly: insert `if(sam_aborted) return;` as the first statement inside the sound output loop of `Render` (the `while(1)` whose first line is `A = sampledConsonantFlag[Y];`) and as the first statement inside the `while(1)` loop of `PrepareOutput`.
 8. Append the entry point at the end of the file. It performs the same resets as the original default constructor, then the same steps as the original `sam()`:
    ```c
-   bool sam_speak(const char* text, const SamVoice* voice, SamOutputCallback callback, void* context) {
+   bool sam_speak(const char* text, const SamVoice* voice, SamOutputCallback callback, void* context, size_t* consumed) {
        if(!text || !voice || !callback) return false;
        size_t len = strlen(text);
        if(len == 0 || len > SAM_MAX_INPUT) return false;
@@ -515,7 +525,7 @@ cd /Users/robin/Downloads/flipper-access && git add tests/host/sam_ref tests/hos
 - Modify: `tools/run_host_tests.sh`
 
 **Interfaces:**
-- Produces: `size_t speech_text_expand(const char* in, char* out, size_t out_size)` and `size_t speech_text_next_chunk(const char* text, size_t* pos, char* chunk, size_t chunk_size)`, constants `SPEECH_TEXT_MAX` (400) and `SPEECH_CHUNK_MAX` (100). Task 4's worker calls expand once per utterance, then next_chunk until it returns 0, upper casing each chunk before `sam_speak`.
+- Produces: `size_t speech_text_expand(const char* in, char* out, size_t out_size)` and `size_t speech_text_next_chunk(const char* text, size_t* pos, char* chunk, size_t chunk_size)`, constants `SPEECH_TEXT_MAX` (400) and `SPEECH_CHUNK_MAX` (80). Task 4's worker calls expand once per utterance, then next_chunk until it returns 0, upper casing each chunk before `sam_speak`.
 
 Rules the code implements (SAM's own behaviour was measured: isolated letters are spoken by name except A, which becomes the article, so A is written as "ay"; digits are spoken one by one; words such as okay, gigahertz, percent, slash, dot come out correctly):
 
@@ -633,9 +643,13 @@ static void test_chunks(void) {
         "Sentence number three is the last one.";
     pos = 0;
     size_t n = speech_text_next_chunk(three, &pos, chunk, sizeof(chunk));
-    CHECK(n == 88);
-    CHECK(strcmp(chunk, "Sentence number one has some words in it. Sentence number two has some more words in it.") == 0);
+    CHECK(n == 41);
+    CHECK(strcmp(chunk, "Sentence number one has some words in it.") == 0);
     n = speech_text_next_chunk(three, &pos, chunk, sizeof(chunk));
+    CHECK(n == 46);
+    CHECK(strcmp(chunk, "Sentence number two has some more words in it.") == 0);
+    n = speech_text_next_chunk(three, &pos, chunk, sizeof(chunk));
+    CHECK(n == 38);
     CHECK(strcmp(chunk, "Sentence number three is the last one.") == 0);
     CHECK(speech_text_next_chunk(three, &pos, chunk, sizeof(chunk)) == 0);
 
@@ -644,18 +658,18 @@ static void test_chunks(void) {
     for(int i = 0; i < 30; i++) strcat(words, i ? " word" : "word");
     pos = 0;
     n = speech_text_next_chunk(words, &pos, chunk, sizeof(chunk));
-    CHECK(n == 99);
-    CHECK(chunk[98] == 'd' && chunk[99] == '\0');
+    CHECK(n == 79);
+    CHECK(chunk[78] == 'd' && chunk[79] == '\0');
     n = speech_text_next_chunk(words, &pos, chunk, sizeof(chunk));
-    CHECK(n == 49);
+    CHECK(n == 69);
     CHECK(speech_text_next_chunk(words, &pos, chunk, sizeof(chunk)) == 0);
 
     char solid[121];
     memset(solid, 'x', 120);
     solid[120] = '\0';
     pos = 0;
-    CHECK(speech_text_next_chunk(solid, &pos, chunk, sizeof(chunk)) == 100);
-    CHECK(speech_text_next_chunk(solid, &pos, chunk, sizeof(chunk)) == 20);
+    CHECK(speech_text_next_chunk(solid, &pos, chunk, sizeof(chunk)) == 80);
+    CHECK(speech_text_next_chunk(solid, &pos, chunk, sizeof(chunk)) == 40);
 
     pos = 0;
     const char* commas = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu, nu xi omicron pi rho sigma tau upsilon phi chi psi omega alpha";
@@ -705,7 +719,7 @@ extern "C" {
 #endif
 
 #define SPEECH_TEXT_MAX  400
-#define SPEECH_CHUNK_MAX 100
+#define SPEECH_CHUNK_MAX 80
 
 /** Rewrite `in` into `out`. Returns the length written. */
 size_t speech_text_expand(const char* in, char* out, size_t out_size);
@@ -2004,13 +2018,22 @@ static void speech_speak_item(Speech* speech, const SpeechItem* item) {
         for(char* p = speech->chunk; *p; p++) {
             if(*p >= 'a' && *p <= 'z') *p = (char)(*p - 'a' + 'A');
         }
-        // The synthesizer reads past a table when text ends without punctuation
+        // A closing period gives the synthesizer a pause to shape the end of the chunk on
         size_t len = strlen(speech->chunk);
         if(len > 0 && len < sizeof(speech->chunk) - 1 && strchr(".?!,", speech->chunk[len - 1]) == NULL) {
             speech->chunk[len] = '.';
             speech->chunk[len + 1] = '\0';
+            len++;
         }
-        sam_speak(speech->chunk, &voice, speech_sam_output, speech);
+        // The reciter inside SAM stops at a word boundary once its phoneme string is full and
+        // reports how much text it used; speak the rest with further calls
+        size_t offset = 0;
+        while(offset < len && !speech->aborted) {
+            size_t consumed = 0;
+            sam_speak(speech->chunk + offset, &voice, speech_sam_output, speech, &consumed);
+            if(consumed == 0) break;
+            offset += consumed;
+        }
     }
 
     if(speech->aborted) {
@@ -2350,7 +2373,7 @@ DEMO = "/ext/apps/Media/text2sam.fap"
 TIMING = "/ext/apps_data/text2sam/timing.txt"
 SENTENCES = [
     "Hello Robin. This is your Flipper Zero speaking through the built in piezo.",
-    "The quick brown fox jumps over the lazy dog, again and again, until the evening comes.",
+    "The quick brown fox jumps over the lazy dog, again and again, until evening.",
 ]
 
 
