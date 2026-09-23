@@ -31,3 +31,13 @@ if ! diff <(grep '^case' "$OUT/sam_reference.txt") <(grep '^case' "$OUT/sam_port
 fi
 grep -v '^case' "$OUT/sam_port.txt"
 echo "SAM port matches the original on $(grep -c '^case' "$OUT/sam_reference.txt") cases"
+
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/test_speech_text" \
+  "$TESTS/test_speech_text.c" "$SRC/speech_text.c"
+if ! "$OUT/test_speech_text" > "$OUT/speech_text.txt"; then
+  cat "$OUT/speech_text.txt"
+  echo "speech text checks failed"
+  exit 1
+fi
+echo "speech text: $(tail -n 1 "$OUT/speech_text.txt")"
