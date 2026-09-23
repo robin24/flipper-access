@@ -32,23 +32,46 @@ def highpass(x, hz, fc):
     return y
 
 
+def trim(x, hz, threshold=0.02, pad_ms=15):
+    """Cut leading and trailing silence, keeping pad_ms of it at each end."""
+    first = next((i for i, v in enumerate(x) if abs(v) > threshold), None)
+    if first is None:
+        return x[: int(hz * pad_ms / 1000)]
+    last = next(i for i in range(len(x) - 1, -1, -1) if abs(x[i]) > threshold)
+    pad = int(hz * pad_ms / 1000)
+    return x[max(0, first - pad) : min(len(x), last + 1 + pad)]
+
+
+def finish(x, gain=1.0, soft=False):
+    """Peak normalise to 0.95, apply the gain and, with soft, the tanh limiter."""
+    peak = max((abs(v) for v in x), default=0.0) or 1.0
+    x = [v / peak * 0.95 * gain for v in x]
+    if soft:
+        x = [math.tanh(v * 1.5) / math.tanh(1.5) for v in x]
+    return x
+
+
+def to_u8(x):
+    return bytes(max(0, min(255, int(round(v * 127 + 128)))) for v in x)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("out"); ap.add_argument("text")
     ap.add_argument("--voice", default="Samantha"); ap.add_argument("--rate", type=int, default=175)
     ap.add_argument("--hz", type=int, default=16000); ap.add_argument("--highpass", type=float, default=0)
     ap.add_argument("--gain", type=float, default=1.0); ap.add_argument("--soft", action="store_true")
+    ap.add_argument("--trim", action="store_true", help="cut leading/trailing silence, keeping 15 ms of pad")
     a = ap.parse_args()
     with tempfile.TemporaryDirectory() as d:
         wav = os.path.join(d, "clip.wav")
         synth(a.text, a.voice, a.rate, a.hz, wav)
         x, hz = read_wav(wav)
     x = highpass(x, hz, a.highpass)
-    peak = max(abs(v) for v in x) or 1.0
-    x = [v / peak * 0.95 * a.gain for v in x]
-    if a.soft:
-        x = [math.tanh(v * 1.5) / math.tanh(1.5) for v in x]
-    out = bytes(max(0, min(255, int(round(v * 127 + 128)))) for v in x)
+    if a.trim:
+        x = trim(x, hz)
+    x = finish(x, a.gain, a.soft)
+    out = to_u8(x)
     with open(a.out, "wb") as f: f.write(out)
     print(f"{a.out}: {len(out)} bytes, {len(out) / hz:.2f} s at {hz} Hz, voice {a.voice} rate {a.rate}, "
           f"highpass {a.highpass:g} Hz, gain {a.gain:g}{' soft' if a.soft else ''}")
