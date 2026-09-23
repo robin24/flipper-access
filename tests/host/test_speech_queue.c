@@ -209,6 +209,66 @@ static void test_text_limit(void) {
     CHECK(strncmp(item.text, text, SPEECH_ITEM_TEXT_MAX - 1) == 0);
 }
 
+
+// File items: a clip to play from the card takes the whole queue, like an interrupting push.
+static void test_file_items(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    speech_queue_init(&q);
+
+    // One file after two texts: the queue holds that one item, of a new generation, with the
+    // path in text, the rate, file true and replaceable false
+    speech_queue_push(&q, "one", false, false);
+    speech_queue_push(&q, "two", false, false);
+    uint32_t g = q.generation;
+    speech_queue_push_file(&q, "/ext/sr/clips/2_samantha_hp.raw", 16000);
+    CHECK(q.generation == g + 1);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(item.file && item.rate == 16000 && !item.replaceable);
+    CHECK(strcmp(item.text, "/ext/sr/clips/2_samantha_hp.raw") == 0);
+    CHECK(item.generation == g + 1);
+    CHECK(!speech_queue_pop(&q, &item));
+
+    // Text items carry file false and rate 0, also after a file item went through
+    speech_queue_push(&q, "words", false, true);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(!item.file && item.rate == 0 && item.replaceable);
+
+    // A file item is not replaceable: a replaceable text after it is appended, not merged
+    speech_queue_push_file(&q, "/ext/a.raw", 8000);
+    speech_queue_push(&q, "change", false, true);
+    CHECK(speech_queue_count(&q) == 2);
+    CHECK(speech_queue_pop(&q, &item) && item.file && item.rate == 8000);
+    CHECK(speech_queue_pop(&q, &item) && !item.file && strcmp(item.text, "change") == 0);
+
+    // A file never merges into a replaceable tail either: it clears the queue instead
+    speech_queue_push(&q, "change", false, true);
+    speech_queue_push_file(&q, "/ext/b.raw", 32000);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item) && item.file && item.rate == 32000);
+    CHECK(strcmp(item.text, "/ext/b.raw") == 0);
+
+    // A file clears a full queue without counting drops, and a stop drops a waiting file
+    push_numbered(&q, 0, SPEECH_QUEUE_CAPACITY);
+    uint32_t dropped = q.dropped;
+    speech_queue_push_file(&q, "/ext/c.raw", 16000);
+    CHECK(q.dropped == dropped && speech_queue_count(&q) == 1);
+    speech_queue_stop(&q);
+    CHECK(speech_queue_count(&q) == 0);
+    CHECK(!speech_queue_pop(&q, &item));
+
+    // A long path is cut like text and stays terminated
+    char path[SPEECH_ITEM_TEXT_MAX + 10];
+    memset(path, 'p', sizeof(path) - 1);
+    path[0] = '/';
+    path[sizeof(path) - 1] = '\0';
+    speech_queue_push_file(&q, path, 16000);
+    CHECK(speech_queue_pop(&q, &item) && item.file);
+    CHECK(strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
+    CHECK(strncmp(item.text, path, SPEECH_ITEM_TEXT_MAX - 1) == 0);
+}
+
 int main(void) {
     SpeechQueue q;
     SpeechItem item;
@@ -278,6 +338,7 @@ int main(void) {
     test_empty_queue();
     test_replace_rules();
     test_text_limit();
+    test_file_items();
 
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
