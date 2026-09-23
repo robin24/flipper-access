@@ -1,4 +1,6 @@
+.DS_Store
+.superpowers/
 .venv/
 Momentum-Firmware/
+__pycache__/
 firmware-packages/
-.superpowers/
