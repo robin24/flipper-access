@@ -1,0 +1,284 @@
+#include <stdio.h>
+#include <string.h>
+#include "speech_queue.h"
+
+static int failures = 0, checks = 0;
+#define CHECK(cond)                                                            \
+    do {                                                                       \
+        checks++;                                                              \
+        if(!(cond)) {                                                          \
+            failures++;                                                        \
+            printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond);            \
+        }                                                                      \
+    } while(0)
+
+// Pops the next item and compares its text.
+static bool pops(SpeechQueue* q, const char* want) {
+    SpeechItem item;
+    return speech_queue_pop(q, &item) && strcmp(item.text, want) == 0;
+}
+
+// Pushes n plain items named "item first" .. "item first + n - 1".
+static void push_numbered(SpeechQueue* q, unsigned first, unsigned n) {
+    for(unsigned i = 0; i < n; i++) {
+        char text[24];
+        snprintf(text, sizeof(text), "item %u", first + i);
+        speech_queue_push(q, text, false, false);
+    }
+}
+
+static bool pops_numbered(SpeechQueue* q, unsigned n) {
+    char text[24];
+    snprintf(text, sizeof(text), "item %u", n);
+    return pops(q, text);
+}
+
+static void test_capacity_edges(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    speech_queue_init(&q);
+
+    // Exactly at capacity nothing is dropped
+    push_numbered(&q, 0, SPEECH_QUEUE_CAPACITY);
+    CHECK(speech_queue_count(&q) == SPEECH_QUEUE_CAPACITY);
+    CHECK(q.dropped == 0);
+
+    // One over: the oldest goes, is counted, and the rest keep their order
+    push_numbered(&q, SPEECH_QUEUE_CAPACITY, 1);
+    CHECK(speech_queue_count(&q) == SPEECH_QUEUE_CAPACITY);
+    CHECK(q.dropped == 1);
+    for(unsigned i = 1; i <= SPEECH_QUEUE_CAPACITY; i++) CHECK(pops_numbered(&q, i));
+    CHECK(!speech_queue_pop(&q, &item));
+    CHECK(speech_queue_count(&q) == 0);
+
+    // Three over: three more dropped, the last CAPACITY items remain in order
+    push_numbered(&q, 0, SPEECH_QUEUE_CAPACITY + 3);
+    CHECK(speech_queue_count(&q) == SPEECH_QUEUE_CAPACITY);
+    CHECK(q.dropped == 4);
+    for(unsigned i = 3; i < SPEECH_QUEUE_CAPACITY + 3; i++) CHECK(pops_numbered(&q, i));
+    CHECK(!speech_queue_pop(&q, &item));
+
+    // Clearing a full queue by interrupt or stop is not a drop
+    push_numbered(&q, 0, SPEECH_QUEUE_CAPACITY);
+    speech_queue_push(&q, "urgent", true, false);
+    CHECK(q.dropped == 4);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(pops(&q, "urgent"));
+    push_numbered(&q, 0, SPEECH_QUEUE_CAPACITY);
+    speech_queue_stop(&q);
+    CHECK(q.dropped == 4);
+    CHECK(speech_queue_count(&q) == 0);
+}
+
+static void test_ring_wraps(void) {
+    // The ring keeps order once the head has moved on and the tail wraps around
+    SpeechQueue q;
+    speech_queue_init(&q);
+    push_numbered(&q, 0, 3);
+    CHECK(pops_numbered(&q, 0));
+    CHECK(pops_numbered(&q, 1));
+    push_numbered(&q, 3, 3);
+    CHECK(speech_queue_count(&q) == 4);
+    CHECK(q.dropped == 0);
+    for(unsigned i = 2; i < 6; i++) CHECK(pops_numbered(&q, i));
+    CHECK(speech_queue_count(&q) == 0);
+
+    // Many rounds through the ring, one item at a time
+    bool in_order = true;
+    for(unsigned round = 0; round < 100; round++) {
+        push_numbered(&q, round, 1);
+        if(!pops_numbered(&q, round)) in_order = false;
+    }
+    CHECK(in_order);
+    CHECK(q.dropped == 0);
+    CHECK(speech_queue_count(&q) == 0);
+}
+
+static void test_empty_queue(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    speech_queue_init(&q);
+
+    // Pop from empty fails and leaves the output alone
+    memset(&item, 0, sizeof(item));
+    item.generation = 77;
+    item.replaceable = true;
+    memcpy(item.text, "untouched", sizeof("untouched"));
+    CHECK(!speech_queue_pop(&q, &item));
+    CHECK(item.generation == 77 && item.replaceable && strcmp(item.text, "untouched") == 0);
+    CHECK(speech_queue_count(&q) == 0);
+
+    // Interrupt while empty: a new generation with the one item in it
+    uint32_t g = q.generation;
+    speech_queue_push(&q, "alone", true, false);
+    CHECK(q.generation == g + 1);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(strcmp(item.text, "alone") == 0 && item.generation == g + 1 && !item.replaceable);
+
+    // Stop while empty still bumps the generation
+    g = q.generation;
+    speech_queue_stop(&q);
+    CHECK(q.generation == g + 1);
+    CHECK(speech_queue_count(&q) == 0);
+    CHECK(!speech_queue_pop(&q, &item));
+
+    // An interrupting replaceable item on an empty queue is simply appended
+    speech_queue_push(&q, "change", true, true);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(item.replaceable && strcmp(item.text, "change") == 0);
+
+    // An empty text is a valid item
+    speech_queue_push(&q, "", false, false);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item) && item.text[0] == '\0');
+}
+
+static void test_replace_rules(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    speech_queue_init(&q);
+
+    // A replaceable item after a non replaceable one is appended and both keep their order
+    speech_queue_push(&q, "change 1", false, true);
+    speech_queue_push(&q, "focus", false, false);
+    speech_queue_push(&q, "change 2", false, true);
+    CHECK(speech_queue_count(&q) == 3);
+    CHECK(pops(&q, "change 1"));
+    CHECK(pops(&q, "focus"));
+    CHECK(pops(&q, "change 2"));
+
+    // A non replaceable item never overwrites a replaceable tail
+    speech_queue_push(&q, "change", false, true);
+    speech_queue_push(&q, "focus", false, false);
+    CHECK(speech_queue_count(&q) == 2);
+    CHECK(pops(&q, "change"));
+    CHECK(pops(&q, "focus"));
+
+    // Only the tail is looked at: a replaceable item deeper in the queue stays
+    speech_queue_push(&q, "change 1", false, true);
+    speech_queue_push(&q, "focus", false, false);
+    speech_queue_push(&q, "change 2", false, true);
+    speech_queue_push(&q, "change 3", false, true);
+    CHECK(speech_queue_count(&q) == 3);
+    CHECK(pops(&q, "change 1"));
+    CHECK(pops(&q, "focus"));
+    CHECK(pops(&q, "change 3"));
+
+    // Replacing at the tail of a full queue drops nothing
+    push_numbered(&q, 0, SPEECH_QUEUE_CAPACITY - 1);
+    speech_queue_push(&q, "change 1", false, true);
+    CHECK(speech_queue_count(&q) == SPEECH_QUEUE_CAPACITY);
+    uint32_t dropped = q.dropped;
+    speech_queue_push(&q, "change 2", false, true);
+    CHECK(speech_queue_count(&q) == SPEECH_QUEUE_CAPACITY);
+    CHECK(q.dropped == dropped);
+    for(unsigned i = 0; i < SPEECH_QUEUE_CAPACITY - 1; i++) CHECK(pops_numbered(&q, i));
+    CHECK(pops(&q, "change 2"));
+
+    // The replacement takes the current generation and flag, and a shorter text leaves no tail
+    speech_queue_push(&q, "a long change", false, true);
+    speech_queue_push(&q, "x", false, true);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(item.replaceable && item.generation == q.generation && strcmp(item.text, "x") == 0);
+
+    // A plain item reports replaceable false
+    speech_queue_push(&q, "focus", false, false);
+    CHECK(speech_queue_pop(&q, &item) && !item.replaceable);
+}
+
+static void test_text_limit(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    char text[SPEECH_ITEM_TEXT_MAX + 1];
+    speech_queue_init(&q);
+
+    // Exactly the item size minus the terminator is kept whole
+    memset(text, 'y', SPEECH_ITEM_TEXT_MAX - 1);
+    text[SPEECH_ITEM_TEXT_MAX - 1] = '\0';
+    speech_queue_push(&q, text, false, false);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, text) == 0);
+
+    // One more character is cut, and the item stays terminated
+    memset(text, 'y', SPEECH_ITEM_TEXT_MAX);
+    text[SPEECH_ITEM_TEXT_MAX] = '\0';
+    speech_queue_push(&q, text, false, false);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
+    CHECK(strncmp(item.text, text, SPEECH_ITEM_TEXT_MAX - 1) == 0);
+}
+
+int main(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    speech_queue_init(&q);
+    CHECK(speech_queue_count(&q) == 0);
+    CHECK(!speech_queue_pop(&q, &item));
+
+    // Plain order
+    speech_queue_push(&q, "one", false, false);
+    speech_queue_push(&q, "two", false, false);
+    CHECK(speech_queue_count(&q) == 2);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, "one") == 0);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, "two") == 0);
+    CHECK(!speech_queue_pop(&q, &item));
+
+    // Interrupt clears and starts a new generation
+    uint32_t g0 = q.generation;
+    speech_queue_push(&q, "old", false, false);
+    speech_queue_push(&q, "new", true, false);
+    CHECK(q.generation == g0 + 1);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, "new") == 0);
+    CHECK(item.generation == g0 + 1);
+
+    // A replaceable item at the tail is overwritten by the next replaceable one
+    speech_queue_push(&q, "focus", false, false);
+    speech_queue_push(&q, "change 1", false, true);
+    speech_queue_push(&q, "change 2", false, true);
+    CHECK(speech_queue_count(&q) == 2);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, "focus") == 0);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, "change 2") == 0);
+
+    // A replaceable item after a non replaceable tail is appended
+    speech_queue_push(&q, "change 1", false, true);
+    speech_queue_push(&q, "focus", false, false);
+    speech_queue_push(&q, "change 2", false, true);
+    CHECK(speech_queue_count(&q) == 3);
+    speech_queue_stop(&q);
+    CHECK(speech_queue_count(&q) == 0);
+
+    // Full: the oldest is dropped and counted
+    uint32_t dropped = q.dropped;
+    speech_queue_push(&q, "a", false, false);
+    speech_queue_push(&q, "b", false, false);
+    speech_queue_push(&q, "c", false, false);
+    speech_queue_push(&q, "d", false, false);
+    speech_queue_push(&q, "e", false, false);
+    CHECK(speech_queue_count(&q) == SPEECH_QUEUE_CAPACITY);
+    CHECK(q.dropped == dropped + 1);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, "b") == 0);
+
+    // Stop bumps the generation so a running utterance notices
+    uint32_t g1 = q.generation;
+    speech_queue_stop(&q);
+    CHECK(q.generation == g1 + 1);
+
+    // Long text is cut to the item size
+    char longtext[300];
+    memset(longtext, 'x', sizeof(longtext) - 1);
+    longtext[sizeof(longtext) - 1] = '\0';
+    speech_queue_push(&q, longtext, true, false);
+    CHECK(speech_queue_pop(&q, &item) && strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
+
+    // Beyond the brief: capacity edges, ring wrap, the empty queue, replace rules, text limit
+    test_capacity_edges();
+    test_ring_wraps();
+    test_empty_queue();
+    test_replace_rules();
+    test_text_limit();
+
+    printf("%d checks, %d failures\n", checks, failures);
+    return failures ? 1 : 0;
+}

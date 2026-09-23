@@ -41,3 +41,23 @@ if ! "$OUT/test_speech_text" > "$OUT/speech_text.txt"; then
   exit 1
 fi
 echo "speech text: $(tail -n 1 "$OUT/speech_text.txt")"
+
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/test_speech_queue" \
+  "$TESTS/test_speech_queue.c" "$SRC/speech_queue.c"
+if ! "$OUT/test_speech_queue" > "$OUT/speech_queue.txt"; then
+  cat "$OUT/speech_queue.txt"
+  echo "speech queue checks failed"
+  exit 1
+fi
+echo "speech queue: $(tail -n 1 "$OUT/speech_queue.txt")"
+
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/test_speech_pcm" \
+  "$TESTS/test_speech_pcm.c" "$SRC/speech_pcm.c" -lm
+if ! "$OUT/test_speech_pcm" > "$OUT/speech_pcm.txt"; then
+  cat "$OUT/speech_pcm.txt"
+  echo "speech PCM checks failed"
+  exit 1
+fi
+echo "speech PCM: $(tail -n 1 "$OUT/speech_pcm.txt")"
