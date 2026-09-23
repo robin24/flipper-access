@@ -2484,6 +2484,34 @@ cd /Users/robin/Downloads/flipper-access && git add tools/sam_calibrate.py patch
 
 ---
 
+### Task 4b: TIM16 arbitration with the NFC-V listener
+
+**Files:**
+- Modify: `Momentum-Firmware/lib/signal_reader/signal_reader.c` (start and stop)
+- Modify: `Momentum-Firmware/applications/services/screen_reader/speech.c` (stop flag), `screen_reader_cli.c` (`sr say` truncation message)
+
+**Why:** the Task 4 review found that `signal_reader_start` (used only by the ISO15693 listener, that is NFC-V tag emulation, through `iso15693_parser_start` from `furi_hal_nfc_iso15693_wait_event`, so it starts and stops around every wait for a reader command) calls `furi_hal_bus_enable(FuriHalBusTIM16)` directly, while `furi_hal_speaker_acquire` enables the same bus for whoever holds the speaker mutex. Momentum's `furi_hal_bus_enable` is a `furi_check` that the peripheral is disabled, so an NFC-V listener starting while the speech worker holds the speaker (an utterance plus 200 ms) crashes and reboots the device. Beeps had the same 50 ms window; speech widens it to seconds, and Task 6 announces the emulation screen at exactly that moment. The speech side already refuses the speaker while TIM16 is enabled elsewhere.
+
+**Interfaces:** none new. The speaker mutex becomes the single owner token of TIM16: `signal_reader_start` acquires it (`furi_check(furi_hal_speaker_acquire(FuriWaitForever))`, which enables TIM16 and idles the speaker pin on the timer's alternate function; the signal reader's own output compare stays disabled, so the speaker is silent) in place of the bus enable, and `signal_reader_stop` calls `furi_hal_speaker_release()` (which stops the timer and disables the bus) in place of the bus disable. Both run on the NFC worker thread, so the mutex owner check in the release holds. While the speaker is held by the listener, speech announcements cannot take it within their 200 ms wait and are dropped and counted, so the reader is silent during NFC-V emulation; a key press stops speech (Task 6), which is what frees the listener if speech was mid-sentence.
+
+- [ ] **Step 1: Reproduce on the current image**
+
+With the Task 4 image on the device, create an NFC-V test file from the ISO15693-3 save format in `lib/nfc/protocols/iso15693_3/iso15693_3.c` (a UID starting with E0, eight bytes, 28 blocks of 4 zero bytes) and upload it as `/ext/nfc/sr_nfcv_test.nfc` with `scripts/storage.py`. Open it with `loader open NFC /ext/nfc/sr_nfcv_test.nfc`, confirm with `sr screen` that the emulation screen is shown, then `sr say` a long sentence and read `sr screen` again after five seconds. Expected before the fix: the crash popup "Flipper crashed, furi_check failed" (the device reboots on its own); dismiss it with `input send back short`. Record what happened either way; if it does not crash, say so and continue, the fix is still required by the code path.
+
+- [ ] **Step 2: The fix**
+
+In `signal_reader_start`, replace `furi_hal_bus_enable(FuriHalBusTIM16);` with a comment and `furi_check(furi_hal_speaker_acquire(FuriWaitForever));` (include `<furi_hal_speaker.h>` if `furi_hal.h` is not already included). In `signal_reader_stop`, replace `furi_hal_bus_disable(FuriHalBusTIM16);` with `furi_hal_speaker_release();`. Read `furi_hal_speaker_release` and `furi_hal_speaker_stop` in `targets/f7/furi_hal/furi_hal_speaker.c` to confirm they only touch TIM16 registers and the pin, and note in the report any register the signal reader configured that the release does not reset (the bus disable resets the peripheral).
+
+In `speech.c`, clear the stop flag when it is applied (`furi_thread_flags_clear(SPEECH_FLAG_STOP)` inside the apply-stop path) so a stop cannot be applied twice. In `screen_reader_cli.c`, make `sr say` print how many characters were queued and, when the text was longer than the queue item, that it was cut ("queued 159 of 200 characters, cut").
+
+- [ ] **Step 3: Build, flash, verify**
+
+`./fbt` clean, `./fbt flash_usb`, wait, `sr screen` for a crash popup. Then: open the NFC-V file again, `sr say` three long sentences while it emulates, `sr status` (expect no crash, the utterances counted as dropped or spoken depending on who held the speaker, and the NFC app still on its screen), leave the app with Back presses (`input send back short`, repeated until `sr screen` shows the home screen), then `sr say` a sentence and confirm it plays with underruns 0. Also open the NFC app's main menu (`loader open NFC`), speak, and leave it: NFC-A paths do not use the signal reader and must still speak. Record every output.
+
+- [ ] **Step 4: Commit**
+
+Firmware: `git add lib/signal_reader/signal_reader.c applications/services/screen_reader/speech.c applications/services/screen_reader/screen_reader_cli.c && git commit -m "screen reader: NFC-V listener shares TIM16 through the speaker mutex"`. Delete the test file from the SD card (`storage remove /ext/nfc/sr_nfcv_test.nfc`) unless it is useful to keep, and say which.
+
 ### Task 6: Announcements spoken, key presses silence, regression checks, docs
 
 **Files:**
