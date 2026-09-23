@@ -23,12 +23,12 @@ import argparse, glob, hashlib, json, math, multiprocessing, os, re, subprocess,
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
-from clip_make import finish, highpass, read_wav, synth, to_u8, trim  # noqa: E402
+from clip_make import finish, highpass, pad, read_wav, synth, to_u8, trim  # noqa: E402
 
 FW = os.path.join(ROOT, "Momentum-Firmware")
 SRC = os.path.join(FW, "applications", "services", "screen_reader")
 DEFAULTS = dict(backend="say", voice="Samantha", rate=175, highpass=500.0, gain=1.3, soft=True, hz=16000, model="")
-WORD_RE = re.compile(r"^[a-z0-9]{1,31}$")
+WORD_RE = re.compile(r"^(?:[a-z]{1,16}|[0-9])$")
 STRING_RE = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 PRINTF_RE = re.compile(r"%[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|L|q|j|z|t)?[diouxXeEfgGcsp%]")
 DIGIT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
@@ -156,8 +156,9 @@ def make_clip(job):
                 synth(text, settings["voice"], settings["rate"], settings["hz"], wav)
                 x, _ = read_wav(wav)
         x = highpass(x, settings["hz"], settings["highpass"])
-        x = trim(x, settings["hz"])
         x = finish(x, settings["gain"], settings["soft"])
+        x = trim(x, settings["hz"])
+        x = pad(x, settings["hz"])
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "wb") as f:
             f.write(to_u8(x))
@@ -182,8 +183,30 @@ def open_storage(port):
     return storage, FlipperStorageOperations(storage)
 
 
+def voice_was_on(storage):
+    """True if the device's status reply to `sr voice status` says the recorded voice is on."""
+    reply = storage.send_and_wait_prompt("sr voice status\r")
+    return b"voice: on" in reply
+
+
+def voice_off(storage):
+    """Silence the recorded voice before a transfer: opening a file the worker has open for
+    playback would otherwise block and stall the speaker mid-buffer. Returns whether it was
+    on before, so the caller can decide whether to turn it back on."""
+    was_on = voice_was_on(storage)
+    storage.send_and_wait_prompt("sr voice off\r")
+    log("voice: silenced for the transfer")
+    return was_on
+
+
+def voice_on(storage):
+    storage.send_and_wait_prompt("sr voice on\r")
+    log("voice: restored")
+
+
 def pull_missing(port):
     storage, _ = open_storage(port)
+    was_on = voice_off(storage)
     words = set()
     try:
         if storage.exist_file("/ext/sr/missing.txt"):
@@ -194,17 +217,22 @@ def pull_missing(port):
             storage.remove("/ext/sr/missing.txt")
         log(f"pulled {len(words)} missing words from the device")
     finally:
+        if was_on:
+            voice_on(storage)
         storage.stop()
     return words
 
 
 def sync(port, out_dir):
     storage, ops = open_storage(port)
+    was_on = voice_off(storage)
     try:
         t0 = time.time()
         ops.recursive_send("/ext/sr/voice", out_dir)
         log(f"sync: done in {time.time() - t0:.0f} s")
     finally:
+        if was_on:
+            voice_on(storage)
         storage.stop()
 
 
@@ -218,7 +246,7 @@ def check(settings, names, workdir):
         seconds = len(data) / settings["hz"]
         pad = int(settings["hz"] * 0.015)
         edges = data[:pad] + data[-pad:]
-        quiet = all(abs(v - 128) <= 8 for v in edges)
+        quiet = all(abs(v - 128) <= 2 for v in edges)
         loud = max(abs(v - 128) for v in data) >= 100 if data else False
         good = ok and 0.05 <= seconds <= 3.0 and quiet and loud
         bad += 0 if good else 1

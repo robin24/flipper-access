@@ -32,14 +32,19 @@ def highpass(x, hz, fc):
     return y
 
 
-def trim(x, hz, threshold=0.02, pad_ms=15):
-    """Cut leading and trailing silence, keeping pad_ms of it at each end."""
+def trim(x, hz, threshold=0.02):
+    """Return the content span only: from the first sample past threshold to the last, no pad."""
     first = next((i for i, v in enumerate(x) if abs(v) > threshold), None)
     if first is None:
-        return x[: int(hz * pad_ms / 1000)]
+        return []
     last = next(i for i in range(len(x) - 1, -1, -1) if abs(x[i]) > threshold)
-    pad = int(hz * pad_ms / 1000)
-    return x[max(0, first - pad) : min(len(x), last + 1 + pad)]
+    return x[first : last + 1]
+
+
+def pad(x, hz, ms=15):
+    """Prepend and append ms of true silence (zeros)."""
+    n = int(hz * ms / 1000)
+    return [0.0] * n + x + [0.0] * n
 
 
 def finish(x, gain=1.0, soft=False):
@@ -68,9 +73,10 @@ def main():
         synth(a.text, a.voice, a.rate, a.hz, wav)
         x, hz = read_wav(wav)
     x = highpass(x, hz, a.highpass)
+    x = finish(x, a.gain, a.soft)
     if a.trim:
         x = trim(x, hz)
-    x = finish(x, a.gain, a.soft)
+        x = pad(x, hz)
     out = to_u8(x)
     with open(a.out, "wb") as f: f.write(out)
     print(f"{a.out}: {len(out)} bytes, {len(out) / hz:.2f} s at {hz} Hz, voice {a.voice} rate {a.rate}, "
