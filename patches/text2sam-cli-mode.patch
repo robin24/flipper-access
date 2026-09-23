@@ -1,5 +1,5 @@
 diff --git a/text2sam/sam_app.cpp b/text2sam/sam_app.cpp
-index 0e515d1cc..71c9c5cfc 100644
+index 0e515d1cc..a9aabfd38 100644
 --- a/text2sam/sam_app.cpp
 +++ b/text2sam/sam_app.cpp
 @@ -1,6 +1,7 @@
@@ -10,10 +10,36 @@ index 0e515d1cc..71c9c5cfc 100644
  
  #include <input/input.h>
  #include <dialogs/dialogs.h>
-@@ -45,6 +46,31 @@ static void say_something(char* something) {
-     }
- }
+@@ -37,12 +38,55 @@ typedef struct {
  
+ AppState* app_state;
+ 
++// Timing record for the screen reader's speech calibration (tools/sam_calibrate.py in the
++// accessibility project): how many milliseconds the last utterance took to speak.
++static void save_timing(uint32_t ms) {
++    Storage* storage = (Storage*)furi_record_open(RECORD_STORAGE);
++    File* file = storage_file_alloc(storage);
++    if(storage_file_open(file, APP_DATA_PATH("timing.txt"), FSAM_WRITE, FSOM_CREATE_ALWAYS)) {
++        char line[32];
++        int n = snprintf(line, sizeof(line), "ms=%lu\n", (unsigned long)ms);
++        storage_file_write(file, line, n);
++    }
++    storage_file_close(file);
++    storage_file_free(file);
++    furi_record_close(RECORD_STORAGE);
++}
++
+ static void say_something(char* something) {
+     if(furi_hal_speaker_is_mine() || furi_hal_speaker_acquire(1000)) {
++        uint32_t started = furi_get_tick();
+         voice.begin();
+         voice.say(something);
++        uint32_t elapsed = furi_get_tick() - started;
+         furi_hal_speaker_release();
++        save_timing(elapsed);
++    }
++}
++
 +// Command-line mode, added for accessibility work:
 +//   loader open /ext/apps/Media/text2sam.fap some text to speak
 +//   loader open /ext/apps/Media/text2sam.fap !pitch,speed,mouth,throat some text
@@ -33,16 +59,14 @@ index 0e515d1cc..71c9c5cfc 100644
 +        }
 +        while(*s == ' ') s++;
 +        voice.setVoice(v[0] & 0xff, v[1] & 0xff, v[2] & 0xff, v[3] & 0xff);
-+    }
+     }
 +    strncpy(text, s, TEXT_BUFFER_SIZE - 1);
 +    FURI_LOG_I(TAG, "Speaking: %s", text);
 +    say_something(text);
-+}
-+
+ }
+ 
  static void text_input_callback(void* ctx) {
-     AppState* app_state = (AppState*)ctx;
-     //FURI_LOG_D(TAG, "Input text: %s", app_state->input);
-@@ -103,7 +129,11 @@ static bool load_messages() {
+@@ -103,7 +147,11 @@ static bool load_messages() {
  }
  
  extern "C" int32_t sam_app(void* p) {
