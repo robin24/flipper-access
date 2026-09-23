@@ -193,27 +193,32 @@ static void test_rule4_periods_and_hyphens(void) {
     expect("Sub-GHz.sub", "sub gigahertz dot sub");
     expect("read-only", "read only");
     expect("on-the-fly", "on the fly");
-    expect("1-2", "one two");
     expect("20-MHz", "twenty megahertz");
-    expect(
-        "378-481, 749-962 MHz",
-        "three hundred seventy eight four hundred eighty one, "
-        "seven hundred forty nine nine hundred sixty two megahertz");
 }
 
-// Rule 5: leading digits are a number, the rest is processed on its own.
+// Rule 5: a number, decimal or not, then letters: a term, spelled when one to five upper case
+// letters outside the stop list, copied otherwise.
 static void test_rule5_digits_then_letters(void) {
     expect("868MHz", "eight hundred sixty eight megahertz");
     expect("FAAC SLH 868MHz", "F ay ay C S L H eight hundred sixty eight megahertz");
     expect("2FA", "two F ay");
-    expect("3V3", "three V 3");
+    // "V3" is not letters only, so the token is not rule 5's shape and rule 7 spells it.
+    expect("3V3", "3 V 3");
     expect("100mAh", "one hundred milliamp hours");
     expect("0dBm", "zero dee bee em");
     expect("10dBm +", "ten dee bee em plus");
     expect("007px", "zero zero seven px");
-    // Rule 4 comes before rule 5: a decimal glued to its unit is not a decimal number token, so
-    // it splits at the period with "dot". Flagged in the report.
-    expect("433.92MHz", "four hundred thirty three dot ninety two megahertz");
+    expect("433.92MHz", "four hundred thirty three point nine two megahertz");
+    expect("3.3V", "three point three V");
+    expect("1.5mAh", "one point five milliamp hours");
+    expect("12.MHz", "twelve dot megahertz");
+    expect("1A", "one ay");
+    expect("9F", "nine F");
+    expect("10s", "ten s");
+    expect("04 1A 2B", "zero four one ay two B");
+    expect("12AT", "twelve AT");
+    expect("4GB", "four G B");
+    expect("12ABCDEF", "twelve ABCDEF");
 }
 
 // Rule 6: words up to six digits without a leading zero, digits otherwise, "point" for decimals.
@@ -243,6 +248,10 @@ static void test_rule6_numbers(void) {
 // in the stop list; six or more, mixed case, or a lone letter are copied.
 static void test_rule7_spelling_and_stop_list(void) {
     expect("ERROR", "ERROR");
+    expect("SET AT", "SET AT");
+    expect("HEX", "HEX");
+    expect("IN", "IN");
+    expect("ID", "I D");
     expect("HELLO", "H E L L O");
     expect("SECRET", "SECRET");
     expect("OKAY", "OKAY");
@@ -424,6 +433,36 @@ static void test_rule10_chunk_edges(void) {
     CHECK(speech_text_next_chunk(short_words, &pos, small, sizeof(small)) == 0);
 }
 
+// Rule 11: a hyphen before a digit, at the start or after a character that is not alphanumeric,
+// is "minus"; a hyphen before a space or a letter is still a space, inside a token rule 4 applies.
+static void test_rule11_minus(void) {
+    expect("-90dBm", "minus ninety dee bee em");
+    expect("TX power -10dBm", "T X power minus ten dee bee em");
+    expect("-", "dash");
+    expect("- 90", "ninety");
+    expect("Ch-3", "Ch three");
+    expect("(-5)", "minus five");
+    expect("-0.5", "minus zero point five");
+    expect("-5-3", "minus five to three");
+    expect("a -b", "a b");
+    expect("RSSI: -70", "R S S I, minus seventy");
+}
+
+// Rule 12: a hyphen between two digits inside a token is "to" when it is the only hyphen and
+// "dash" when there are more; hyphens next to letters keep rule 4.
+static void test_rule12_ranges(void) {
+    expect(
+        "378-481, 749-962 MHz",
+        "three hundred seventy eight to four hundred eighty one, "
+        "seven hundred forty nine to nine hundred sixty two megahertz");
+    expect("2026-09-23", "two thousand twenty six dash zero nine dash twenty three");
+    expect("1-2", "one to two");
+    expect("1-2-3", "one dash two dash three");
+    expect("a-1-2", "a one dash two");
+    expect("10-20%", "ten to twenty percent");
+    expect("on-the-fly", "on the fly");
+}
+
 // Behaviour the rule list does not decide. These pin what the code does today so a change is
 // noticed; the report lists each one.
 static void test_beyond_the_rule_list(void) {
@@ -444,10 +483,6 @@ static void test_beyond_the_rule_list(void) {
     expect("x\\y", "x y");
     expect("a ~ b", "a b");
     expect("a ^ b $ c", "a b c");
-    // A hyphen before a number is not in a token, so the sign is lost (see the report).
-    expect("-90dBm", "ninety dee bee em");
-    // Rule 5 leaves a lone A behind a digit as a one letter token, which rule 8 copies.
-    expect("04 1A 2B", "zero four one A two B");
     // The output buffer: truncated, always terminated; a null input gives an empty string.
     char small[8];
     CHECK(speech_text_expand("Hello world", small, sizeof(small)) == 7);
@@ -472,6 +507,8 @@ int main(void) {
     test_rule9_separators();
     test_rule9_every_byte();
     test_rule10_chunk_edges();
+    test_rule11_minus();
+    test_rule12_ranges();
     test_beyond_the_rule_list();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
