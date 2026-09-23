@@ -65,3 +65,13 @@ if ! "$OUT/test_speech_pcm" > "$OUT/speech_pcm.txt"; then
   exit 1
 fi
 echo "speech PCM: $(tail -n 1 "$OUT/speech_pcm.txt")"
+
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/test_speech_voice" \
+  "$TESTS/test_speech_voice.c" "$SRC/speech_voice.c"
+if ! "$OUT/test_speech_voice" > "$OUT/speech_voice.txt"; then
+  cat "$OUT/speech_voice.txt"
+  echo "speech voice checks failed"
+  exit 1
+fi
+echo "speech voice: $(tail -n 1 "$OUT/speech_voice.txt")"
