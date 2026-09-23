@@ -525,7 +525,7 @@ cd /Users/robin/Downloads/flipper-access && git add tests/host/sam_ref tests/hos
 - Modify: `tools/run_host_tests.sh`
 
 **Interfaces:**
-- Produces: `size_t speech_text_expand(const char* in, char* out, size_t out_size)` and `size_t speech_text_next_chunk(const char* text, size_t* pos, char* chunk, size_t chunk_size)`, constants `SPEECH_TEXT_MAX` (640, four times an announcement: a hex dump screen expands to about 3.6 times) and `SPEECH_CHUNK_MAX` (80). Task 4's worker calls expand once per utterance, then next_chunk until it returns 0, upper casing each chunk before `sam_speak`.
+- Produces: `size_t speech_text_expand(const char* in, char* out, size_t out_size)` and `size_t speech_text_next_chunk(const char* text, size_t* pos, char* chunk, size_t chunk_size)`, constants `SPEECH_TEXT_MAX` (800, five times an announcement: a screen of two digit pairs expands about 4.7 times) and `SPEECH_CHUNK_MAX` (80). Task 4's worker calls expand once per utterance, then next_chunk until it returns 0, upper casing each chunk before `sam_speak`.
 
 Rules the code implements (SAM's own behaviour was measured: isolated letters are spoken by name except A, which becomes the article, so A is written as "ay"; digits are spoken one by one; words such as okay, gigahertz, percent, slash, dot come out correctly):
 
@@ -721,7 +721,7 @@ Create `speech_text.h`:
 extern "C" {
 #endif
 
-#define SPEECH_TEXT_MAX  640
+#define SPEECH_TEXT_MAX  800
 #define SPEECH_CHUNK_MAX 80
 
 /** Rewrite `in` into `out`. Returns the length written. */
@@ -2579,4 +2579,4 @@ cd /Users/robin/Downloads/flipper-access && git add README.md docs && git commit
 
 Spec coverage: section 8 (SAM in firmware as C, DMA output, ring buffer, speaker sharing, interruption, thread) is Tasks 1, 3, 4; the pronunciation table of section 5 is Task 2; settings for rate and volume (section 10) are wired in Task 4; failure handling for a busy speaker (section 12) is Task 4; testing (section 13) is the host tests of Tasks 1 to 3 plus the device checks and probe of Tasks 4 to 6. Deviations from section 8 are listed for the spec update in Task 6.
 
-Type consistency: `SamOutputCallback` (Task 1) is what `speech_sam_output` implements (Task 4); `SpeechPcmEmit` (Task 3) is what `speech_emit` implements; `SpeechItem.text` is 160 bytes and `SrAnnouncement.text` is 160 bytes; `speech_text_expand` writes at most `SPEECH_TEXT_MAX` (640) and the chunk buffer is `SPEECH_CHUNK_MAX + 1`; `sam_calibrate.py` parses the exact `last utterance: N ms played, S subsamples, M ms nominal` order that `sr status` prints.
+Type consistency: `SamOutputCallback` (Task 1) is what `speech_sam_output` implements (Task 4); `SpeechPcmEmit` (Task 3) is what `speech_emit` implements; `SpeechItem.text` is 160 bytes and `SrAnnouncement.text` is 160 bytes; `speech_text_expand` writes at most `SPEECH_TEXT_MAX` (800) and the chunk buffer is `SPEECH_CHUNK_MAX + 1`; `sam_calibrate.py` parses the exact `last utterance: N ms played, S subsamples, M ms nominal` order that `sr status` prints.
