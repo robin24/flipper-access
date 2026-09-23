@@ -16,7 +16,8 @@ clang "${CFLAGS[@]}" -I "$SRC" -o "$OUT/test_screen_model" \
 
 clang++ -std=c++17 -O1 -w -I "$TESTS/sam_ref" -I "$SAM_ORIG" -o "$OUT/sam_reference" \
   "$TESTS/sam_ref/sam_reference.cpp" "$SAM_ORIG/stm32_sam.cpp"
-clang "${CFLAGS[@]}" -I "$SRC/sam" -I "$TESTS" -o "$OUT/test_sam_port" \
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC/sam" -I "$TESTS" -o "$OUT/test_sam_port" \
   "$TESTS/test_sam_port.c" "$SRC/sam/sam.c" -lm
 "$OUT/sam_reference" > "$OUT/sam_reference.txt"
 if ! "$OUT/test_sam_port" > "$OUT/sam_port.txt"; then

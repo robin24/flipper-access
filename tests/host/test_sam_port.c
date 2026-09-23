@@ -67,13 +67,18 @@ int main(void) {
         }
     }
 
-    // Texts the original synthesizer never returns from; the port must finish and produce sound
+    // Texts the original synthesizer never returns from, or overruns its tables or output arrays
+    // on; the port must finish and produce sound
     static const char* const hard_cases[] = {
         "UUUUUUUUU.",
         "OOOOOOOOOOOOOOOOOOO.",
         "XXXXXXXXXXXXXXXXXXX.",
         "ANTIDISESTABLISHMENTARIANISM.",
         "SUPERCALIFRAGILISTICEXPIALIDOCIOUS.",
+        "READ",
+        "CAT",
+        "IT IS LATE",
+        "SAVED. READ",
     };
     for(size_t i = 0; i < sizeof(hard_cases) / sizeof(hard_cases[0]); i++) {
         n_values = 0;
