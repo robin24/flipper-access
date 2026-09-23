@@ -13,10 +13,13 @@ and the tools in this folder. Last updated 2026-09-23.
   device is in the updater and comes back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
   speaks its launch argument. Its on-screen behaviour is unchanged.
-- Known problem with the phase 2 firmware: Sub-GHz is loaded from the card into RAM in this
-  firmware base (mntm-012 had it in flash), so with the reader on its read mode leaves 2 KB of
-  memory and the frequency analyzer runs out of memory and reboots the device. Avoid Sub-GHz
-  until it is built into the firmware again; the numbers are in `docs/measurements/`.
+- The `screen-reader` branch firmware builds Sub-GHz into the flash image, as mntm-012 did.
+  This firmware base had made it a fap loaded from the card into RAM, which with the reader on
+  left 2 KB of memory in read mode and crashed the frequency analyzer (numbers in
+  `docs/measurements/`). The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F)
+  still load as external faps from `/ext/apps`; NFC read leaves about 24 KB with the reader on.
+  After flashing, remove `/ext/apps/Sub-GHz/subghz.fap` from the card so that the RAM loaded
+  copy cannot be launched from the Applications browser.
 
 ## Folder contents
 
@@ -69,8 +72,11 @@ Screen reader console commands (firmware from the `screen-reader` branch):
 
 Speech: announcements are spoken by the device itself. `sr say <text>` speaks text and prints
 timing; `sr stop` silences; `sr rate <40..120>` and `sr volume <0..100>` are saved settings.
-Any button press silences speech. `tools/sam_calibrate.py --verify` checks the voice still
-matches the Text to SAM demo's timing.
+Any button press silences speech. On the home screen the dolphin's speech bubbles are not
+spoken unless a button was pressed in the last two seconds (`sr status` counts them as
+suppressed; `sr watch` still shows them). During NFC-V emulation the reader is silent, because
+the emulation borrows the speaker timer; it parks the speaker pin so nothing is heard.
+`tools/sam_calibrate.py --verify` checks the voice still matches the Text to SAM demo's timing.
 
 Phase 1 marks the focused main menu item only in the List style; other menu styles are read by
 inversion where possible and will get hints in a later phase.

@@ -355,8 +355,9 @@ original text.
 - Screen change rule: fewer than half of the previous rows, ignoring roles and the status bar,
   remain; plus layer, content and title changes. A list scrolling by one row is not a screen
   change. Frames on the home screen never count as a screen change against a previous home
-  screen frame: bubble text arrives as a rate limited, non interrupting change, and "Home
-  screen" is announced only when arriving from another layer.
+  screen frame: bubble text arrives as a rate limited, non interrupting change (which phase 2
+  does not speak without a recent key press, see "Phase 2 as built"), and "Home screen" is
+  announced only when arriving from another layer.
 - Buttons carry a side hint set by the three dialog button helpers; the x position rule remains
   only as a fallback for third party drawing. The bottom row threshold for that fallback is
   y 61.
@@ -440,9 +441,12 @@ and 14, this list is what the code does.
   whenever speech held the speaker at that moment: it waits for a running utterance to end, and
   while it holds the speaker every announcement is dropped and counted, so NFC-V emulation is
   silent, including its own "Emulating" screen when speech was idle at the open (when speech was
-  running, the screen is announced and the listener starts after it). During the emulation the
-  speaker pin sits on the timer's alternate function with the timer output disabled, high
-  impedance with no pull, instead of analog with a pull down.
+  running, the screen is announced and the listener starts after it). The listener reads the
+  timer's control register only after the acquire, when the bus enable has just released the
+  peripheral reset, so it never copies a register that speech owns; and since the acquire puts
+  the speaker pin on the timer's alternate function, the listener parks the pin as analog with
+  a pull down right after it, for the whole emulation, so it does not float on the timer (the
+  release re-initialises the pin).
 - Queue and interruption: 4 items of 160 characters (SR_ANN_TEXT_MAX) and a generation counter.
   Screen, focus, typed and home announcements interrupt: the utterance in progress is aborted at
   its next sample and the queue is cleared. Change announcements do not interrupt and are
@@ -453,6 +457,13 @@ and 14, this list is what the code does.
   a sentence was cut 30 ms after an OK press, and a Back press on the NFC-V emulation screen
   cut the announcement within 10 ms with the app gone 0.6 s later. `sr say` interrupts as well
   and cuts its text at 159 characters, saying so.
+- Home screen: the desktop keeps redrawing its dolphin speech bubbles, which the model reports
+  as change announcements on the same screen. The service speaks a change on the desktop only
+  when a key was pressed in the last 2 s (SR_DESKTOP_KEY_MS in screen_reader.c); otherwise it
+  drops the utterance and counts it as "suppressed" on the frames line of sr status, while the
+  announcements counter counts only what was handed to speech. The console mirror (sr watch)
+  still receives every announcement, and "Home screen" on arrival is a different kind and is
+  spoken.
 - Worker thread: 3 KB stack (at most 812 bytes used), high priority (section 8 said 2 KB,
   normal). SAM's working memory is 3.9 KB of static RAM in the image. Flash: about 23 KB for
   the port, the engine, the text and PCM stages and the console commands.
@@ -470,11 +481,18 @@ and 14, this list is what the code does.
   37.5 KB with the phase 1 reader), infrared universal remotes 35.3 KB, infrared learn 44.4 KB,
   TOTP 65.3 KB, RFID read 80.5 KB, Doom 80.7 KB, Momentum settings 81.8 KB, Bad KB browser
   84.0 KB, iButton read 87.3 KB, Text to SAM 88.5 KB, GPIO 98.3 KB; uPython no longer loads
-  ("Not enough memory" at preload, as with the phase 1 reader). Sub-GHz is the exception and an
-  open item: in this firmware base it is a MENUEXTERNAL app loaded from the card into RAM
-  (mntm-012 built it into flash and shipped no subghz.fap; the phase 1 reader-on probe could not
-  open it because the card still held the mntm-012 resources), about 55 KB of code and data,
-  so its read mode left 2.0 KB free and the frequency analyzer ran out of memory, which is a
-  furi_check that reboots the device. Until Sub-GHz is built into the firmware again on this
-  branch (175 KB of flash is free) or 30 KB is found elsewhere, Sub-GHz is not usable with the
-  reader on.
+  ("Not enough memory" at preload, as with the phase 1 reader). Sub-GHz was the exception: in
+  this firmware base it is a MENUEXTERNAL app loaded from the card into RAM (mntm-012 built it
+  into flash and shipped no subghz.fap; the phase 1 reader-on probe could not open it because
+  the card still held the mntm-012 resources), about 55 KB of code and data, so its read mode
+  left 2.0 KB free and the frequency analyzer ran out of memory, which is a furi_check that
+  reboots the device. The branch therefore builds Sub-GHz into the firmware again: the
+  manifest's apptype is APP as in mntm-012, with the fap's file set listed explicitly because
+  the firmware build passes each sources entry to the glob on its own and so ignores the "!"
+  excludes (the "sources separation" the manifest complained about); the startup hook, the
+  cli and GPS plugins and the Add Manually fap keep their own files. It costs 41 KB of flash
+  (.free_flash 179,916 to 137,880 bytes, 134.7 KB left; .data plus 4 and .bss plus 32 bytes)
+  and no fap in RAM. The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F,
+  Momentum settings) still load as external faps; NFC read leaves about 24 KB. After the
+  flash, /ext/apps/Sub-GHz/subghz.fap is removed from the card so that the RAM loaded copy
+  cannot be launched from the Applications browser.
