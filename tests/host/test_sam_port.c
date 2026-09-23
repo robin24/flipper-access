@@ -122,6 +122,32 @@ int main(void) {
         }
     }
 
+    // Brackets, and the bytes 0xdb and 0xfb that the reciter folds to them, must not end the
+    // text: they render as spaces, and the closing bracket already reads as one
+    static const char* const bracket_pairs[][2] = {
+        {"Option [x] enabled.", "Option  x  enabled."},
+        {"Option {x} enabled.", "Option  x  enabled."},
+        {"Option \xdb" "x\xfb enabled.", "Option  x  enabled."},
+        {"[x] enabled.", " x] enabled."}, // the first character too
+    };
+    for(size_t i = 0; i < sizeof(bracket_pairs) / sizeof(bracket_pairs[0]); i++) {
+        SamCase plain = {bracket_pairs[i][1], 64, 72, 128, 128};
+        unsigned long long expected = run_case(&plain);
+        unsigned long long expected_values = n_values;
+        SamCase bracketed = {bracket_pairs[i][0], 64, 72, 128, 128};
+        unsigned long long got = run_case(&bracketed);
+        if(consumed != strlen(bracketed.text) || got != expected || expected_values == 0) {
+            printf(
+                "FAIL bracket text %zu: consumed=%zu of %zu hash=%016llx expected=%016llx\n",
+                i,
+                consumed,
+                strlen(bracketed.text),
+                got,
+                expected);
+            failures++;
+        }
+    }
+
     // Texts the original synthesizer never returns from, or overruns its tables or output arrays
     // on; the port must finish and produce sound
     for(size_t i = 0; i < SAM_MAX_INPUT; i++) {
