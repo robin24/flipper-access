@@ -377,3 +377,104 @@ original text.
   change without a key press can be dropped; desktop layer popups whose only new text is a
   button label are silent; moving between keyboard rows is announced with kind "screen"
   instead of "focus" with identical text.
+
+### Phase 2 as built
+
+Recorded after the Task 6 device checks. Where this list disagrees with sections 5, 8, 11, 12
+and 14, this list is what the code does.
+
+- Synthesizer: the SAM port is applications/services/screen_reader/sam/sam.c with sam.h, not
+  lib/sam; sources under the service directory are compiled into the firmware automatically.
+  The port matches the original C++ synthesizer value for value on the host test cases and
+  carries guards, marked "port guard", only where the original hangs or reads past its tables
+  (forced breath breaks, phoneme list positions at 255, the T/D rule at the end of unpunctuated
+  text, a phoneme string that wrapped its buffer, and the four byte values the reciter mistakes
+  for its end marker). sam_speak takes at most 250 characters and reports through `consumed` how
+  much text it rendered: the reciter stops at a word boundary once its phoneme string reaches
+  120 characters, and the worker calls again with the rest, so no words are lost.
+- Text: speech_text_expand rewrites an announcement into at most 800 characters (SPEECH_TEXT_MAX;
+  a screen of two digit hex pairs expands 4.7 times) and speech_text_next_chunk cuts that into
+  chunks of at most 80 characters (SPEECH_CHUNK_MAX) at a sentence, a comma or a word boundary.
+  The worker upper cases each chunk and appends a period when it ends without punctuation. The
+  rules, numbered as in speech_text.c: (1) a one character announcement is named, a letter by
+  its name with A as "ay", a digit by its word, punctuation by its name; (2) the text is scanned
+  as tokens of letters and digits with inner apostrophes, periods and hyphens; (3) whole tokens
+  in the term table take its pronunciation: Sub-GHz and SubGHz "sub gigahertz", kHz, MHz, GHz
+  and Hz as words, dBm "dee bee em", dB "dee bee", iButton "eye button", OK "okay", PIN "pin",
+  Wi-Fi "why fye", mAh "milliamp hours", MNTM "momentum"; (4) periods inside a token that is not
+  a decimal read "dot", an unmatched token with hyphens is split at them; (5) a number followed
+  by letters, such as 433.92MHz or 3V3, is the number and its unit, the letters through the term
+  table or spelled; (6) numbers up to four digits without a leading zero are words, longer ones
+  digit by digit, a decimal part is "point" and digits; (7) upper case letter and digit mixes
+  outside the stop list are spelled by runs: one to five letters character by character (so
+  NFC, RFID, GPIO, USB, BLE, IR, U2F, LED and hex bytes are spelled), six or more as a word, one
+  to three digits as a number, longer digit runs digit by digit; (8) other tokens are copied in
+  pieces of at most 20 characters, because the synthesizer never returns on words of about 30
+  letters; (9) between tokens, sentence punctuation stays with its word, a colon becomes a comma
+  (a space between digits), symbols become words, everything else a single space; (10) chunks
+  end at a sentence, a comma or a word boundary; (11) a hyphen before a digit outside a token is
+  "minus"; (12) a hyphen next to a digit is "to" between two digit runs of equal length, a space
+  before a word of two or more letters, "dash" otherwise; (13) a lone upper case A is "ay". A
+  stop list of about a hundred common upper case words (ON, OFF, SAVE, READ, MENU and so on)
+  keeps them as words. The console stream still receives the untouched text.
+- Output path: TIM16 is the 50 kHz PWM carrier (prescaler 4, autoreload 255) on the speaker pin
+  as in section 8, but the samples move by DMA2 channel 4 with the TIM16 update event as its
+  DMAMUX request, not DMA1 channel 1, which every bundled audio app uses; there is no second
+  timer. The firmware's own drivers do not use DMA2 channel 4, but the external CC1101 radio
+  driver in the apps submodule uses it for its asynchronous transmit, so speech during a Sub-GHz
+  transmit with an external radio garbles both; it cannot hang or crash.
+- Ring buffer 4096 bytes, about 82 ms, in two halves. The DMA's half and complete interrupts set
+  thread flags on the worker, which waits for the flag of the half it is about to fill (no
+  semaphore); an underrun is counted when the DMA has already moved into the half being filled.
+  Each SAM value is held for delta / 8 microseconds, the Text to SAM demo's hold, plus a
+  calibrated overhead of 7400 ns per value (SPEECH_OVERHEAD_NS; measured 7362 and 7422 ns on the
+  two calibration sentences with tools/sam_calibrate.py, mean 7392; the played time then matches
+  the demo within 0.2 percent once the 40 ms of pre fill and flush padding is taken off). The
+  loudness curve is a lookup table that folds in the volume setting.
+- Speaker sharing: the worker takes the speaker with a 500 ms timeout (SPEECH_ACQUIRE_TIMEOUT_MS;
+  section 8 said 100 ms with retries) when it dequeues an item, refuses it without waiting when
+  the TIM16 bus is already enabled by someone else, and hands it back after 200 ms of silence.
+  An utterance that cannot get the speaker is dropped and counted (sr status "dropped"). The
+  NFC-V listener (ISO15693 emulation) needs TIM16 and now takes the speaker mutex for each wait
+  for a reader command instead of enabling the bus directly, which was a furi_check crash
+  whenever speech held the speaker at that moment: it waits for a running utterance to end, and
+  while it holds the speaker every announcement is dropped and counted, so NFC-V emulation is
+  silent, including its own "Emulating" screen when speech was idle at the open (when speech was
+  running, the screen is announced and the listener starts after it). During the emulation the
+  speaker pin sits on the timer's alternate function with the timer output disabled, high
+  impedance with no pull, instead of analog with a pull down.
+- Queue and interruption: 4 items of 160 characters (SR_ANN_TEXT_MAX) and a generation counter.
+  Screen, focus, typed and home announcements interrupt: the utterance in progress is aborted at
+  its next sample and the queue is cleared. Change announcements do not interrupt and are
+  replaceable: a change still waiting is overwritten by the next change instead of queuing
+  behind it. Any key press stops speech and clears the queue (the service's input subscription
+  sets the worker's stop flag on every press, before the app has seen the key; section 14 had
+  this in phase 3); the announcement the press causes follows after the settle time. Measured:
+  a sentence was cut 30 ms after an OK press, and a Back press on the NFC-V emulation screen
+  cut the announcement within 10 ms with the app gone 0.6 s later. `sr say` interrupts as well
+  and cuts its text at 159 characters, saying so.
+- Worker thread: 3 KB stack (at most 812 bytes used), high priority (section 8 said 2 KB,
+  normal). SAM's working memory is 3.9 KB of static RAM in the image. Flash: about 23 KB for
+  the port, the engine, the text and PCM stages and the console commands.
+- Console: sr say, sr stop, sr rate 40..120 (bigger is slower, saved), sr volume 0..100 (saved);
+  sr status shows the speech counters (utterances, aborted, dropped, underruns, queue dropped),
+  the last utterance's played and nominal time with its value count, and the worker's stack
+  watermark.
+- Memory, measured on 2026-09-23 with tools/ram_probe.py, raw log in
+  docs/measurements/2026-09-23-ram-probe-speech-on.txt: total heap 185,720 bytes (3.9 KB less
+  than phase 1, SAM's static tables), 115.8 KB free on the home screen. The phase 2 code takes
+  9.7 KB of heap at service start (the 4 KB ring, the 800 byte text buffer, the queue, the PCM
+  tables and the worker's 3 KB stack with its records), inside the 13 KB budget, and nothing
+  per utterance.
+  Lowest free heap while each core app was busy: NFC read 23.8 KB (51 KB before the reader,
+  37.5 KB with the phase 1 reader), infrared universal remotes 35.3 KB, infrared learn 44.4 KB,
+  TOTP 65.3 KB, RFID read 80.5 KB, Doom 80.7 KB, Momentum settings 81.8 KB, Bad KB browser
+  84.0 KB, iButton read 87.3 KB, Text to SAM 88.5 KB, GPIO 98.3 KB; uPython no longer loads
+  ("Not enough memory" at preload, as with the phase 1 reader). Sub-GHz is the exception and an
+  open item: in this firmware base it is a MENUEXTERNAL app loaded from the card into RAM
+  (mntm-012 built it into flash and shipped no subghz.fap; the phase 1 reader-on probe could not
+  open it because the card still held the mntm-012 resources), about 55 KB of code and data,
+  so its read mode left 2.0 KB free and the frequency analyzer ran out of memory, which is a
+  furi_check that reboots the device. Until Sub-GHz is built into the firmware again on this
+  branch (175 KB of flash is free) or 30 KB is found elsewhere, Sub-GHz is not usable with the
+  reader on.
