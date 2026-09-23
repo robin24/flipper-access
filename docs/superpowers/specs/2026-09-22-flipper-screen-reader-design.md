@@ -481,18 +481,20 @@ and 14, this list is what the code does.
   37.5 KB with the phase 1 reader), infrared universal remotes 35.3 KB, infrared learn 44.4 KB,
   TOTP 65.3 KB, RFID read 80.5 KB, Doom 80.7 KB, Momentum settings 81.8 KB, Bad KB browser
   84.0 KB, iButton read 87.3 KB, Text to SAM 88.5 KB, GPIO 98.3 KB; uPython no longer loads
-  ("Not enough memory" at preload, as with the phase 1 reader). Sub-GHz was the exception: in
+  ("Not enough memory" at preload, as with the phase 1 reader). Sub-GHz is the exception: in
   this firmware base it is a MENUEXTERNAL app loaded from the card into RAM (mntm-012 built it
   into flash and shipped no subghz.fap; the phase 1 reader-on probe could not open it because
   the card still held the mntm-012 resources), about 55 KB of code and data, so its read mode
-  left 2.0 KB free and the frequency analyzer ran out of memory, which is a furi_check that
-  reboots the device. The branch therefore builds Sub-GHz into the firmware again: the
-  manifest's apptype is APP as in mntm-012, with the fap's file set listed explicitly because
-  the firmware build passes each sources entry to the glob on its own and so ignores the "!"
-  excludes (the "sources separation" the manifest complained about); the startup hook, the
-  cli and GPS plugins and the Add Manually fap keep their own files. It costs 41 KB of flash
-  (.free_flash 179,916 to 137,880 bytes, 134.7 KB left; .data plus 4 and .bss plus 32 bytes)
-  and no fap in RAM. The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F,
-  Momentum settings) still load as external faps; NFC read leaves about 24 KB. After the
-  flash, /ext/apps/Sub-GHz/subghz.fap is removed from the card so that the RAM loaded copy
-  cannot be launched from the Applications browser.
+  leaves 2.0 KB free and the frequency analyzer runs out of memory, which is a furi_check that
+  reboots the device. Sub-GHz is therefore not usable while the reader is enabled, until
+  phase 3 addresses memory. Building it into the firmware again was tried in the final fix
+  round (manifest apptype APP with the fap's file set listed explicitly, 42 KB of flash) and
+  reverted: the updater validates every page of the image against the start of the BLE stack
+  (SFSA 0xD7 for ble_light 1.20.0, so the firmware may use 880,640 bytes) and refused the
+  910,360 byte image before writing, while fbt's .free_flash line, measured against the
+  nominal 1024 KB linker region, had shown 175 KB free. The true headroom of this branch is
+  11,972 bytes (firmware.bin 868,668 bytes after the round; mntm-012 was 876,900 with 3.7 KB
+  spare), so phase 3 cannot add 60 KB of code to the firmware on this base;
+  tools/flash_headroom.sh prints the spare bytes and is run before every flash. The other main
+  apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F, Momentum settings) load as external
+  faps as well; NFC read leaves about 24 KB.

@@ -13,13 +13,13 @@ and the tools in this folder. Last updated 2026-09-23.
   device is in the updater and comes back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
   speaks its launch argument. Its on-screen behaviour is unchanged.
-- The `screen-reader` branch firmware builds Sub-GHz into the flash image, as mntm-012 did.
-  This firmware base had made it a fap loaded from the card into RAM, which with the reader on
-  left 2 KB of memory in read mode and crashed the frequency analyzer (numbers in
-  `docs/measurements/`). The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F)
-  still load as external faps from `/ext/apps`; NFC read leaves about 24 KB with the reader on.
-  After flashing, remove `/ext/apps/Sub-GHz/subghz.fap` from the card so that the RAM loaded
-  copy cannot be launched from the Applications browser.
+- Sub-GHz loads as an external app from the card into RAM in this firmware base (mntm-012 had
+  it in flash). With the reader on, its read mode leaves about 2 KB of heap and the frequency
+  analyzer crashes out of memory (numbers in `docs/measurements/`), so avoid Sub-GHz while the
+  reader is enabled until phase 3 addresses memory. Building it into the firmware was tried and
+  reverted: the image did not fit below the BLE stack (see the flash limit under Useful
+  commands). The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F) load as
+  external faps too; NFC read leaves about 24 KB with the reader on.
 
 ## Folder contents
 
@@ -55,6 +55,13 @@ Build the patched app and copy it to the card:
 
 (The storage helper is `Momentum-Firmware/scripts/storage.py`; run it with the venv Python and
 `-p /dev/cu.usbmodemflip_R0skie1`.)
+
+Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 for ble_light
+1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region
+and does not know this, and the updater refuses a larger image before writing. Run
+`tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
+`build/f7-firmware-C/firmware.bin` and the spare bytes (this branch: 868,668 bytes, 11,972
+spare; the Task 6 image was 868,572, about 12 KB spare).
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
 serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,
