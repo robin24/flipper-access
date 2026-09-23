@@ -32,7 +32,7 @@ static void test_words_and_numbers(void) {
     expect("Battery: 87%", "Battery, eighty seven percent");
     expect("2026", "two thousand twenty six");
     expect("1234567", "one two three four five six seven");
-    expect("04 A2 FF", "zero four ay 2 F F");
+    expect("04 A2 FF", "zero four ay two F F");
     expect("12:34", "twelve thirty four");
     expect("100", "one hundred");
     expect("105", "one hundred five");
@@ -44,7 +44,7 @@ static void test_acronyms_and_terms(void) {
     expect("NFC", "N F C");
     expect("Sub-GHz", "sub gigahertz");
     expect("OK", "okay");
-    expect("U2F", "U 2 F");
+    expect("U2F", "U two F");
     expect("GPIO", "G P I O");
     expect("ON", "ON");
     expect("Read RAW", "Read RAW");
@@ -193,7 +193,6 @@ static void test_rule4_periods_and_hyphens(void) {
     expect("Sub-GHz.sub", "sub gigahertz dot sub");
     expect("read-only", "read only");
     expect("on-the-fly", "on the fly");
-    expect("20-MHz", "twenty megahertz");
 }
 
 // Rule 5: a number, decimal or not, then letters: a term, spelled when one to five upper case
@@ -202,8 +201,8 @@ static void test_rule5_digits_then_letters(void) {
     expect("868MHz", "eight hundred sixty eight megahertz");
     expect("FAAC SLH 868MHz", "F ay ay C S L H eight hundred sixty eight megahertz");
     expect("2FA", "two F ay");
-    // "V3" is not letters only, so the token is not rule 5's shape and rule 7 spells it.
-    expect("3V3", "3 V 3");
+    // "V3" is not letters only, so the token is not rule 5's shape; rule 7 spells it by runs.
+    expect("3V3", "three V three");
     expect("100mAh", "one hundred milliamp hours");
     expect("0dBm", "zero dee bee em");
     expect("10dBm +", "ten dee bee em plus");
@@ -219,6 +218,8 @@ static void test_rule5_digits_then_letters(void) {
     expect("12AT", "twelve AT");
     expect("4GB", "four G B");
     expect("12ABCDEF", "twelve ABCDEF");
+    expect("1ABCDE", "one ay B C D E");
+    expect("1K", "one K");
 }
 
 // Rule 6: words up to six digits without a leading zero, digits otherwise, "point" for decimals.
@@ -244,8 +245,10 @@ static void test_rule6_numbers(void) {
     expect("1234567.89", "one two three four five six seven point eight nine");
 }
 
-// Rule 7: two to five upper case letters and digits with a letter are spelled unless the word is
-// in the stop list; six or more, mixed case, or a lone letter are copied.
+// Rule 7: upper case letters and digits, two or more with a letter, outside the stop list, are
+// spelled by runs: one to five letters character by character (a stop word run as a word),
+// longer letter runs as a word, one to three digits as a number, longer digit runs digit by
+// digit. Mixed case is copied.
 static void test_rule7_spelling_and_stop_list(void) {
     expect("ERROR", "ERROR");
     expect("SET AT", "SET AT");
@@ -257,9 +260,18 @@ static void test_rule7_spelling_and_stop_list(void) {
     expect("OKAY", "OKAY");
     expect("GO", "GO");
     expect("IO", "I O");
-    expect("T5577", "T 5 5 7 7");
-    expect("AM650", "ay M 6 5 0");
-    expect("EM4100", "EM4100");
+    expect("T5577", "T five five seven seven");
+    expect("AM650", "ay M six hundred fifty");
+    expect("EM4100", "E M four one zero zero");
+    expect("DS1990A", "D S one nine nine zero ay");
+    expect("NTAG215", "N T ay G two hundred fifteen");
+    expect("ISO14443", "I S O one four four four three");
+    expect("MIFARE", "MIFARE");
+    expect("MODE1", "MODE one");
+    expect("A1", "ay one");
+    expect("UID: 04 A2 B3 C4", "U I D, zero four ay two B three C four");
+    expect("X007", "X zero zero seven");
+    expect("SET1", "SET one");
     expect("USB", "U S B");
     expect("AA", "ay ay");
     expect("NFC ON", "N F C ON");
@@ -288,9 +300,9 @@ static void test_rule9_separators(void) {
     expect("12:34:56", "twelve thirty four fifty six");
     expect("Time: 12:34", "Time, twelve thirty four");
     expect("1: 2", "one, two");
-    expect("A:B", "A, B");
+    expect("A:B", "ay, B");
     expect("Read/Write", "Read slash Write");
-    expect("A&B", "A and B");
+    expect("A&B", "ay and B");
     expect("1+1=2", "one plus one equals two");
     expect("#1", "number one");
     expect("user@host", "user at host");
@@ -420,6 +432,42 @@ static void test_rule10_chunk_edges(void) {
     CHECK(n == 4);
     CHECK(strcmp(chunk, "more") == 0);
 
+    // a space exactly at index 80 is outside the limit: the cut falls at the previous space
+    char at80[100];
+    memset(at80, 'a', 39);
+    at80[39] = ' ';
+    memset(at80 + 40, 'b', 40);
+    at80[80] = ' ';
+    strcpy(at80 + 81, "tail");
+    pos = 0;
+    n = speech_text_next_chunk(at80, &pos, chunk, sizeof(chunk));
+    CHECK(n == 39);
+    CHECK(chunk[0] == 'a' && chunk[38] == 'a' && chunk[39] == '\0');
+    n = speech_text_next_chunk(at80, &pos, chunk, sizeof(chunk));
+    CHECK(n == 45);
+    CHECK(chunk[0] == 'b' && strcmp(chunk + 40, " tail") == 0);
+    CHECK(speech_text_next_chunk(at80, &pos, chunk, sizeof(chunk)) == 0);
+
+    // a comma at index 79 followed by a space: an 80 character chunk ending in the comma
+    char comma79[100];
+    memset(comma79, 'x', 79);
+    comma79[79] = ',';
+    strcpy(comma79 + 80, " more");
+    pos = 0;
+    n = speech_text_next_chunk(comma79, &pos, chunk, sizeof(chunk));
+    CHECK(n == 80);
+    CHECK(chunk[79] == ',');
+    n = speech_text_next_chunk(comma79, &pos, chunk, sizeof(chunk));
+    CHECK(n == 4);
+    CHECK(strcmp(chunk, "more") == 0);
+
+    // a chunk buffer below two characters holds nothing
+    char tiny[2];
+    pos = 0;
+    CHECK(speech_text_next_chunk("Hello", &pos, tiny, 1) == 0);
+    CHECK(tiny[0] == '\0');
+    CHECK(speech_text_next_chunk("Hello", &pos, tiny, 0) == 0);
+
     // the buffer can be smaller than the chunk limit
     char small[11];
     const char* short_words = "Hello world foo";
@@ -434,13 +482,14 @@ static void test_rule10_chunk_edges(void) {
 }
 
 // Rule 11: a hyphen before a digit, at the start or after a character that is not alphanumeric,
-// is "minus"; a hyphen before a space or a letter is still a space, inside a token rule 4 applies.
+// is "minus"; a hyphen before a space or a letter is still a space, inside a token rules 4 and
+// 12 apply.
 static void test_rule11_minus(void) {
     expect("-90dBm", "minus ninety dee bee em");
     expect("TX power -10dBm", "T X power minus ten dee bee em");
     expect("-", "dash");
     expect("- 90", "ninety");
-    expect("Ch-3", "Ch three");
+    expect("Ch-3", "Ch dash three");
     expect("(-5)", "minus five");
     expect("-0.5", "minus zero point five");
     expect("-5-3", "minus five to three");
@@ -448,8 +497,8 @@ static void test_rule11_minus(void) {
     expect("RSSI: -70", "R S S I, minus seventy");
 }
 
-// Rule 12: a hyphen between two digits inside a token is "to" when it is the only hyphen and
-// "dash" when there are more; hyphens next to letters keep rule 4.
+// Rule 12: a hyphen with a digit on at least one side is "to" when it is the only hyphen of a
+// token made of digit runs and "dash" otherwise; hyphens between letters keep rule 4.
 static void test_rule12_ranges(void) {
     expect(
         "378-481, 749-962 MHz",
@@ -458,9 +507,51 @@ static void test_rule12_ranges(void) {
     expect("2026-09-23", "two thousand twenty six dash zero nine dash twenty three");
     expect("1-2", "one to two");
     expect("1-2-3", "one dash two dash three");
-    expect("a-1-2", "a one dash two");
+    expect("a-1-2", "a dash one dash two");
+    expect("20-MHz", "twenty dash megahertz");
+    expect("ISO14443-3A", "I S O one four four four three dash three ay");
+    expect(
+        "Tech: ISO 14443-3A (NFC-A)",
+        "Tech, I S O fourteen thousand four hundred forty three dash three ay N F C ay");
+    expect("NFC-A", "N F C ay");
     expect("10-20%", "ten to twenty percent");
     expect("on-the-fly", "on the fly");
+}
+
+// Rule 13: a token that is the single upper case letter A is "ay"; lower case a is the article.
+static void test_rule13_upper_a(void) {
+    expect("NFC-A", "N F C ay");
+    expect("Type A", "Type ay");
+    expect("a key", "a key");
+    expect("A", "ay");
+    expect("Plan A or B", "Plan ay or B");
+    expect("A.", "ay.");
+}
+
+// SPEECH_TEXT_MAX: a 160 character hex dump expands without being cut. The dump mixes the
+// pair shapes of a real screen; each expected word comes from rules 5, 6 and 7.
+static void test_text_buffer(void) {
+    static const char* const pairs[16] = {
+        "0A", "1B", "2C", "3D", "4E", "5F", "6A", "7B", "8C", "9D", "77", "33", "88", "AA", "FF", "00"};
+    static const char* const words[16] = {
+        "zero ay", "one B", "two C", "three D", "four E", "five F", "six ay", "seven B",
+        "eight C", "nine D", "seventy seven", "thirty three", "eighty eight", "ay ay", "F F",
+        "zero zero"};
+    char in[161] = "UID:";
+    char want[SPEECH_TEXT_MAX] = "U I D,";
+    for(int k = 0; k < 52; k++) {
+        strcat(in, " ");
+        strcat(in, pairs[k % 16]);
+        strcat(want, " ");
+        strcat(want, words[k % 16]);
+    }
+    CHECK(strlen(in) == 160);
+    char out[SPEECH_TEXT_MAX];
+    size_t n = speech_text_expand(in, out, sizeof(out));
+    CHECK(n == strlen(out));
+    CHECK(strcmp(out, want) == 0);
+    CHECK(n > 400); // the previous 400 byte buffer would have cut this text
+    CHECK(n > strlen("three D") && strcmp(out + n - strlen("three D"), "three D") == 0);
 }
 
 // Behaviour the rule list does not decide. These pin what the code does today so a change is
@@ -483,6 +574,8 @@ static void test_beyond_the_rule_list(void) {
     expect("x\\y", "x y");
     expect("a ~ b", "a b");
     expect("a ^ b $ c", "a b c");
+    // A rule 7 letter run longer than 20 characters is copied in rule 8's pieces (the hang guard).
+    expect("ABCDEFGHIJKLMNOPQRSTUVWXYZ1", "ABCDEFGHIJKLMNOPQRST UVWXYZ one");
     // The output buffer: truncated, always terminated; a null input gives an empty string.
     char small[8];
     CHECK(speech_text_expand("Hello world", small, sizeof(small)) == 7);
@@ -509,6 +602,8 @@ int main(void) {
     test_rule10_chunk_edges();
     test_rule11_minus();
     test_rule12_ranges();
+    test_rule13_upper_a();
+    test_text_buffer();
     test_beyond_the_rule_list();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
