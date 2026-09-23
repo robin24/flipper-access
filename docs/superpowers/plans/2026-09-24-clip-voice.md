@@ -908,7 +908,7 @@ Create `tools/voice_build.py`:
 
     tools/voice_build.py [--extract] [--pull-missing] [--sync] [--check] [options]
 
-Words come from tools/voice_words.txt, from every string literal in the firmware sources run
+Words come from tools/voice_words.txt, from every string literal in the firmware's core apps and services run
 through the real pronunciation layer (--extract), and from the device's /ext/sr/missing.txt
 (--pull-missing). Clips land in voice/<initial>/<word>.raw next to voice/manifest.json, which
 remembers the settings each clip was made with, so a rerun makes only what is missing or
@@ -993,7 +993,10 @@ def build_expander(workdir):
 def firmware_strings():
     """Every string literal in the firmware's C sources, unescaped, printf fields removed."""
     seen = set()
-    roots = [os.path.join(FW, "applications"), os.path.join(FW, "lib", "toolbox")]
+    # The core apps and services only: applications/external holds hundreds of community apps
+    # whose strings would multiply the vocabulary and the upload time for nothing
+    roots = [os.path.join(FW, "applications", d) for d in ("main", "services", "settings", "system")]
+    roots.append(os.path.join(FW, "lib", "toolbox"))
     for root in roots:
         for path in glob.glob(os.path.join(root, "**", "*.[ch]"), recursive=True):
             try:
