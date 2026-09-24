@@ -157,6 +157,37 @@ static void test_paths(void) {
     expect_path(longest);
 }
 
+static void expect_letter(char c, const char* want) {
+    char out[3] = {'x', 'x', 'x'};
+    bool got = speech_voice_letter_clip(c, out);
+    checks++;
+    if(want ? (!got || strcmp(out, want) != 0) : got) {
+        failures++;
+        printf("FAIL letter_clip(0x%02x) got %s \"%.3s\", want %s\n", (unsigned)(unsigned char)c,
+               got ? "true" : "false", got ? out : "", want ? want : "false");
+    }
+}
+
+static void test_letters(void) {
+    // The clips that spell a missing word: a by its name, so that it is not the article
+    expect_letter('a', "ay");
+    expect_letter('b', "b");
+    expect_letter('z', "z");
+    expect_letter('0', "0");
+    expect_letter('7', "7");
+    expect_letter('-', NULL);
+    expect_letter('A', NULL); // clip names are lower case
+    expect_letter('\'', NULL);
+    // Every character value: b to z and 0 to 9 are their own clip, anything else is skipped
+    for(int i = 0; i < 256; i++) {
+        char c = (char)i;
+        if(c == 'a') continue;
+        char want[2] = {c, '\0'};
+        bool named = (c >= 'b' && c <= 'z') || (c >= '0' && c <= '9');
+        expect_letter(c, named ? want : NULL);
+    }
+}
+
 static void test_missing(void) {
     SpeechVoiceState s;
     speech_voice_state_init(&s);
@@ -200,6 +231,7 @@ static void test_missing(void) {
 int main(void) {
     test_words();
     test_paths();
+    test_letters();
     test_missing();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
