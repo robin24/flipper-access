@@ -9,7 +9,8 @@ and the tools in this folder. Last updated 2026-09-24.
 - Device name: R0skie. Hardware version 12, region DE. 64 GB microSD card, exFAT.
 - Firmware: Momentum mntm-012 (built 31 December 2025), installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
-  here: on 2026-09-24 that is phase 3, commit 6c7469a79, API version 87.2.
+  here: on 2026-09-24 that is phase 3 with its final review fixes, commit af4ee0952, API version
+  87.2.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1`, 230400 baud. It disappears while the
   device is in the updater and comes back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
@@ -39,7 +40,8 @@ otherwise. The device outputs are in `docs/measurements/2026-09-24-phase-3.txt`.
 ### Back chords
 
 Hold Back, press a second key, then let go of Back. The second key goes to the screen reader
-only. The app on the screen never sees it, so a chord never moves the focus or opens anything.
+only. The app on the screen never sees it, so a chord never moves the focus or opens anything. A
+third key pressed while the second is still held goes to the app as a normal key.
 
 - Back and Up reads the whole screen from the top. The home screen, which draws no text of its
   own, reads as "Home screen". A long screen is read in several parts, one after the other.
@@ -88,8 +90,8 @@ value of the row you are on.
 
 - Screen Reader, ON or OFF. OFF turns the reader off at once: nothing more is read, and the
   chords become ordinary keys. If that happens by mistake, press Right straight away. The
-  selection is still on this row, and Right turns the reader back on. The console command
-  `sr on` does the same.
+  selection is still on this row, and Right turns the reader back on and the screen is read
+  again: you hear "Screen Reader ON". The console command `sr on` does the same.
 - Voice, Recorded or SAM. Recorded speaks with the word clips on the SD card, SAM with the
   built-in synthesizer.
 - Rate, from 40 to 120 in steps of 4. Bigger is slower. The rate changes SAM only: the recorded
@@ -120,7 +122,8 @@ is a grid of icons, and the reader names the selected one. It opens on Lock.
   in steps of 5 percent.
 - You hear "Lock", "Momentum", "Settings", "Left handed on" or "Left handed off", "Dark mode on"
   or "off", "Bluetooth on" or "off", and the sliders with their level, such as "Brightness 100"
-  and "Volume 95". In stealth mode the Volume slider is "Volume muted".
+  and "Volume 95". In stealth mode the Volume slider keeps its level and adds "muted", such as
+  "Volume 95, muted".
 - OK uses the selected tile. A switch flips, Settings and Momentum open those apps, Lock offers
   the ways to lock, described below, and Volume switches stealth mode on or off. Stealth mode
   mutes the device's own beeps and sounds; the reader keeps speaking.
@@ -132,11 +135,12 @@ Select Lock in the lock menu and press OK. A short list offers Keypad Lock, PIN 
 Lock + OFF, read as "Keypad Lock, 1 of 3" and so on. Up and Down choose, and OK locks.
 
 When the device locks, from this list or by the auto-lock timer, you hear "Locked, press Back
-three times to unlock". A PIN lock says "Locked with PIN, press Up to enter it". For two seconds
-after that the reader says nothing else about the home screen, so the sentence is heard in full.
+three times quickly to unlock". A PIN lock says "Locked with PIN, press Up to enter it". For two
+seconds after that the reader says nothing else about the home screen, so the sentence is heard
+in full.
 
 Any key pressed on the lock screen brings up its hint, and the reader says "Press Back three
-times to unlock" or "Press Up to enter the PIN". Back and Up reads the whole lock screen,
+times quickly to unlock" or "Press Up to enter the PIN". Back and Up reads the whole lock screen,
 including the time and date.
 
 To unlock a keypad lock, press Back three times quickly: each press must come less than 0.6
@@ -176,8 +180,9 @@ the emulation takes over the speaker, and the reader stays silent until you leav
   around a lock.
 - The screen shown after a firmware update is not read. Back closes it.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
-- After a long idle, the first key press on the home screen may open the lock menu, the menu that
-  Up opens by default. Back closes it.
+- Twice, after a long idle, the first OK that the scripted driver `tools/sr_drive.py` sent on the
+  home screen opened the lock menu instead of the main menu. It has not been reproduced since and
+  is not explained. Up, not OK, is the default key for the lock menu. Back closes it.
 - Keys sent from `sr watch` and from remote control bypass the chords, as described under Back
   chords.
 
@@ -226,9 +231,10 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region
 and does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after phase 3, at 6c7469a79
-on 2026-09-24: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 bytes, 8,592
-spare. Before the recorded voice, at 54794522b: 869,756 bytes, 10,884 spare.
+`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after phase 3 and its final
+review fixes, at af4ee0952 on 2026-09-24: 876,056 bytes, 4,584 spare. After phase 3 before those
+fixes, at 6c7469a79: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 bytes,
+8,592 spare. Before the recorded voice, at 54794522b: 869,756 bytes, 10,884 spare.
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
 serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,

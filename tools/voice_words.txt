@@ -117,3 +117,4 @@ selected
 locked
 unlocked
 digits
+quickly

@@ -505,9 +505,10 @@ and 14, this list is what the code does.
 Agreed with Robin on 2026-09-24 (build authorised without further approval). It replaces the chord table of section 9 and the settings paragraph of section 10 where they differ, and adds the icon-only screens.
 
 Status: built, and verified on the device on 2026-09-24. Firmware branch screen-reader at
-6c7469a79, API 87.2, firmware.bin 875,928 bytes with 4,712 spare. The paragraphs below are the
-design as agreed. "Phase 3 as built", at the end of this section, lists where the code differs;
-where the two disagree, that list is what the code does. The design text is wrong in five places:
+6c7469a79, API 87.2, firmware.bin 875,928 bytes with 4,712 spare; after the final review fixes at
+af4ee0952, 876,056 bytes with 4,584 spare. The paragraphs below are the design as agreed.
+"Phase 3 as built", at the end of this section, lists where the code differs; where the two
+disagree, that list is what the code does. The design text is wrong in five places:
 
 - The filter runs under the input service's own filter lock, a mutex held around each filter
   call and around input_set_filter, not under the pubsub mutex, which is private to
@@ -594,7 +595,10 @@ docs/measurements/2026-09-24-phase-3.txt.
 - Accessibility scene: momentum_app_scene_accessibility.c, the fourth item of the app's root
   list, after Misc. When the saved rate or volume is off the scene's grid (set from the
   console), the row shows the nearest step (volume 75 shows 80); the first Left or Right moves
-  from that step. The app saves on exit.
+  from that step. The app saves on exit. Turning the reader back on, in the scene or with sr on,
+  reads the screen again: the frame tap sees the setting go from off to on, and the model forgets
+  its previous screen, so the screen shown is announced as a new one even when it is the one the
+  reader last saw (on the Screen Reader row, "Screen Reader ON").
 - Notes: canvas_tap_hint_note records text with the note flag at position 0, 0 in the secondary
   font. In the model a note is a row, a focus row when focus is set, never the title and never
   joined with drawn text. Notes are read before the drawn text (the lock screen's date sits
@@ -604,22 +608,24 @@ docs/measurements/2026-09-24-phase-3.txt.
   such as the lock menu or the power-off dialog, once the desktop's text is gone. That one does
   not interrupt and follows the bubble rule: it is spoken only within 2 s of a key press. The
   lock menu names the selected tile, a switch with "on" or "off", a slider with its level
-  ("Brightness 100", "Volume 95"), and the Volume slider as "Volume muted" in stealth mode. The
-  lock popup's choices are a focus with a position ("Keypad Lock, 1 of 3"). The PIN entry's note
-  says "1 digit entered" or "N digits entered" and is read before "Enter PIN:"; the PIN entry
-  was not exercised on the device.
+  ("Brightness 100", "Volume 95"), and in stealth mode the Volume slider with its level and
+  "muted" ("Volume 95, muted"). The lock popup's choices are a focus with a position ("Keypad
+  Lock, 1 of 3"). The PIN entry's note says "1 digit entered" or "N digits entered" and is read
+  before "Enter PIN:"; the PIN entry was not exercised on the device.
 - Lock: the reader subscribes to the desktop status pubsub once the desktop record exists
   (retried on every frame, because the desktop creates the record at the end of its setup) and
   announces the lock itself, as a new announcement kind ("lock:" in sr watch), interrupting and
   never suppressed, so an auto-lock is heard without a key press: "Locked, press Back three times
-  to unlock", or "Locked with PIN, press Up to enter it" when the RTC lock flag of a PIN lock is
-  set. For 2 s after it, or until a key press, the desktop says nothing more: not the lock screen
-  arriving, not the bubbles behind its cover, not a late frame of the lock menu. "Unlocked" is
-  said on every locked=false message, which only desktop_unlock publishes, without interrupting,
-  so the "Home screen" that follows is queued behind it. The lock screen keeps its own note for
-  Back plus Up; while its hint shows after a key press, a second note names the key, "Press Back
-  three times to unlock" or "Press Up to enter the PIN", also when the visual prompt is turned
-  off.
+  quickly to unlock" (quickly: the lock screen counts afresh after 600 ms without a key), or
+  "Locked with PIN, press Up to enter it" when the RTC lock flag of a PIN lock is set. For 2 s
+  after it, or until a key press, the desktop says nothing more: not the lock screen arriving,
+  not the bubbles behind its cover, not a late frame of the lock menu. "Unlocked" is said on
+  every locked=false message, which only desktop_unlock publishes, without interrupting, so the
+  "Home screen" that follows is queued behind it. The lock screen keeps its own note for Back
+  plus Up, with the 3 as a digit ("Locked, press Back 3 times quickly to unlock", spoken as
+  "three") because a note keeps 47 characters; while its hint shows after a key press, a second
+  note names the key, "Press Back three times quickly to unlock" or "Press Up to enter the PIN",
+  also when the visual prompt is turned off.
 - Infrared: button_panel_item_set_name gives each ButtonItem a name, and the panel hints the
   selected item's name as a focus note after its icons, so the panel's label stays the title.
   The universal remotes name all 56 buttons of their 9 scenes, beyond the design's table: Stop,
@@ -632,11 +638,13 @@ docs/measurements/2026-09-24-phase-3.txt.
   with flash_usb_full, so every app on the card was rebuilt for it.
 - Vocabulary: the hint words were added by the routine voice_build run (27 clips, among them
   digit, dry, backward and muted). The PIN note's "digits" is built by printf, which the
-  extraction cannot see, so tools/voice_words.txt lists it.
+  extraction cannot see, so tools/voice_words.txt lists it. The final review fixes added one
+  clip, "quickly", also listed there.
 - Budget: firmware.bin 875,928 bytes at 6c7469a79, 4,712 spare; phase 3 took 3,880 bytes (8,592
-  spare at d5b77c219). Idle heap about 110 KB free, as before. Lowest free stack seen:
-  InputSrv 580 of 1,020 bytes, TimersSrv 740 of 1,020, DesktopSrv 1,084 of 2,044, GuiSrv 1,108
-  of 2,044, ScreenReaderSrv 2,028 of 3,068, SpeechWorker 2,180 of 3,068.
+  spare at d5b77c219). The final review fixes took 128 more: 876,056 bytes at af4ee0952, 4,584
+  spare. Idle heap about 110 KB free, as before. Lowest free stack seen: InputSrv 580 of 1,020
+  bytes, TimersSrv 740 of 1,020, DesktopSrv 1,084 of 2,044, GuiSrv 1,108 of 2,044,
+  ScreenReaderSrv 2,028 of 3,068, SpeechWorker 2,180 of 3,068.
 - Tests: host checks for chords 73, the model 159, speech text 1,022, the queue 156, PCM 700 and
   the voice 4,433, plus the 11 SAM cases. On the device, tools/sr_drive.py's third session sends
   the four chords that change no setting (Back plus Up, Down, OK and OK Long) with `input send`,
@@ -645,7 +653,8 @@ docs/measurements/2026-09-24-phase-3.txt.
 - Known limits: Sub-GHz runs out of memory with the reader on (opening it restarted the device);
   the memory plan comes next. Dolphin bubbles behind the lock screen can be read around a lock.
   The splash screen after an update is dismissed silently. After a PIN unlock "Unlocked" and
-  "Home screen" can swap. The first key press on the home screen after a long idle may open the
-  lock menu, which Up opens by default. Remote control and `sr watch` keys bypass the chords.
-  One unexplained "furi_check failed" reboot happened during phase 3 (15:09:51, the project's
-  third); tools/flipper_log.py now keeps the log, so the next one names its thread.
+  "Home screen" can swap. Twice the scripted driver's first synthetic OK on the home screen after
+  a long idle opened the lock menu; not reproduced since, not explained (Up is the default
+  keybind that opens the lock menu). Remote control and `sr watch` keys bypass the chords. One
+  unexplained "furi_check failed" reboot happened during phase 3 (15:09:51, the project's third);
+  tools/flipper_log.py now keeps the log, so the next one names its thread.
