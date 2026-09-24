@@ -206,9 +206,10 @@ def voice_on(storage):
 
 def pull_missing(port):
     storage, _ = open_storage(port)
-    was_on = voice_off(storage)
     words = set()
+    was_on = False
     try:
+        was_on = voice_off(storage)
         if storage.exist_file("/ext/sr/missing.txt"):
             with tempfile.TemporaryDirectory() as d:
                 local = os.path.join(d, "missing.txt")
@@ -218,21 +219,28 @@ def pull_missing(port):
         log(f"pulled {len(words)} missing words from the device")
     finally:
         if was_on:
-            voice_on(storage)
+            try:
+                voice_on(storage)
+            except Exception as e:
+                log(f"failed to restore voice: {e}")
         storage.stop()
     return words
 
 
 def sync(port, out_dir):
     storage, ops = open_storage(port)
-    was_on = voice_off(storage)
+    was_on = False
     try:
+        was_on = voice_off(storage)
         t0 = time.time()
         ops.recursive_send("/ext/sr/voice", out_dir)
         log(f"sync: done in {time.time() - t0:.0f} s")
     finally:
         if was_on:
-            voice_on(storage)
+            try:
+                voice_on(storage)
+            except Exception as e:
+                log(f"failed to restore voice: {e}")
         storage.stop()
 
 
@@ -244,14 +252,22 @@ def check(settings, names, workdir):
         w, ok, msg = make_clip((word, spoken_text(word, names), settings, path))
         data = open(path, "rb").read() if ok else b""
         seconds = len(data) / settings["hz"]
-        pad = int(settings["hz"] * 0.015)
-        edges = data[:pad] + data[-pad:]
+        edge = int(settings["hz"] * 0.015)
+        edges = data[:edge] + data[-edge:]
         quiet = all(abs(v - 128) <= 2 for v in edges)
         loud = max(abs(v - 128) for v in data) >= 100 if data else False
         good = ok and 0.05 <= seconds <= 3.0 and quiet and loud
         bad += 0 if good else 1
         log(f"check {word}: {'ok' if good else 'BAD'} {seconds:.2f} s, quiet edges {quiet}, peak ok {loud} {msg}")
     return bad == 0
+
+
+def save_manifest(manifest, manifest_path):
+    """Write the manifest atomically, so a crash or interruption mid-write can never leave a
+    truncated/corrupt manifest.json behind."""
+    tmp = manifest_path + ".tmp"
+    json.dump(manifest, open(tmp, "w"), indent=0, sort_keys=True)
+    os.replace(tmp, manifest_path)
 
 
 def main():
@@ -316,15 +332,17 @@ def main():
                 log(f"failed: {word}: {msg}")
             if i % 100 == 0:
                 log(f"{i} of {len(jobs)} clips, {time.time() - t0:.0f} s")
-                json.dump(manifest, open(manifest_path, "w"), indent=0, sort_keys=True)
+                save_manifest(manifest, manifest_path)
     manifest["settings"] = settings
-    json.dump(manifest, open(manifest_path, "w"), indent=0, sort_keys=True)
+    save_manifest(manifest, manifest_path)
     with open(os.path.join(a.out, "voice.txt"), "w") as f:
         f.write(settings_line(settings) + "\n")
     log(f"made {made} clips, {failed} failed, {time.time() - t0:.0f} s; vocabulary {len(manifest['words'])} words in {a.out}")
     if a.sync:
         sync(a.port, a.out)
-    return 0
+    if failed:
+        log(f"{failed} clip(s) failed")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
