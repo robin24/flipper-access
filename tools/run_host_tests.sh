@@ -10,7 +10,8 @@ OUT="${TMPDIR:-/tmp}/screen_reader_host_tests"
 mkdir -p "$OUT"
 CFLAGS=(-std=c11 -Wall -Wextra -Werror -O1)
 
-clang "${CFLAGS[@]}" -I "$SRC" -o "$OUT/test_screen_model" \
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/test_screen_model" \
   "$TESTS/test_screen_model.c" "$SRC/screen_model.c"
 "$OUT/test_screen_model"
 

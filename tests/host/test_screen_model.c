@@ -60,6 +60,12 @@ static void add_button(SrFrame* f, int x, int y, uint8_t side, const char* text)
     f->records[f->count - 1].button = side;
 }
 
+/** A note as canvas_tap_hint_note records it: no position, the secondary font, normal colour. */
+static void add_note(SrFrame* f, uint8_t layer, bool focus, const char* text) {
+    add(f, 0, 0, layer, SrFontSecondary, false, focus, 0, 0, text);
+    f->records[f->count - 1].note = true;
+}
+
 static void test_normalize(void) {
     char out[SR_TEXT_MAX];
     sr_normalize("  Hello   World ", out, sizeof(out));
@@ -385,8 +391,15 @@ static void test_desktop_bubbles_do_not_reannounce_the_screen(void) {
     CHECK(!out[0].interrupt);
     CHECK_STR(out[0].text, "I am happy");
 
-    // It vanishes again: nothing to say.
+    // It vanishes again: the desktop's own text went away, which says "Home screen" once and
+    // without interrupting; the service keeps it silent without a key press, as it keeps the
+    // bubble itself. The next frame without text says nothing.
     n = sr_model_process(&m, &home, 5000, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnHome);
+    CHECK(!out[0].interrupt);
+    CHECK_STR(out[0].text, "Home screen");
+    n = sr_model_process(&m, &home, 5500, false, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 0);
 
     // Coming back from another screen does announce the home screen.
@@ -467,7 +480,23 @@ static void test_status_text(void) {
     sr_screen_build(&f, &s);
     CHECK(s.row_count == 2);
     sr_status_text(&s, text, sizeof(text));
-    CHECK_STR(text, "14:05, 100");
+    CHECK_STR(text, "14:05, battery 100 percent");
+
+    // The bar style draws a charge between the colour steps as two digits in two colours: two
+    // records a few pixels apart, read as one number
+    frame_init(&f, SrLayerDesktop);
+    add(&f, 78, 8, SrLayerStatusRight, SrFontPrimary, false, false, 0, 0, "14:05");
+    add(&f, 107, 9, SrLayerStatusRight, SrFontBatteryPercent, true, false, 0, 0, "7");
+    add(&f, 113, 9, SrLayerStatusRight, SrFontBatteryPercent, false, false, 0, 0, "5");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 3);
+    sr_status_text(&s, text, sizeof(text));
+    CHECK_STR(text, "14:05, battery 75 percent");
+
+    // A buffer too small for the whole text still ends with a terminator
+    char small[12];
+    CHECK(sr_status_text(&s, small, sizeof(small)) == strlen(small));
+    CHECK(strlen(small) < sizeof(small));
 
     // No status text at all: empty, and the reader says so
     frame_init(&f, SrLayerWindow);
@@ -499,6 +528,160 @@ static void test_focus_with_position(void) {
     add(&f, 6, 30, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Read");
     sr_screen_build(&f, &s);
     CHECK(sr_focus_with_position(&s, text, sizeof(text)) == 0 && text[0] == '\0');
+}
+
+/** A universal remote: the label drawn as text, the selected button's name as a focus note. */
+static SrFrame remote_frame(const char* button) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 22, 10, SrLayerFullscreen, SrFontPrimary, false, false, 0, 0, "TVs");
+    add_note(&f, SrLayerFullscreen, true, button);
+    return f;
+}
+
+static void test_note_rows(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+
+    // One drawn title and one focus note: the title stays the title, the note is the focus
+    f = remote_frame("Power");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 2);
+    CHECK(s.title_row >= 0);
+    CHECK_STR(s.title_row >= 0 ? s.rows[s.title_row].text : "", "TVs");
+    CHECK(s.rows[0].kind == SrRowFocus);
+    CHECK_STR(s.rows[0].text, "Power");
+    CHECK(s.has_content);
+    sr_screen_focus_text(&s, text, sizeof(text));
+    CHECK_STR(text, "Power");
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "TVs. Power");
+
+    // A note without focus is a normal row
+    frame_init(&f, SrLayerDesktop);
+    add_note(&f, SrLayerDesktop, false, "Locked, press Back three times to unlock");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK(s.rows[0].kind == SrRowNormal);
+    CHECK(s.title_row == -1);
+    CHECK(s.has_content);
+
+    // A note is never the title, even in the primary font at the top of the screen
+    frame_init(&f, SrLayerWindow);
+    add_note(&f, SrLayerWindow, false, "Settings");
+    f.records[0].font = SrFontPrimary;
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK(s.title_row == -1);
+
+    // A note never joins a string drawn on its baseline (the lock screen's clock slides through
+    // the top rows while its cover moves)
+    frame_init(&f, SrLayerDesktop);
+    add(&f, 0, 1, SrLayerDesktop, SrFontSecondary, false, false, 0, 0, "14:05");
+    add_note(&f, SrLayerDesktop, false, "Locked, press Back three times to unlock");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 2);
+    CHECK_STR(s.rows[0].text, "Locked, press Back three times to unlock");
+    CHECK_STR(s.rows[1].text, "14:05");
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Locked, press Back three times to unlock. 14:05");
+}
+
+static void test_note_focus_moves(void) {
+    SrModel m;
+    sr_model_init(&m, 1);
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame menu;
+    frame_init(&menu, SrLayerFullscreen);
+    add(&menu, 4, 11, SrLayerFullscreen, SrFontPrimary, false, false, 0, 0, "Universal Remotes");
+    add(&menu, 6, 25, SrLayerFullscreen, SrFontSecondary, true, true, 1, 10, "TVs");
+    sr_model_process(&m, &menu, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+
+    SrFrame f = remote_frame("Power");
+    size_t n = sr_model_process(&m, &f, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnScreen);
+    CHECK(out[0].interrupt);
+    CHECK_STR(out[0].text, "TVs. Power");
+
+    f = remote_frame("Mute");
+    n = sr_model_process(&m, &f, 1400, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnFocus);
+    CHECK(out[0].interrupt);
+    CHECK_STR(out[0].text, "Mute");
+
+    // The same button again: silence
+    n = sr_model_process(&m, &f, 1600, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 0);
+}
+
+/** The desktop's own screens (the lock menu, the power off dialog, the lock screen) stay on the
+ * desktop layer; closing them leaves the home screen with no text, which is said. */
+static void test_desktop_text_gone_says_home(void) {
+    SrModel m;
+    sr_model_init(&m, 1);
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame home;
+    frame_init(&home, SrLayerDesktop);
+    add(&home, 100, 8, SrLayerStatusRight, SrFontPrimary, false, false, 0, 0, "12:34");
+    size_t n = sr_model_process(&m, &home, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnHome && out[0].interrupt);
+
+    // The lock menu opens: its tiles are icons, the selected one is a focus note
+    SrFrame lock_menu;
+    frame_init(&lock_menu, SrLayerDesktop);
+    add_note(&lock_menu, SrLayerDesktop, true, "Lock");
+    n = sr_model_process(&m, &lock_menu, 2000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Lock");
+    strncpy(lock_menu.records[0].text, "Bluetooth on", SR_TEXT_MAX - 1);
+    n = sr_model_process(&m, &lock_menu, 2500, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Bluetooth on");
+
+    // Back closes it: the home screen, said after what is being said
+    n = sr_model_process(&m, &home, 3000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnHome);
+    CHECK(!out[0].interrupt);
+    CHECK_STR(out[0].text, "Home screen");
+    n = sr_model_process(&m, &home, 3500, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 0);
+
+    // The power off dialog runs on the desktop layer too
+    SrFrame dialog;
+    frame_init(&dialog, SrLayerDesktop);
+    add(&dialog, 64, 10, SrLayerDesktop, SrFontPrimary, false, false, 0, 0, "Turn Off Device?");
+    add_button(&dialog, 10, 61, 1, "Battery");
+    add_button(&dialog, 100, 61, 3, "Power Off");
+    sr_model_process(&m, &dialog, 4000, true, out, SR_MAX_ANNOUNCEMENTS);
+    n = sr_model_process(&m, &home, 5000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnHome);
+    CHECK(!out[0].interrupt);
+
+    // Status text alone does not count: a clock that changes on the home screen says nothing
+    SrFrame later = home;
+    strncpy(later.records[0].text, "12:35", SR_TEXT_MAX - 1);
+    n = sr_model_process(&m, &later, 6000, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 0);
+}
+
+/** A screen that has only notes is still a screen with text: it is read, not called home. */
+static void test_note_only_screen_is_read(void) {
+    SrModel m;
+    sr_model_init(&m, 1);
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame lock_menu;
+    frame_init(&lock_menu, SrLayerDesktop);
+    add_note(&lock_menu, SrLayerDesktop, true, "Lock");
+    size_t n = sr_model_process(&m, &lock_menu, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Lock");
 }
 
 static void test_overflow_is_mentioned(void) {
@@ -536,6 +719,10 @@ int main(void) {
     test_overflow_is_mentioned();
     test_status_text();
     test_focus_with_position();
+    test_note_rows();
+    test_note_focus_moves();
+    test_desktop_text_gone_says_home();
+    test_note_only_screen_is_read();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
