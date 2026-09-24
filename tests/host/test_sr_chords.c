@@ -51,20 +51,21 @@ static void test_back_alone_long_on_release(void) {
 }
 
 static void test_chord_up_and_down(void) {
+    // Two quick chords while Back is held under 300 ms, so Back ends with a Short, not a Long
     sr_chords_init(&s);
     CHECK(feed(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop);
     CHECK(feed(InputKeyUp, InputTypePress, 100) == SrChordReadAll && drop);
     CHECK(feed(InputKeyUp, InputTypeShort, 150) == SrChordNone && drop);
     CHECK(feed(InputKeyUp, InputTypeRelease, 150) == SrChordNone && drop);
     // A second chord in the same hold
-    CHECK(feed(InputKeyDown, InputTypePress, 400) == SrChordStatus && drop);
-    CHECK(feed(InputKeyDown, InputTypeLong, 700) == SrChordNone && drop);
-    CHECK(feed(InputKeyDown, InputTypeRepeat, 850) == SrChordNone && drop);
-    CHECK(feed(InputKeyDown, InputTypeRelease, 900) == SrChordNone && drop);
-    // Back's own Long and Short are dropped after a chord, Release passes, no Long emitted
-    CHECK(feed(InputKeyBack, InputTypeLong, 300) == SrChordNone && drop && !elong);
-    CHECK(feed(InputKeyBack, InputTypeShort, 1000) == SrChordNone && drop && !elong);
-    CHECK(feed(InputKeyBack, InputTypeRelease, 1000) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyDown, InputTypePress, 200) == SrChordStatus && drop);
+    // Back's Short is dropped after a chord, its Release passes, no Long emitted
+    CHECK(feed(InputKeyBack, InputTypeShort, 280) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeRelease, 280) == SrChordNone && !drop && !elong);
+    // Down is still held: its Long, Repeat and Release are swallowed
+    CHECK(feed(InputKeyDown, InputTypeLong, 500) == SrChordNone && drop);
+    CHECK(feed(InputKeyDown, InputTypeRepeat, 650) == SrChordNone && drop);
+    CHECK(feed(InputKeyDown, InputTypeRelease, 700) == SrChordNone && drop);
 }
 
 static void test_chord_ok_short_and_long(void) {
@@ -73,12 +74,41 @@ static void test_chord_ok_short_and_long(void) {
     CHECK(feed(InputKeyOk, InputTypePress, 100) == SrChordNone && drop); // OK decides later
     CHECK(feed(InputKeyOk, InputTypeShort, 200) == SrChordRepeat && drop);
     CHECK(feed(InputKeyOk, InputTypeRelease, 200) == SrChordNone && drop);
+    // Back's own Long after a chord is dropped and not kept for the release
+    CHECK(feed(InputKeyBack, InputTypeLong, 300) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeRepeat, 450) == SrChordNone && drop && !elong);
     CHECK(feed(InputKeyOk, InputTypePress, 500) == SrChordNone && drop);
     CHECK(feed(InputKeyOk, InputTypeLong, 800) == SrChordSpell && drop);
     CHECK(feed(InputKeyOk, InputTypeRepeat, 950) == SrChordNone && drop);
     CHECK(feed(InputKeyOk, InputTypeRelease, 1000) == SrChordNone && drop); // no Short after Long
-    CHECK(feed(InputKeyBack, InputTypeShort, 1100) == SrChordNone && drop);
+    // Held past 300 ms, Back ends without a Short: its Release passes, no Long emitted
     CHECK(feed(InputKeyBack, InputTypeRelease, 1100) == SrChordNone && !drop && !elong);
+}
+
+static void test_chord_after_back_long(void) {
+    // The usual timing on the device: Back is held past its Long before the chord key comes
+    sr_chords_init(&s);
+    CHECK(feed(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeLong, 300) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeRepeat, 450) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyUp, InputTypePress, 500) == SrChordReadAll && drop);
+    CHECK(feed(InputKeyBack, InputTypeRepeat, 600) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyUp, InputTypeShort, 600) == SrChordNone && drop);
+    CHECK(feed(InputKeyUp, InputTypeRelease, 600) == SrChordNone && drop);
+    // The chord cancels the held-back Long: the Release passes and no Long is emitted
+    CHECK(feed(InputKeyBack, InputTypeRelease, 700) == SrChordNone && !drop && !elong);
+}
+
+static void test_chord_ok_long_then_short(void) {
+    sr_chords_init(&s);
+    CHECK(feed(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop);
+    CHECK(feed(InputKeyOk, InputTypePress, 100) == SrChordNone && drop);
+    CHECK(feed(InputKeyBack, InputTypeLong, 300) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyOk, InputTypeLong, 400) == SrChordSpell && drop);
+    // input.c sends no Short after a Long; should one come, it must not run Repeat after Spell
+    CHECK(feed(InputKeyOk, InputTypeShort, 450) == SrChordNone && drop);
+    CHECK(feed(InputKeyOk, InputTypeRelease, 500) == SrChordNone && drop);
+    CHECK(feed(InputKeyBack, InputTypeRelease, 600) == SrChordNone && !drop && !elong);
 }
 
 static void test_chord_volume(void) {
@@ -123,6 +153,8 @@ int main(void) {
     test_back_alone_long_on_release();
     test_chord_up_and_down();
     test_chord_ok_short_and_long();
+    test_chord_after_back_long();
+    test_chord_ok_long_then_short();
     test_chord_volume();
     test_chord_key_outlives_back();
     test_second_key_while_chord_key_held();
