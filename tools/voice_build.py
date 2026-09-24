@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Build and sync the screen reader's recorded vocabulary.
 
-    tools/voice_build.py [--extract] [--pull-missing] [--sync] [--check] [options]
+    tools/voice_build.py [--extract] [--extract-all] [--card-apps] [--pull-missing] [--sync]
+        [--check] [--dry] [options]
 
 Words come from tools/voice_words.txt, from every string literal in the firmware's core apps
 and services and the dolphin's speech bubble texts, run through the real pronunciation layer
@@ -23,6 +24,11 @@ piper (any platform, a freely licensed model, the right choice for a release).
 --sync and --pull-missing import the firmware's scripts/flipper/storage.py, which needs
 pyserial: run those with the project virtualenv's Python (.venv/bin/python), not the system
 python3.
+
+--extract-all folds in every app under applications/external (hundreds of them); --card-apps
+folds in only the ones actually installed on the card, which is the routine choice, and needs
+the device but only to list it, never to write to it. Both need --extract to have an effect.
+--dry builds the word list and prints its counts without making clips or syncing.
 """
 import argparse, glob, hashlib, json, math, multiprocessing, os, re, subprocess, sys, tempfile, time
 
@@ -38,6 +44,9 @@ WORD_RE = re.compile(r"^(?:[a-z]{1,16}|[0-9])$")
 STRING_RE = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 PRINTF_RE = re.compile(r"%[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|L|q|j|z|t)?[diouxXeEfgGcsp%]")
 DIGIT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+FAM_APPID_RE = re.compile(r'appid\s*=\s*"([^"]+)"')
+FAM_FILENAME_RE = re.compile(r'fap_file_name\s*=\s*"([^"]+)"')
+APP_MANIFEST_DIRS = ("external", "main", "system", "settings", "debug")
 
 
 def log(msg):
@@ -126,13 +135,11 @@ def build_expander(workdir):
     return exe
 
 
-def firmware_strings():
-    """Every string literal in the firmware's C sources, unescaped, printf fields removed."""
+def strings_in(roots):
+    """Every string literal in the .c and .h files under the given directories, unescaped,
+    printf fields removed -- the same filtering firmware_strings applies to the core roots,
+    reused for community app directories by --extract-all and --card-apps."""
     seen = set()
-    # The core apps and services only: applications/external holds hundreds of community apps
-    # whose strings would multiply the vocabulary and the upload time for nothing
-    roots = [os.path.join(FW, "applications", d) for d in ("main", "services", "settings", "system")]
-    roots.append(os.path.join(FW, "lib", "toolbox"))
     for root in roots:
         for path in glob.glob(os.path.join(root, "**", "*.[ch]"), recursive=True):
             try:
@@ -147,7 +154,43 @@ def firmware_strings():
                 s = "".join(ch if 32 <= ord(ch) < 127 else " " for ch in s).strip()
                 if len(s) >= 2:
                     seen.add(s)
-    return sorted(seen)
+    return seen
+
+
+def firmware_strings():
+    """Every string literal in the firmware's core C sources, unescaped, printf fields removed."""
+    # The core apps and services only: applications/external holds hundreds of community apps
+    # whose strings would multiply the vocabulary and the upload time for nothing, unless asked
+    # for with --extract-all or --card-apps.
+    roots = [os.path.join(FW, "applications", d) for d in ("main", "services", "settings", "system")]
+    roots.append(os.path.join(FW, "lib", "toolbox"))
+    return sorted(strings_in(roots))
+
+
+def external_app_dirs():
+    """Every app directory under applications/external: each holds one application.fam. Used by
+    --extract-all for the word pipeline, and it is where manifest_index looks too."""
+    ext = os.path.join(FW, "applications", "external")
+    return sorted(os.path.dirname(p) for p in glob.glob(os.path.join(ext, "*", "application.fam")))
+
+
+def manifest_index(roots):
+    """Maps a card .fap's base name to the source directory whose application.fam declares it:
+    the appid of one of its App(...) blocks -- a manifest may hold several; applications/main/
+    nfc/application.fam alone has over sixty, one per NFC parser plugin -- or, for a manifest
+    that names its own build output, its fap_file_name. A later match wins on a collision, which
+    the firmware's own build should not allow in practice."""
+    index = {}
+    for root in roots:
+        for path in glob.glob(os.path.join(root, "**", "application.fam"), recursive=True):
+            try:
+                text = open(path, encoding="utf-8", errors="replace").read()
+            except OSError:
+                continue
+            keys = set(FAM_APPID_RE.findall(text)) | set(FAM_FILENAME_RE.findall(text))
+            for key in keys:
+                index[key] = os.path.dirname(path)
+    return index
 
 
 def bubble_texts():
@@ -166,15 +209,11 @@ def bubble_texts():
     return sorted(seen)
 
 
-def extract_words(workdir):
-    """The words of the firmware's strings and the bubble texts, and for each clip name made by
-    leaving out apostrophes the token to speak ("dont" is spoken as "don't")."""
-    exe = build_expander(workdir)
-    strings = firmware_strings()
-    bubbles = bubble_texts()
-    log(f"extract: {len(strings)} distinct strings from the firmware sources, {len(bubbles)} bubble texts")
-    lines = sorted(set(strings) | set(bubbles))
-    out = subprocess.run([exe], input="\n".join(lines) + "\n", capture_output=True, text=True, check=True).stdout
+def _expand(exe, lines):
+    """Run the pronunciation layer over a set of source strings, returning the clip-name words
+    it produces and, for each word an apostrophe was stripped from, the original token to speak
+    ("dont" is spoken as "don't")."""
+    out = subprocess.run([exe], input="\n".join(sorted(lines)) + "\n", capture_output=True, text=True, check=True).stdout
     words, originals = set(), {}
     for line in out.splitlines():
         for token in line.split():
@@ -185,10 +224,32 @@ def extract_words(workdir):
                 core = token.strip("'").lower()
                 if "'" in core:  # inside the word, not quotes around it
                     originals[n] = min(originals.get(n, core), core)
+    return words, originals
+
+
+def extract_words(workdir, extra=()):
+    """The words of the firmware's strings and the bubble texts, run through the pronunciation
+    layer. extra is a list of (label, directories) pairs -- --extract-all's app directories,
+    --card-apps's matched ones -- whose own .c and .h strings are folded into the same pipeline
+    on top of the firmware's own, each in turn. The third return value maps each label to how
+    many words it alone added on top of everything folded in before it, so the caller can report
+    an optional source's worth."""
+    exe = build_expander(workdir)
+    strings = firmware_strings()
+    bubbles = bubble_texts()
+    log(f"extract: {len(strings)} distinct strings from the firmware sources, {len(bubbles)} bubble texts")
+    lines = set(strings) | set(bubbles)
+    words, originals = _expand(exe, lines)
+    added = {}
+    for label, dirs in extra:
+        lines |= strings_in(dirs)
+        more_words, more_originals = _expand(exe, lines)
+        added[label] = len(more_words - words)
+        words, originals = more_words, more_originals
     longest = sorted(words, key=lambda w: (-len(w), w))[:10]
     log(f"extract: {len(words)} words; longest: {' '.join(longest)}")
     log(f"extract: {len(originals)} with an apostrophe: {' '.join(originals[n] for n in sorted(originals))}")
-    return words, originals
+    return words, originals, added
 
 
 def settings_hash(settings, text):
@@ -243,6 +304,47 @@ def open_storage(port):
     storage = FlipperStorage(port)
     storage.start()
     return storage, FlipperStorageOperations(storage)
+
+
+def list_card_apps(storage):
+    """*.fap base names on the card: the direct contents of /ext/apps, in case a stray file
+    sits there, and of each of its category folders one level down. Nothing deeper is visited --
+    apps are not nested further than a category folder. storage.walk yields a folder's own
+    listing before recursing into its subfolders, so a single shared generator cannot be used
+    to step across sibling categories: a category that itself has a subfolder would make the
+    next next() descend into it instead of moving to the next category. A fresh walk() per
+    category, read only once, always yields that category's own listing first and is simply
+    never advanced further, so nothing deeper is ever visited."""
+    def faps(names):
+        return [os.path.splitext(n)[0] for n in names if n.lower().endswith(".fap")]
+    _, categories, root_files = next(storage.walk("/ext/apps"))
+    names = faps(root_files)
+    for category in categories:
+        path = ("/ext/apps/" + category).replace("//", "/")
+        _, _, files = next(storage.walk(path))
+        names.extend(faps(files))
+    return sorted(set(names))
+
+
+def card_apps(port):
+    """The apps installed on the card, mapped to the firmware source directory each came from.
+    Read-only, so unlike sync it does not need the voice guard: reuses open_storage directly.
+    Returns the .fap names found, the (possibly repeated, one per matching name) directories
+    they matched, and the names that matched no manifest."""
+    storage, _ = open_storage(port)
+    try:
+        faps = list_card_apps(storage)
+    finally:
+        storage.stop()
+    index = manifest_index([os.path.join(FW, "applications", d) for d in APP_MANIFEST_DIRS])
+    matched, unmatched = [], []
+    for fap in faps:
+        d = index.get(fap)
+        if d:
+            matched.append(d)
+        else:
+            unmatched.append(fap)
+    return faps, matched, unmatched
 
 
 def voice_was_on(storage):
@@ -424,11 +526,14 @@ def main():
     ap.add_argument("--out", default=os.path.join(ROOT, "voice"), help="local vocabulary directory")
     ap.add_argument("--words", action="append", default=[], help="extra word list file (repeatable)")
     ap.add_argument("--extract", action="store_true", help="add the firmware's strings through the pronunciation layer")
+    ap.add_argument("--extract-all", action="store_true", help="with --extract: also add every app under applications/external, not just the ones on the card")
+    ap.add_argument("--card-apps", action="store_true", help="with --extract: also add the apps actually installed on the card (needs the device, read-only)")
     ap.add_argument("--pull-missing", action="store_true", help="add and clear the device's /ext/sr/missing.txt")
     ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the card")
     ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore voice/synced.json and resend everything (for a wiped card)")
     ap.add_argument("--remove-legacy", action="store_true", help="remove the first layout's /ext/sr/voice/<initial>/ clips from the card and clear voice/synced.json")
     ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them")
+    ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips or syncing")
     ap.add_argument("--port", default="/dev/cu.usbmodemflip_R0skie1")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new clips (for trials)")
@@ -458,11 +563,31 @@ def main():
     for path in a.words:
         words |= load_list(path)
     if a.extract:
-        extracted, originals = extract_words(workdir)
+        extra = []
+        if a.extract_all:
+            ext_dirs = external_app_dirs()
+            extra.append(("extract-all", ext_dirs))
+        if a.card_apps:
+            card_faps, card_matched, card_unmatched = card_apps(a.port)
+            extra.append(("card-apps", sorted(set(card_matched))))
+        extracted, originals, added = extract_words(workdir, extra)
         words |= extracted
         names = {**originals, **names}  # an entry in tools/voice_names.txt still wins
+        if a.extract_all:
+            log(f"extract-all: {len(ext_dirs)} apps under applications/external, "
+                f"{added.get('extract-all', 0)} words added")
+        if a.card_apps:
+            skipped = ", ".join(card_unmatched) if card_unmatched else "(none)"
+            log(f"card apps: {len(card_faps)} faps, {len(card_matched)} matched, "
+                f"{added.get('card-apps', 0)} words added; unmatched: {skipped}")
+    elif a.extract_all or a.card_apps:
+        log("--extract-all and --card-apps only add to the word pipeline together with --extract; ignored")
     if a.pull_missing:
         words |= pull_missing(a.port)
+
+    if a.dry:
+        log(f"dry run: {len(words)} words total, no clips made")
+        return 0
 
     manifest_path = os.path.join(a.out, "manifest.json")
     manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {"words": {}}

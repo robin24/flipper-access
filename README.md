@@ -273,7 +273,8 @@ when its clip is missing too, and everything when the voice is off. The letters 
 their names, so "NFC" is heard as "en eff see", not "capital N capital F capital C". The names
 live in `tools/voice_names.txt`. The letter A is recorded from "a": `say` reads "ay" as "aye",
 which sounds exactly like the letter I. A spelled word gets its own clip at the next run of the
-routine command, `.venv/bin/python tools/voice_build.py --extract --pull-missing --sync`.
+routine command, `.venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing
+--sync`.
 
 On the card:
 
@@ -313,7 +314,9 @@ Making the vocabulary with `tools/voice_build.py`:
   27 MB. The words come from:
   - the base list `tools/voice_words.txt`;
   - every string in the firmware's core apps and services;
-  - the dolphin's speech bubble texts.
+  - the dolphin's speech bubble texts;
+  - the apps on the card, with `--card-apps`, or every app under `applications/external` with
+    `--extract-all` for a wider one-off build instead of just the ones installed.
 
   Everything goes through the reader's own pronunciation code.
   - Time on this Mac: about 16 minutes with `--jobs 8`, or 22 minutes with the default of 4.
@@ -321,6 +324,9 @@ Making the vocabulary with `tools/voice_build.py`:
   - A rerun makes only new or changed clips.
   - Locally the clips sit in `voice/<first letter>/<word>.raw`. The sync puts each one into its
     hashed folder on the card.
+- Add `--dry` to any of the above to build the word list and print its counts -- how many
+  strings, how many words, the ten longest, and with `--card-apps` which faps matched which
+  source folder -- without making a single clip or touching the card.
 - `.venv/bin/python tools/voice_build.py --sync` sends new or changed clips and voice.txt to the
   card.
   - A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what
@@ -331,11 +337,12 @@ Making the vocabulary with `tools/voice_build.py`:
     until `sr voice on` is typed.
   - After the card was wiped or replaced, add `--sync-all` to resend everything. `--sync-all`
     works only together with `--sync`.
-- `.venv/bin/python tools/voice_build.py --extract --pull-missing --sync` is the missing-word
-  workflow. It fetches missing.txt from the card, makes clips for those words, sends them and
-  removes the list. `--extract` is there because the spoken spelling of apostrophe words
-  comes from the extraction, not from missing.txt, which has already lost them. For a few
-  words it takes about 3 to 4 seconds.
+- `.venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync` is the
+  missing-word workflow. It fetches missing.txt from the card, makes clips for those words,
+  sends them and removes the list. `--extract` is there because the spoken spelling of
+  apostrophe words comes from the extraction, not from missing.txt, which has already lost
+  them. `--card-apps` adds the strings of the apps actually on the card, so a newly installed
+  app's own words get clips too. For a few words it takes about 3 to 4 seconds.
 - `.venv/bin/python tools/voice_build.py --remove-legacy` removes the first layout from the card:
   the `/ext/sr/voice/<first letter>/` folders of the 2026-09-24 rollout. Then run `--sync` to
   send everything into the hashed folders.
