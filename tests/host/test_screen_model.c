@@ -317,7 +317,12 @@ static void test_spontaneous_changes_are_all_reported(void) {
     CHECK(n == 1);
     CHECK(out[0].kind == SrAnnChange);
     CHECK(strlen(out[0].text) == 80);
+    // Back to the two rows: three of five rows went away, which reads as a new screen
     n = sr_model_process(&m, &f, 2600, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnScreen);
+    CHECK(out[0].interrupt);
+    CHECK_STR(out[0].text, "Wrong PIN!. Timeout: 1s");
     n = sr_model_process(&m, &long_rows, 2700, true, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 1);
     CHECK(out[0].kind == SrAnnChange);

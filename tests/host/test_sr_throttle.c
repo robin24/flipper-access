@@ -184,6 +184,72 @@ static void test_wrap_around(void) {
     CHECK(sr_throttle_offer(&t, "d", 0x00000100u + 1000, 1000));
 }
 
+/** A key's own change (within 500 ms of a key press) is said at once whatever the delay: the
+ *  time is recorded, so the next unrelated change is spaced from it, and a held change is
+ *  dropped. */
+static void test_force(void) {
+    sr_throttle_init(&t);
+    CHECK(sr_throttle_offer(&t, "12 percent", 1000, 1500));
+    CHECK(!sr_throttle_offer(&t, "15 percent", 1200, 1500)); // held
+    sr_throttle_force(&t, 1300); // the key's own change, said at 1300
+    CHECK(!t.pending);
+    CHECK(!due(9000, 1500)); // the held change is gone
+    CHECK(sr_throttle_wait_ms(&t, 1300, 1500) == 0);
+    // The next change is spaced from 1300, not from 1000
+    CHECK(!sr_throttle_offer(&t, "Volume 70", 2000, 1500));
+    CHECK(sr_throttle_wait_ms(&t, 2000, 1500) == 800);
+    CHECK(!due(2799, 1500));
+    CHECK(due(2800, 1500));
+    CHECK_STR(out, "Volume 70");
+    // Forced twice in a row, and inside the delay: both said, the time is the latest
+    sr_throttle_force(&t, 2900);
+    sr_throttle_force(&t, 2950);
+    CHECK(!sr_throttle_offer(&t, "a", 4449, 1500));
+    CHECK(sr_throttle_offer(&t, "b", 4450, 1500));
+    // Forced before any change was said: from then on the delay applies
+    sr_throttle_init(&t);
+    sr_throttle_force(&t, 5);
+    CHECK(!sr_throttle_offer(&t, "c", 100, 1500));
+    CHECK(t.pending);
+}
+
+/** The service's sequences, through the throttle alone. A key press drops the held change (its
+ *  text is about to change), the key's own change is forced, and the change after it waits. A
+ *  suppressed announcement (the desktop quiet again) drops the held change as well: nothing
+ *  held is said after it. */
+static void test_key_press_and_suppression_drop_the_held_change(void) {
+    sr_throttle_init(&t);
+    CHECK(sr_throttle_offer(&t, "Sending 3 percent", 1000, 3000));
+    CHECK(!sr_throttle_offer(&t, "Sending 7 percent", 2000, 3000)); // held until 4000
+    sr_throttle_clear(&t); // a key press at 2500
+    CHECK(!due(4000, 3000)); // the stale "7 percent" is never said
+    sr_throttle_force(&t, 2550); // the key's own change, at once
+    CHECK(!sr_throttle_offer(&t, "Sending 9 percent", 3000, 3000));
+    CHECK(sr_throttle_wait_ms(&t, 3000, 3000) == 2550);
+    CHECK(due(5550, 3000));
+    CHECK_STR(out, "Sending 9 percent");
+
+    // A bubble on the home screen said with a key, the next one held; the bubble goes away
+    // unasked (suppressed): the held one is dropped with it
+    sr_throttle_init(&t);
+    CHECK(sr_throttle_offer(&t, "I am happy", 10000, 3000));
+    CHECK(!sr_throttle_offer(&t, "I am sleepy", 11000, 3000));
+    sr_throttle_clear(&t); // suppressed: the desktop's text went away without a key
+    CHECK(!due(13000, 3000));
+    CHECK(!due(20000, 3000));
+}
+
+/** The new range: up to 10 s. */
+static void test_long_delay(void) {
+    sr_throttle_init(&t);
+    CHECK(sr_throttle_offer(&t, "a", 1000, 10000));
+    CHECK(!sr_throttle_offer(&t, "b", 5000, 10000));
+    CHECK(sr_throttle_wait_ms(&t, 5000, 10000) == 6000);
+    CHECK(!due(10999, 10000));
+    CHECK(due(11000, 10000));
+    CHECK_STR(out, "b");
+}
+
 int main(void) {
     test_progress_bar();
     test_late_collection();
@@ -193,6 +259,9 @@ int main(void) {
     test_interval_zero();
     test_long_text_is_cut();
     test_wrap_around();
+    test_force();
+    test_key_press_and_suppression_drop_the_held_change();
+    test_long_delay();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
