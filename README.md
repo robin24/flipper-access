@@ -99,9 +99,14 @@ inversion where possible and will get hints in a later phase.
 ## Recorded voice
 
 The reader speaks with recorded word clips from the SD card instead of SAM. The clips are made
-on the Mac from a high quality voice (Samantha by default) and played word by word. SAM is still
-the fallback. A word without a clip is spoken by SAM and noted on the card, so nothing is left
-unspoken.
+on the Mac from a high quality voice (Samantha by default) and played word by word.
+
+A word without a clip is spelled letter by letter with the recorded letters and digits, 60 ms
+between letters, and noted on the card, so nothing is left unspoken. SAM speaks a letter only
+when its clip is missing too, and everything when the voice is off. The letters are recorded by
+their names, so "NFC" is heard as "en eff see", not "capital N capital F capital C". The names
+live in `tools/voice_names.txt`. A spelled word gets its own clip at the next run of the routine
+command, `.venv/bin/python tools/voice_build.py --extract --pull-missing --sync`.
 
 On the card:
 
@@ -126,8 +131,8 @@ Console commands:
 - `sr voice on` and `sr voice off` switch between the clips and SAM alone. The setting is saved.
 - `sr voice status` prints the first 63 characters of the settings line, and these counts since
   boot:
-  - words spoken from clips;
-  - words that fell back to SAM;
+  - words, and letters of spelled words, spoken from clips;
+  - words spelled letter by letter because they had no clip;
   - words logged as missing;
   - the longest and the latest clip open, in ms.
 
@@ -192,11 +197,11 @@ licensed voice model.
 
 Known limits:
 
-- Words longer than 16 letters are spoken by SAM.
+- Words longer than 16 letters never get a clip, so they are spelled letter by letter.
 - Tokens that mix letters and digits (for example `md5`, `i2c`, `p1`) never get a clip: the
   generator's word filter accepts letters-only words up to 16 characters or a single digit.
-  They are spoken by SAM every time, logged as missing once per boot, and dropped by
-  `--pull-missing`.
+  They are spelled every time (`md5` is "em dee five"), logged as missing once per boot, and
+  dropped by `--pull-missing`.
 - Two words that differ only by an apostrophe share one clip. For example, "ill" plays the clip
   recorded as "i'll".
 - A word the device logs as missing has already lost its apostrophe. So `--pull-missing` records
