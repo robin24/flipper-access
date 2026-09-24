@@ -159,3 +159,11 @@ OK: "MNTM-DEV 6C7469A7. Protocols. Misc. Interface, 1 of 4". Up: "Accessibility,
 OK: "Voice Recorded. Rate 72. Volume 70. Screen Reader ON, 1 of 5".
 Three Backs: the Momentum list, the main menu on "Momentum, 10 of 11", then the home screen. Nothing was changed.
 Final: home screen, no application, reader on, voice on, speech idle, rate 72, volume 70, underruns 0. The log capture restarted at 17:15:37.
+
+Final fix wave, firmware af4ee0952 (2026-09-24, from the fix report):
+Lock from the lock menu: "Locked, press Back three times quickly to unlock" spoken in full, one utterance, 4,132 ms, aborted unchanged.
+Three quick Backs: "Unlocked", then "Home screen".
+Lock menu Volume tile in stealth mode: note "Volume 95, muted".
+Accessibility screen, Screen Reader row: Left turns the reader off with nothing spoken; Right turns it on and "Screen Reader ON" is announced (utterances plus one, aborted unchanged, two rounds).
+Vocabulary run: 1 clip made and sent (quickly), 2,927 skipped, 0 missing, 0 failed.
+Flash headroom after the wave: 876,056 bytes, 4,584 spare.
