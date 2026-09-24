@@ -86,3 +86,13 @@ if ! "$OUT/test_sr_chords" > "$OUT/sr_chords.txt"; then
   exit 1
 fi
 echo "chords: $(tail -n 1 "$OUT/sr_chords.txt")"
+
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/test_sr_throttle" \
+  "$TESTS/test_sr_throttle.c" "$SRC/sr_throttle.c"
+if ! "$OUT/test_sr_throttle" > "$OUT/sr_throttle.txt"; then
+  cat "$OUT/sr_throttle.txt"
+  echo "throttle checks failed"
+  exit 1
+fi
+echo "throttle: $(tail -n 1 "$OUT/sr_throttle.txt")"
