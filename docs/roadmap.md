@@ -20,7 +20,7 @@ Status on 2026-09-24: the recorded voice (step 1 of the memory plan) and phase 3
 
 ## Memory plan, in order
 
-Where phase 3 left it: firmware.bin is 875,928 bytes, 4,712 spare below the BLE stack; idle free heap is about 110 KB; opening Sub-GHz with the reader on runs out of memory and restarts the device. The next steps make room, in this order.
+Where phase 3 left it: firmware.bin is 876,056 bytes, 4,584 spare below the BLE stack; idle free heap is about 110 KB; opening Sub-GHz with the reader on runs out of memory and restarts the device. The next steps make room, in this order.
 
 1. Recorded voice on the card: done 2026-09-24.
    - Size: 2,892 words, in 64 hashed folders, with 0 underruns in the verification.
