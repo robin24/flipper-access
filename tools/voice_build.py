@@ -70,12 +70,23 @@ def initial(word):
 
 
 def load_list(path):
+    """Load one word per line, '#' starting a comment. A non-blank token that clip_name rejects
+    (for example a word that mixes letters and digits, such as "md5") is silently unusable, so
+    it is counted and reported rather than just vanishing from the word count."""
     words = set()
+    skipped = 0
     if os.path.exists(path):
         for line in open(path, encoding="utf-8", errors="replace"):
-            n = clip_name(line.split("#", 1)[0])
+            token = line.split("#", 1)[0].strip()
+            if not token:
+                continue
+            n = clip_name(token)
             if n:
                 words.add(n)
+            else:
+                skipped += 1
+    if skipped:
+        log(f"skipped {skipped} words that cannot be clips")
     return words
 
 

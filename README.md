@@ -154,12 +154,16 @@ Making the vocabulary with `tools/voice_build.py`:
   - A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what
     changed, which takes seconds.
   - The recorded voice is switched off on the device during the transfer and switched back on
-    afterwards.
+    afterwards. If a transfer dies hard (power loss, a killed process, a dead port), the
+    restore may not run: the saved setting then stays off, and the device speaks with SAM
+    until `sr voice on` is typed.
   - After the card was wiped or replaced, add `--sync-all` to resend everything. `--sync-all`
     works only together with `--sync`.
-- `.venv/bin/python tools/voice_build.py --pull-missing --sync` is the missing-word workflow. It
-  fetches missing.txt from the card, makes clips for those words, sends them and removes the
-  list. For a few words it takes about 3 to 4 seconds.
+- `.venv/bin/python tools/voice_build.py --extract --pull-missing --sync` is the missing-word
+  workflow. It fetches missing.txt from the card, makes clips for those words, sends them and
+  removes the list. `--extract` is there because the spoken spelling of apostrophe words
+  comes from the extraction, not from missing.txt, which has already lost them. For a few
+  words it takes about 3 to 4 seconds.
 - `.venv/bin/python tools/voice_build.py --remove-legacy` removes the first layout from the card:
   the `/ext/sr/voice/<first letter>/` folders of the 2026-09-24 rollout. Then run `--sync` to
   send everything into the hashed folders.
@@ -189,6 +193,10 @@ licensed voice model.
 Known limits:
 
 - Words longer than 16 letters are spoken by SAM.
+- Tokens that mix letters and digits (for example `md5`, `i2c`, `p1`) never get a clip: the
+  generator's word filter accepts letters-only words up to 16 characters or a single digit.
+  They are spoken by SAM every time, logged as missing once per boot, and dropped by
+  `--pull-missing`.
 - Two words that differ only by an apostrophe share one clip. For example, "ill" plays the clip
   recorded as "i'll".
 - A word the device logs as missing has already lost its apostrophe. So `--pull-missing` records

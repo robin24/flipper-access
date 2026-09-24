@@ -1,6 +1,6 @@
 Recorded voice rollout, 2026-09-24
 
-Checks 1 to 7 are the first rollout, with 26 folders by first letter and a 4096-byte ring.
+Checks 1 to 7 are the first rollout, with 36 folders by first letter and a 4096-byte ring.
 Fix round 1, at the end, is the current state: 64 hashed folders and an 8192-byte ring.
 
 Setup
@@ -51,7 +51,7 @@ Position 300: 62.8 ms.
 Position 315: 64.8 ms.
 A word that is not in the folder: 66.9 ms.
 Folder 0, which holds one clip: 12.7 ms.
-Every directory entry costs about 0.17 ms. One half of the 4096-byte ring holds 41 ms of audio, and the worker also has to fill that half. So an open well under 41 ms can already cause an underrun: "types", at about 38 ms, underran three times out of three.
+Every directory entry costs about 0.17 ms. One half of the 4096-byte ring holds 41 ms of audio, and the worker also has to fill that half. So an open of about 38 ms, just under the 41 ms half, can already cause an underrun: "types", at about 38 ms, underran three times out of three.
 
 Check 2: tools/sr_drive.py, both sessions, with the voice on
 Result: 0 failures in 17 steps.
