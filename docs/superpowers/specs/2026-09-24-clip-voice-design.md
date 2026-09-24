@@ -1,6 +1,19 @@
 # Recorded voice for the Flipper Zero screen reader: design
 
-Date: 2026-09-24. Status: approved by Robin on 2026-09-24 (design agreed in conversation; build authorised without further approval).
+Date: 2026-09-24. Status: as built 2026-09-24. Approved by Robin on 2026-09-24: the design was agreed in conversation, and the build authorised without further approval. The measurements are in `docs/measurements/2026-09-24-voice-rollout.txt`.
+
+As built, the implementation differs from the text below in these points:
+
+- Word sources: only the core apps and services are read. These are `applications/main`, `services`, `settings` and `system`, plus `lib/toolbox`; the rest of `applications/` is left out. The community apps would multiply the vocabulary for nothing.
+- Clip names: a name is lower case letters, up to 16 of them, or a single digit. Words with an apostrophe, words with digits inside and longer words have no clips, so SAM speaks them.
+- Processing order: high-pass, peak normalise, then gain and limiter. After that, silence is trimmed on the finished signal and 15 ms of zeros are added at each end.
+- Sync: it sends the manifest's clips and voice.txt, and records what it sent in `voice/synced.json`. It does not compare sizes on the card. `--sync-all` resends everything. The recorded voice is off on the device during a transfer and back on afterwards.
+- `sr voice status` shows the settings line read at the first utterance after boot. After a sync that changes the line, the new one shows after a reboot.
+- Open defect in the timing safety of section 5. The assumption that a directory of a few hundred entries keeps an open under 10 ms does not hold.
+  - On the device, a lookup costs about 0.17 ms per directory entry. At the end of the largest folder, with 315 clips, it takes 65 ms.
+  - The worker can only stall for what is left of the playing half of the ring, at most 41 ms, not 82 ms, before the stall counts as an underrun.
+  - Words near the end of the large folders therefore cause underruns: 41 during the rollout verification. The acceptance test of 0 underruns is not met.
+  - Smaller folders are the fix. They are not built yet.
 
 ## 1. Goal
 

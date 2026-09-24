@@ -18,7 +18,10 @@ Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focus
 
 ## Memory plan, in order
 
-1. Recorded voice on the card (in progress): no new RAM, a few KB of flash.
+1. Recorded voice on the card: done 2026-09-24.
+   - Size: 2,831 words. It costs about 3 KB of flash and about 700 bytes of idle heap.
+   - Measurements: `docs/measurements/2026-09-24-voice-rollout.txt`.
+   - Open: words near the end of the largest folders cause underruns. Smaller folders are the fix.
 2. Animations off by default (asset pack or desktop setting; measure the idle heap with and without).
 3. JavaScript engine out of the build (API major bump, all faps rebuilt by the release pipeline); Sub-GHz back into flash with the freed space; re-measure with `tools/ram_probe.py`.
 4. Reader trims if still needed: ring 4096 to 3072, worker stack 3072 to 2048 (high water 812), SAM optional once the voice covers everything.

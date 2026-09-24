@@ -1,0 +1,112 @@
+Recorded voice rollout, 2026-09-24
+
+Setup
+Device: R0skie on /dev/cu.usbmodemflip_R0skie1, firmware branch screen-reader at 1783e081f, 64 GB exFAT card.
+Generator: tools/voice_build.py at 76346f6, settings line "say Samantha rate 175 highpass 500 gain 1.3 soft 16000".
+Counters are from sr status and sr voice status. Played and nominal are the "last utterance" line.
+Predicted nominal times are the clip sizes plus the pauses. The pauses are 40 ms between words, 150 ms after a comma and 300 ms after a period, with none after the last word.
+
+Build on the Mac: tools/voice_build.py --extract
+Strings: 6182 distinct string literals from the firmware's core apps and services, giving 2815 words.
+Base list: tools/voice_words.txt adds 8 words, for 2823 in total. 0 failed.
+With 4 jobs: 22:02.88 wall clock, of which 1322 s for the clips (0.47 s per clip).
+With 8 jobs: 16:19.58 wall clock, of which 979 s for the clips (0.35 s per clip).
+The say command is limited by the macOS speech server, not by the CPU: with 8 jobs it used 95 percent of one core.
+Clips: 2823 clips, 26,928,695 bytes, or 1683 s of audio. du -sh reports 31M, with an apparent size of 27M.
+Clip length: shortest 0.228 s, median 0.564 s, longest 2.648 s.
+Every clip has 15 ms of silence at both edges and peaks at least 100 away from 128. None is silent.
+Clips per folder: s 315, c 229, m 191, p 188, d 170. The other folders are smaller.
+
+Sync: .venv/bin/python tools/voice_build.py --pull-missing --sync
+Wall clock: 7:26.77.
+Pulled: 17 missing words from the card. 5 of them were new clips: am, bahncard, friend, my, wish.
+Sent: 2828 clips and voice.txt in 442 s. That is 61 kB/s, or 6.4 files per second. 0 missing, 0 failed, exit code 0.
+Guard: the voice was silenced and then restored around both the pull and the sync.
+Card after the sync: 2828 clips. They match the local files by name and size (26,964,198 bytes). voice.txt is 55 bytes, and missing.txt was removed.
+office.raw: the one hand-made Task 2 clip not in the vocabulary. It was removed with storage remove.
+sr voice status right after the sync: vocabulary yes, but still with the old hand-made settings line. The device reads voice.txt once per boot, so the new line showed after the reboot in check 7.
+
+Check 1: sr say Settings. Sub-GHz. Apps, 1 of 11. Read RAW. 433.92 MHz. UID: 04 A2 B3 C4.
+The expansion has 28 words.
+Clips: 32 to 60, which is +28. Fallback +0, missing +0.
+Timing: 17226 ms played, 274710 subsamples, 17169 ms nominal. The prediction was 274710 samples, or 17169 ms, an exact match.
+Underruns: 0 to 5, which is +5. Expected 0.
+
+Extra check: the same number of clips, taken from the front and from the end of folders.
+Front: "settings apps one of okay home screen back saved". These are the Task 2 clips at the front of their folders. Underruns +0. 4569 ms played, 4516 ms nominal.
+End: "systems types cycles", three times. These are the last files in folders of 315, 155 and 229 clips. Underruns +8, one for each open after the first. 6262 ms played, 6144 ms nominal.
+
+Lookup time: the console round trip for storage stat, median of 5
+Folder s holds 315 clips.
+Position 1: 6.6 ms.
+Position 50: 20.6 ms.
+Position 100: 27.9 ms.
+Position 150: 37.1 ms.
+Position 200: 44.6 ms.
+Position 250: 53.4 ms.
+Position 300: 62.8 ms.
+Position 315: 64.8 ms.
+A word that is not in the folder: 66.9 ms.
+Folder 0, which holds one clip: 12.7 ms.
+Every directory entry costs about 0.17 ms. One half of the ring holds 41 ms of audio, so an open that takes longer causes an underrun.
+
+Check 2: tools/sr_drive.py, both sessions, with the voice on
+Result: 0 failures in 17 steps.
+Utterances: 28 to 48. Aborted: 5 to 6.
+Clips: 78 to 114, which is +36.
+Fallback: 14 to 15, which is +1. Missing: 11 to 12.
+The fallback word is "fish", from the dolphin bubble text "So long and thanks for all the fish!". That text is in assets/dolphin/external/L1_Waves_128x50/meta.txt, which the extraction does not read. So this is a gap in the vocabulary, not a bug.
+Underruns: 13 to 16, which is +3. Expected 0.
+
+Check 3: thirty words in one sentence of 134 characters
+Text: sr say Open the saved file to read the new signal from the remote and save it as the key for the next time you go to the menu with your card.
+Clips: 114 to 144, which is +30. Fallback +0.
+Timing: 13504 ms played, 215179 subsamples, 13448 ms nominal. That is 12289 ms of clips plus 29 pauses of 40 ms, 1160 ms. The prediction was an exact match.
+Underruns: 16 to 19, which is +3. Expected 0.
+
+Check 4: the missing-word round trip
+First sr say Zebrafish moonbeam: fallback 15 to 17, which is +2. Missing 12 to 14, which is +2.
+missing.txt held 24 bytes: fish, zebrafish, moonbeam.
+Underruns +1. 2039 ms played, 1380 ms nominal, with SAM speaking both words.
+Round trip: time .venv/bin/python tools/voice_build.py --pull-missing --sync took 4.232 s of wall clock.
+It pulled 3 words, made 3 clips and sent 3 clips and voice.txt. 2828 were skipped. Exit code 0.
+missing.txt was gone afterwards.
+Second sr say Zebrafish moonbeam: clips 144 to 146, which is +2. Fallback +0.
+Timing: 1540 ms played, 23614 subsamples, 1475 ms nominal. The prediction was an exact match.
+Underruns +1. The new moonbeam.raw is the last of 193 files in folder m.
+
+Check 5: interrupt and stop
+A long say interrupted by sr say Home screen after 1.5 s: utterances +2, aborted +1.
+Home screen played in full: 15972 subsamples (predicted 15972), 998 ms nominal, 1042 ms played. Underruns +0.
+A long say cut by input send back short after 1.5 s: aborted +1.
+The first status read, sent as soon as the Back command returned (0.058 s), already showed speech idle.
+At 0.345 s after the Back command, the speaker was released.
+Underruns +0. Home screen, no app running.
+Before check 6, the home screen spoke one announcement by itself: 4 clips, 2523 ms nominal, underruns +1.
+
+Check 6: memory over twenty and forty utterances
+Before: free heap 114600, minimum 83800, largest block 105832.
+After 20 utterances: 114192.
+After 14 s idle: 114480.
+After 20 more utterances: 114064.
+After 11 s idle: 114512.
+The largest block stayed at 105832 and the minimum at 83800 throughout.
+The dip of about 400 bytes right after speech recovers within seconds, so there is no leak.
+Underruns over the 40 utterances: 22 to 41, which is +19.
+The texts used are Settings. Sub-GHz. / Apps, 1 of 11. / Read RAW. 433.92 MHz. / Home screen / Bluetooth. Parent folder. Save.
+
+Check 7: voice off, voice on, reboot
+sr voice off replied "voice off: SAM speaks everything".
+sr say Settings. Sub-GHz.: clips, fallback and missing unchanged. 2304 ms played, 97760 subsamples, 1547 ms nominal. Underruns +0.
+sr voice on replied "voice on". Then power reboot.
+After the reboot, with an uptime of 33 s:
+sr screen: content layer desktop.
+sr voice status: voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0.
+sr status: utterances 1, underruns 0, free heap 114560.
+The 2 clips are the boot announcement "Home screen".
+
+Summary
+All checks behave as specified except underruns.
+Every lookup of a word near the end of a large folder takes longer than one half of the ring, 41 ms.
+The verification caused 41 underruns before the reboot. From the extra check, each one adds about 8 ms to the played time.
+Smaller folders would fix this. That change is not part of this rollout.
