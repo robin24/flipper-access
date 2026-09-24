@@ -105,8 +105,9 @@ A word without a clip is spelled letter by letter with the recorded letters and 
 between letters, and noted on the card, so nothing is left unspoken. SAM speaks a letter only
 when its clip is missing too, and everything when the voice is off. The letters are recorded by
 their names, so "NFC" is heard as "en eff see", not "capital N capital F capital C". The names
-live in `tools/voice_names.txt`. A spelled word gets its own clip at the next run of the routine
-command, `.venv/bin/python tools/voice_build.py --extract --pull-missing --sync`.
+live in `tools/voice_names.txt`. The letter A is recorded from "a": `say` reads "ay" as "aye",
+which sounds exactly like the letter I. A spelled word gets its own clip at the next run of the
+routine command, `.venv/bin/python tools/voice_build.py --extract --pull-missing --sync`.
 
 On the card:
 
