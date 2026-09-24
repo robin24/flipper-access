@@ -269,7 +269,10 @@ static void test_dialog_without_focus_reads_everything(void) {
     CHECK_STR(out[0].text, "Delete file?. key.sub. buttons: left Cancel, right Delete");
 }
 
-static void test_spontaneous_changes_are_rate_limited(void) {
+/** Every change on the same screen is reported, also without a key press and however quickly
+ * they come: the service says them at most once per change delay, always the latest
+ * (sr_throttle). Without a key press within 500 ms the text is cut at 80 characters. */
+static void test_spontaneous_changes_are_all_reported(void) {
     SrModel m;
     sr_model_init(&m, 1);
     SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
@@ -285,14 +288,40 @@ static void test_spontaneous_changes_are_rate_limited(void) {
     CHECK(!out[0].interrupt);
     CHECK_STR(out[0].text, "Timeout: 4s");
     strncpy(f.records[1].text, "Timeout: 3s", SR_TEXT_MAX - 1);
-    n = sr_model_process(&m, &f, 3000, false, out, SR_MAX_ANNOUNCEMENTS);
-    CHECK(n == 0);
+    n = sr_model_process(&m, &f, 2100, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnChange);
+    CHECK_STR(out[0].text, "Timeout: 3s");
     strncpy(f.records[1].text, "Timeout: 2s", SR_TEXT_MAX - 1);
-    n = sr_model_process(&m, &f, 4000, false, out, SR_MAX_ANNOUNCEMENTS);
+    n = sr_model_process(&m, &f, 2200, false, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 1);
+    CHECK_STR(out[0].text, "Timeout: 2s");
     strncpy(f.records[1].text, "Timeout: 1s", SR_TEXT_MAX - 1);
-    n = sr_model_process(&m, &f, 4100, true, out, SR_MAX_ANNOUNCEMENTS);
+    n = sr_model_process(&m, &f, 2300, true, out, SR_MAX_ANNOUNCEMENTS);
     CHECK(n == 1);
+    CHECK_STR(out[0].text, "Timeout: 1s");
+    // The same frame again: nothing changed, nothing said
+    n = sr_model_process(&m, &f, 2400, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 0);
+
+    // Three new rows of 39 characters join to 121: cut at 80 without a key, whole with one
+    SrFrame long_rows;
+    frame_init(&long_rows, SrLayerFullscreen);
+    add(&long_rows, 36, 31, SrLayerFullscreen, SrFontPrimary, false, false, 0, 0, "Wrong PIN!");
+    add(&long_rows, 64, 38, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Timeout: 1s");
+    const char* row = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; // 39 characters
+    add(&long_rows, 2, 46, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, row);
+    add(&long_rows, 2, 54, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, row);
+    add(&long_rows, 2, 60, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, row);
+    n = sr_model_process(&m, &long_rows, 2500, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnChange);
+    CHECK(strlen(out[0].text) == 80);
+    n = sr_model_process(&m, &f, 2600, false, out, SR_MAX_ANNOUNCEMENTS);
+    n = sr_model_process(&m, &long_rows, 2700, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnChange);
+    CHECK(strlen(out[0].text) > 80);
 }
 
 /** One keyboard row as text_input draws it: the keys before the selected one, the selected key
@@ -719,7 +748,7 @@ int main(void) {
     test_verbose_focus_includes_position();
     test_new_screen_announces_title_and_focus();
     test_dialog_without_focus_reads_everything();
-    test_spontaneous_changes_are_rate_limited();
+    test_spontaneous_changes_are_all_reported();
     test_keyboard_focus_is_the_single_key();
     test_typing_announces_the_character();
     test_home_screen_and_loading();
