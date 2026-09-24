@@ -455,6 +455,52 @@ static void test_parent_folder_and_loading_rows(void) {
     CHECK_STR(s.rows[0].text, "Parent folder");
 }
 
+/** The status bar as the desktop draws it with its clock on: the clock and the battery
+ * percentage on the right status layer, a pixel apart, each a row of its own. */
+static void test_status_text(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+    frame_init(&f, SrLayerDesktop);
+    add(&f, 103, 9, SrLayerStatusRight, SrFontBatteryPercent, true, false, 0, 0, "100");
+    add(&f, 78, 8, SrLayerStatusRight, SrFontPrimary, false, false, 0, 0, "14:05");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 2);
+    sr_status_text(&s, text, sizeof(text));
+    CHECK_STR(text, "14:05, 100");
+
+    // No status text at all: empty, and the reader says so
+    frame_init(&f, SrLayerWindow);
+    add(&f, 6, 30, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Read");
+    sr_screen_build(&f, &s);
+    CHECK(sr_status_text(&s, text, sizeof(text)) == 0 && text[0] == '\0');
+}
+
+static void test_focus_with_position(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 22, 14, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Sub-GHz");
+    add(&f, 22, 36, SrLayerFullscreen, SrFontPrimary, false, true, 3, 11, "Apps");
+    sr_screen_build(&f, &s);
+    sr_focus_with_position(&s, text, sizeof(text));
+    CHECK_STR(text, "Apps, 3 of 11");
+
+    // No position known: just the focus text
+    frame_init(&f, SrLayerWindow);
+    add(&f, 6, 30, SrLayerWindow, SrFontSecondary, true, false, 0, 0, "Read");
+    sr_screen_build(&f, &s);
+    sr_focus_with_position(&s, text, sizeof(text));
+    CHECK_STR(text, "Read");
+
+    // No focus: empty, and the reader says so
+    frame_init(&f, SrLayerWindow);
+    add(&f, 6, 30, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Read");
+    sr_screen_build(&f, &s);
+    CHECK(sr_focus_with_position(&s, text, sizeof(text)) == 0 && text[0] == '\0');
+}
+
 static void test_overflow_is_mentioned(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -488,6 +534,8 @@ int main(void) {
     test_button_side_comes_from_the_hint();
     test_parent_folder_and_loading_rows();
     test_overflow_is_mentioned();
+    test_status_text();
+    test_focus_with_position();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

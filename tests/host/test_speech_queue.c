@@ -269,6 +269,39 @@ static void test_file_items(void) {
     CHECK(strncmp(item.text, path, SPEECH_ITEM_TEXT_MAX - 1) == 0);
 }
 
+// Spelled items: the focus spelled on Back plus OK held takes the whole queue like an
+// interrupting push, and only push_spelled sets spell.
+static void test_spelled_items(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    speech_queue_init(&q);
+
+    // One push_spelled after a text: one item, of a new generation, spell true, the text kept
+    speech_queue_push(&q, "one", false, false);
+    uint32_t g = q.generation;
+    speech_queue_push_spelled(&q, "Apps");
+    CHECK(q.generation == g + 1);
+    CHECK(speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(item.spell && !item.file && !item.replaceable && item.rate == 0);
+    CHECK(strcmp(item.text, "Apps") == 0);
+
+    // Text and file pushes that reuse the slot of a spelled item leave spell false
+    speech_queue_push_spelled(&q, "Apps");
+    speech_queue_push(&q, "words", true, false);
+    CHECK(speech_queue_pop(&q, &item) && !item.spell && strcmp(item.text, "words") == 0);
+    speech_queue_push_spelled(&q, "Apps");
+    speech_queue_push_file(&q, "/ext/a.raw", 16000);
+    CHECK(speech_queue_pop(&q, &item) && item.file && !item.spell);
+
+    // A spelled item is not replaceable: a replaceable text after it is appended
+    speech_queue_push_spelled(&q, "Apps");
+    speech_queue_push(&q, "change", false, true);
+    CHECK(speech_queue_count(&q) == 2);
+    CHECK(speech_queue_pop(&q, &item) && item.spell && strcmp(item.text, "Apps") == 0);
+    CHECK(speech_queue_pop(&q, &item) && !item.spell && strcmp(item.text, "change") == 0);
+}
+
 int main(void) {
     SpeechQueue q;
     SpeechItem item;
@@ -339,6 +372,7 @@ int main(void) {
     test_replace_rules();
     test_text_limit();
     test_file_items();
+    test_spelled_items();
 
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
