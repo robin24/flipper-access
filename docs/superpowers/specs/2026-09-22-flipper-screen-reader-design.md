@@ -161,9 +161,10 @@ Decision rules, in order:
    order. Kind screen, interrupt on.
 3. Focus changed on the same screen: announce the focus text, plus position when verbosity is
    high or when requested. Kind focus, interrupt on.
-4. Other rows changed: announce only the changed rows. If a button was pressed within 500 ms
-   the announcement is immediate; otherwise it is rate limited to one per 1500 ms and the text
-   is limited to 80 characters. Kind change, interrupt off.
+4. Other rows changed: the model reports every changed row (kind change, interrupt off); it no
+   longer rate limits them itself. The service says it at once within 500 ms of a key press,
+   otherwise at most once per change delay (sr_change_ms, 500 to 10000 ms, default 3000) with
+   the latest text, cut at 80 characters without a recent key.
 5. A frame with no rows in the Window and Fullscreen layers after a screen with rows: announce a
    synthesized name when one is known (home screen when the Desktop layer is active), else
    nothing. The loading screen, which draws no text, therefore stays silent.
@@ -185,16 +186,21 @@ the console command can reach it.
 
 Thread loop: wait on thread flags with a timeout. Flags: frame ready, input event, control
 message. A frame starts a 50 ms settle timer; if another frame arrives the timer restarts; when
-it expires the latest frame is processed. Input events arrive through a small queue filled by
-the pubsub callback, which only enqueues. The service keeps the timestamp of the last Press and
-uses it for the key correlation rule and, in phase 3, for chords.
+it expires the latest frame is processed. The wait also ends when a held change is due; while a
+frame is settling, the held change waits for it rather than firing mid-settle. A key press drops
+a held change before the frame it causes is modelled. Input events arrive through a small queue
+filled by the pubsub callback, which only enqueues. The service keeps the timestamp of the last
+Press and uses it for the key correlation rule and, in phase 3, for chords.
 
 Enable state: the tap is installed at start and consults momentum_settings.screen_reader on
 every frame, so toggling from the console or the settings app takes effect immediately without
 a reboot. When off, the tap records nothing and the service idles.
 
-Outputs: every announcement goes to a ring of the last 8 announcements for the console watch
-command, and, when speech is enabled and built, to the speech queue with its interrupt flag.
+Outputs: the console mirror (the ring of the last 8 announcements for sr watch) receives an
+announcement when it is said, or when it is suppressed on arrival by the quiet rules; a change
+replaced by a newer one while held, or dropped by the quiet rules once it comes due, never
+reaches it. A said announcement also goes to the speech queue, when speech is enabled and built,
+with its interrupt flag.
 
 ## 7. Console command sr
 
@@ -207,8 +213,10 @@ Registered by the service as a built in parallel safe command. Subcommands:
   keyboard command, and printable characters are sent as ascii events. This is the tethered
   screen reader and the integration test harness.
 - sr on, sr off: set and save the setting.
-- sr status: prints enabled state, rate, volume, verbosity, and memory use of the service.
+- sr status: prints enabled state, rate, volume, verbosity, change delay, and memory use of the
+  service.
 - sr say text: speaks text (phase 2). sr rate n, sr volume n, sr verbosity n: set and save.
+  sr delay ms (500 to 10000): set and save.
 
 ## 8. Speech engine
 
@@ -264,10 +272,11 @@ a long press. Repeat events for Back are dropped while the reader is on.
 ## 10. Settings
 
 New fields in MomentumSettings with defaults: screen_reader false, sr_rate 72 (SAM speed 40 to
-120), sr_volume 100 (0 to 100), sr_verbosity 1 (0 terse, 1 normal, 2 verbose). Registered in
-the settings table so the console can set them before any spoken settings screen exists. In
-phase 3 an Accessibility scene in the Momentum settings app exposes them as a variable item
-list; changes apply live, no reboot.
+120), sr_volume 100 (0 to 100), sr_verbosity 1 (0 terse, 1 normal, 2 verbose), sr_change_ms 3000
+(500 to 10000). Registered in the settings table so the console can set them before any spoken
+settings screen exists. In phase 3 an Accessibility scene in the Momentum settings app exposes
+them as a variable item list; changes apply live, no reboot. Rate is shown only when the voice
+is SAM; Change delay is a row of seven values: 0.5, 1, 1.5, 2, 3, 5 and 10 s.
 
 ## 11. Memory and flash budget
 
@@ -531,7 +540,7 @@ Chords, Back held as the modifier. Back Press and Release pass through; Back Rep
 
 Spelling. `speech_say_spelled(text)` queues an item whose words are spelled with the letter and digit clips, 60 ms between letters and 150 ms between words.
 
-Settings. An "Accessibility" scene in the Momentum settings app (a variable item list under the app's root list, after Misc): Screen reader OFF/ON, Voice SAM/Recorded, Rate 40 to 120 in steps of 4, Volume 0 to 100 in steps of 10, Verbosity Terse/Normal/Verbose. Values apply live because the reader reads `momentum_settings` itself: `screen_reader` and `sr_verbosity` per frame as today, `sr_rate`, `sr_volume` and `sr_voice` pushed to the speech engine before every announcement; the app saves when it exits, as its other scenes do.
+Settings. An "Accessibility" scene in the Momentum settings app (a variable item list under the app's root list, after Misc): Screen reader OFF/ON, Voice SAM/Recorded, Rate 40 to 120 in steps of 4 (shown only when Voice is SAM), Volume 0 to 100 in steps of 10, Verbosity Terse/Normal/Verbose, Change delay 0.5 to 10 s in a table of seven values (default 3 s). Values apply live because the reader reads `momentum_settings` itself: `screen_reader`, `sr_verbosity` and `sr_change_ms` per frame as today, `sr_rate`, `sr_volume` and `sr_voice` pushed to the speech engine before every announcement; the app saves when it exits, as its other scenes do.
 
 Icon-only screens get spoken hints through a new tap call, `canvas_tap_hint_note(canvas, text, focus)`: a synthetic text record on the current layer that the model treats as a row (a focus row when focus is true), so no module needs real text on screen. Internal users: the desktop's lock menu (the selected tile's name, "Brightness N", "Volume N"), the PIN entry ("N digits entered", never the digits), the lock screen ("Locked, press Back three times to unlock" or "Locked with PIN, press Up to enter it"), and the unlock ("Unlocked") through the desktop status pubsub. External users: `button_panel_item_set_name(panel, index, name)` stores a name for a button, the module hints the selected button's name; the infrared app names its universal remote buttons ("Power", "Mute", "Volume up", "Volume down", "Channel up", "Channel down", and the AC, audio, projector, fan, LED, monitor, Blu-ray and digital sign sets). `canvas_tap_hint_note` and `button_panel_item_set_name` are exported for external apps: API version 87.1 becomes 87.2 (additions only; existing apps keep loading), and the infrared and Momentum settings apps are rebuilt and copied to the card.
 
@@ -598,7 +607,10 @@ docs/measurements/2026-09-24-phase-3.txt.
   from that step. The app saves on exit. Turning the reader back on, in the scene or with sr on,
   reads the screen again: the frame tap sees the setting go from off to on, and the model forgets
   its previous screen, so the screen shown is announced as a new one even when it is the one the
-  reader last saw (on the Screen Reader row, "Screen Reader ON").
+  reader last saw (on the Screen Reader row, "Screen Reader ON"). Rate is shown only when Voice
+  is SAM: five rows with the recorded voice, six with SAM. Change delay is a seven-value table
+  (0.5, 1, 1.5, 2, 3, 5, 10 s; default 3 s) rather than a step grid; an off-table saved value
+  snaps to its nearest entry, the same as Rate and Volume snap to their nearest step.
 - Notes: canvas_tap_hint_note records text with the note flag at position 0, 0 in the secondary
   font. In the model a note is a row, a focus row when focus is set, never the title and never
   joined with drawn text. Notes are read before the drawn text (the lock screen's date sits
@@ -642,9 +654,10 @@ docs/measurements/2026-09-24-phase-3.txt.
   clip, "quickly", also listed there.
 - Budget: firmware.bin 875,928 bytes at 6c7469a79, 4,712 spare; phase 3 took 3,880 bytes (8,592
   spare at d5b77c219). The final review fixes took 128 more: 876,056 bytes at af4ee0952, 4,584
-  spare. Idle heap about 110 KB free, as before. Lowest free stack seen: InputSrv 580 of 1,020
-  bytes, TimersSrv 740 of 1,020, DesktopSrv 1,084 of 2,044, GuiSrv 1,108 of 2,044,
-  ScreenReaderSrv 2,028 of 3,068, SpeechWorker 2,180 of 3,068.
+  spare. The polish round (change throttle, Rate shown only for SAM, Change delay) took 980
+  more: 877,036 bytes at 859c87c98, 3,604 spare. Idle heap about 110 KB free, as before. Lowest
+  free stack seen: InputSrv 580 of 1,020 bytes, TimersSrv 740 of 1,020, DesktopSrv 1,084 of
+  2,044, GuiSrv 1,108 of 2,044, ScreenReaderSrv 2,028 of 3,068, SpeechWorker 2,180 of 3,068.
 - Tests: host checks for chords 73, the model 159, speech text 1,022, the queue 156, PCM 700 and
   the voice 4,433, plus the 11 SAM cases. On the device, tools/sr_drive.py's third session sends
   the four chords that change no setting (Back plus Up, Down, OK and OK Long) with `input send`,
@@ -658,3 +671,16 @@ docs/measurements/2026-09-24-phase-3.txt.
   keybind that opens the lock menu). Remote control and `sr watch` keys bypass the chords. One
   unexplained "furi_check failed" reboot happened during phase 3 (15:09:51, the project's third);
   tools/flipper_log.py now keeps the log, so the next one names its thread.
+
+### Polish round as built (2026-09-24)
+
+Three items: a change delay so same-screen changes such as a progress bar are throttled instead
+of read on every frame, Rate shown only when Voice is SAM, and `tools/voice_build.py` extracting
+vocabulary from the apps already on the card instead of from firmware source alone. Deviations
+from the design sections above: the model's own rate limiter (section 5 rule 4, a flat 1500 ms)
+was removed rather than kept alongside a service-side one; the throttle lives in the service
+(`sr_throttle.c`, host tested), so the model itself just reports every changed row. Change delay
+is a seven-value table (0.5, 1, 1.5, 2, 3, 5, 10 s), not a uniform step range like Rate and
+Volume. The card-apps extraction reads the strings already built into the `.fap` files on the
+SD card, so a clip is produced even when its source text lives in an app outside this
+repository.

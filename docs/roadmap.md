@@ -2,7 +2,7 @@
 
 Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focused firmware built on Momentum, rather than a pull request to Momentum.
 
-Status on 2026-09-24: the recorded voice (step 1 of the memory plan) and phase 3, on-device control, are done. Next: the memory plan, from step 2.
+Status on 2026-09-24: the recorded voice (step 1 of the memory plan), phase 3 on-device control, and the polish round (change delay, Rate shown only for SAM) are done. Next: the memory plan, from step 2.
 
 ## Why a fork
 
@@ -20,7 +20,7 @@ Status on 2026-09-24: the recorded voice (step 1 of the memory plan) and phase 3
 
 ## Memory plan, in order
 
-Where phase 3 left it: firmware.bin is 876,056 bytes, 4,584 spare below the BLE stack; idle free heap is about 110 KB; opening Sub-GHz with the reader on runs out of memory and restarts the device. The next steps make room, in this order.
+Where phase 3 and the polish round leave it: firmware.bin is 877,036 bytes, 3,604 spare below the BLE stack; idle free heap is about 110 KB; opening Sub-GHz with the reader on runs out of memory and restarts the device. The next steps make room, in this order.
 
 1. Recorded voice on the card: done 2026-09-24.
    - Size: 2,892 words, in 64 hashed folders, with 0 underruns in the verification.

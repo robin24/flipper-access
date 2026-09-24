@@ -222,8 +222,8 @@ static void test_key_press_and_suppression_drop_the_held_change(void) {
     CHECK(sr_throttle_offer(&t, "Sending 3 percent", 1000, 3000));
     CHECK(!sr_throttle_offer(&t, "Sending 7 percent", 2000, 3000)); // held until 4000
     sr_throttle_clear(&t); // a key press at 2500
-    CHECK(!due(4000, 3000)); // the stale "7 percent" is never said
     sr_throttle_force(&t, 2550); // the key's own change, at once
+    CHECK(!due(4000, 3000)); // the stale "7 percent" is never said
     CHECK(!sr_throttle_offer(&t, "Sending 9 percent", 3000, 3000));
     CHECK(sr_throttle_wait_ms(&t, 3000, 3000) == 2550);
     CHECK(due(5550, 3000));
