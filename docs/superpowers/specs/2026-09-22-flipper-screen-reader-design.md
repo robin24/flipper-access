@@ -1,6 +1,6 @@
 # Flipper Zero screen reader for Momentum firmware: design
 
-Date: 2026-09-22. Status: approved by Robin on 2026-09-22; phase 1 implemented and reviewed on 2026-09-22 (see section 16 for the deviations made during implementation). Author: Claude, for Robin.
+Date: 2026-09-22. Status: approved by Robin on 2026-09-22; phase 1 implemented and reviewed on 2026-09-22 (see section 16 for the deviations made during implementation); phase 2 built on 2026-09-23 ("Phase 2 as built" in section 16) and phase 3 on 2026-09-24 (section 17). Author: Claude, for Robin.
 
 ## 1. Goal and scope
 
@@ -332,7 +332,8 @@ cannot be closed from the console at all, only by a reboot. The reader never sen
 2. Speech: SAM port, DMA playback, queue and interruption, sr say, rate and volume. Done when
    the phase 1 announcements are spoken by the device.
 3. Control: input filter and chords, position and verbosity, the Accessibility settings scene,
-   synthesized announcements for the home screen, lock screen and lock menu, typing echo.
+   synthesized announcements for the home screen, lock screen and lock menu, typing echo. Done on
+   2026-09-24: see section 17.
 4. Polish: app by app fixes as gaps appear, then cleanup for upstream contribution.
 
 ## 15. Open items
@@ -503,6 +504,26 @@ and 14, this list is what the code does.
 
 Agreed with Robin on 2026-09-24 (build authorised without further approval). It replaces the chord table of section 9 and the settings paragraph of section 10 where they differ, and adds the icon-only screens.
 
+Status: built, and verified on the device on 2026-09-24. Firmware branch screen-reader at
+6c7469a79, API 87.2, firmware.bin 875,928 bytes with 4,712 spare. The paragraphs below are the
+design as agreed. "Phase 3 as built", at the end of this section, lists where the code differs;
+where the two disagree, that list is what the code does. The design text is wrong in five places:
+
+- The filter runs under the input service's own filter lock, a mutex held around each filter
+  call and around input_set_filter, not under the pubsub mutex, which is private to
+  furi_pubsub_publish.
+- An emitted Back Long is published just before the Back Release that carries it, not right
+  after the original event: the GUI drops a Long that arrives after its key's Release.
+- The filter is installed once, when the reader starts, and checks the screen_reader setting
+  itself, letting every event through while the reader is off. It is not installed and removed
+  with the setting, because the settings app writes the setting without calling the reader.
+- Notes are read first, before the drawn text, and count as screen content: a screen that shows
+  only notes is not "Home screen".
+- The lock is announced by the reader from the desktop status pubsub, not by the lock screen's
+  note, which stays for Back plus Up.
+
+The rate stays in the settings, on the Accessibility screen and in `sr rate`; no chord changes it.
+
 Input filter. `input_set_filter(InputFilterCallback callback, void* context)` in the input service, called before every publish (the four sites in input.c and the console's `input send` path), on the publishing thread (the input service thread for Press, Release and Short; the timer service thread for Long and Repeat), under the pubsub mutex. The callback fills `InputFilterResult { bool drop; bool emit_long; }`: drop suppresses the event, emit_long publishes an extra Long event for the same key right after the original. Only the screen reader installs it, while enabled. The callback must not block: it feeds a pure state machine (`sr_chords`, host tested) and posts commands to the reader thread.
 
 Chords, Back held as the modifier. Back Press and Release pass through; Back Repeat is dropped; Back's Long from the timer is dropped and delivered on release when Back was held at least 300 ms and no chord was used; Back Short is dropped when a chord was used. While Back is down, the first Press of another key starts a chord: every event of that key is dropped until its Release. Commands, executed on the reader thread: Back plus Up reads the whole screen (`sr_screen_describe`); Back plus Down reads the status rows (time, battery, connections); Back plus OK Short repeats the focus with its position, Back plus OK Long spells it letter by letter with the recorded letters; Back plus Left and Right lower and raise the volume by ten (0 to 100, saved) and speak the new value. The rate is not on a chord: with the recorded voice it only affects SAM. Any other Press stops speech, as today. Console: `sr chord up|down|ok|okhold|left|right` runs a command without keys.
@@ -516,3 +537,115 @@ Icon-only screens get spoken hints through a new tap call, `canvas_tap_hint_note
 NFC-V. The ISO15693 listener's signal reader waits 400 ms before its first speaker acquire after allocation, so the reader's "Emulating" announcement takes the speaker first and finishes; later acquires do not wait. During the emulation announcements are still dropped (section 16).
 
 Deviations from section 9: no rate chord (volume instead); OK Long spells; Long on release stays as designed. Out of scope: hotkeys for apps other than through their own text and hints, a repeat-last-announcement history beyond the current focus, and voice feedback for the lock menu sliders beyond their value.
+
+### Phase 3 as built
+
+Recorded after the Task 5 device runs on 2026-09-24. Where this list disagrees with sections 9
+and 10 or with the design above, this list is what the code does. The device outputs are in
+docs/measurements/2026-09-24-phase-3.txt.
+
+- Input filter: input_publish_event(pubsub, event) is the one publish path, used by the four
+  sites in input.c and by the console's fake_input. The console command is the cli_input plugin
+  on the card, so input_publish_event is exported ("+" in the API table); input_set_filter stays
+  internal ("-"), a single slot for the reader. The filter lock is allocated before the input
+  record is created, and input_set_filter opens that record first, so the filter can be
+  installed at any point of the reader's start. Once input_set_filter returns, the old filter is
+  not running and will not run again. The lock is released before publishing, so it never nests
+  with the pubsub mutex. The callers are the input service thread (Press, Release, Short), the
+  timer service thread (Long, Repeat) and console threads, which can preempt one another; the
+  filter must not block, call input_set_filter or publish. Stack cost: input_publish_event 32
+  bytes, sr_input_filter 40, sr_chords_feed 20.
+- The emitted Long is published before the event when that event is a Release, after it
+  otherwise, and alone when the event is dropped too. It is a copy of the event, so it keeps the
+  press's sequence number, and it does not pass the filter. Section 9's side effect stands: with
+  the reader on, a Long of Back alone arrives when Back is released.
+- The filter reads momentum_settings.screen_reader on every event; while it is off, every event
+  passes and the chord state is reset. Publishers that bypass the filter: remote control
+  (rpc_gui.c) and the keys of `sr watch` (sr_cli_press). Console keys (`input send`) pass it but
+  have no press timer: a press followed by a release never makes a Long, and `input send back
+  long` sends Press, Long, Release.
+- sr_chords keeps no time of its own (now_ms is reserved; the input service's 300 ms threshold
+  decides the Long). OK decides on its Short (repeat) or its Long (spell); a Short after a Long
+  is ignored. 73 host checks, including Back held past 300 ms before the chord key.
+- Commands reach the reader thread through one atomic slot: the latest wins and none runs
+  twice. A frame still settling is modelled first, so a command reads the screen as it is, and
+  reads the model's screen in place, without a 1.3 KB copy. A command is dropped when the reader
+  was turned off in between; `sr chord` answers "screen reader is off" then. Every command
+  interrupts. The rate, volume and voice are pushed to the engine before every command, as
+  before every announcement.
+- Texts: Back plus Up on a screen without text says "Home screen" on the desktop (the model's
+  word for it) and "Nothing on screen" elsewhere. Back plus Down: status records never join a
+  row; the battery's digits read as "battery N percent", after the clock when the clock is
+  shown; "No status bar" when there is none. Back plus OK with no focus says "No focus"; so does
+  Back plus OK Long, spoken, not spelled, and a focus without letters or digits is said
+  normally.
+- Long texts: commands build their text in a 640 byte buffer (SR_DESCRIBE_TEXT_MAX) and say it
+  in parts of at most 159 characters, cut after the last ". " or ", ", else the last space,
+  else hard; at most four parts (more count as queue dropped), the first interrupting, the rest
+  following. sr status counts each part as an utterance. No screen found on the device reads
+  longer than 160 characters (the longest, About page 3, has 119), so the split is proven by the
+  host tests only.
+- Spelling spells the text as written, not the expanded text, which would spell number words:
+  letters and digits are kept, other characters separate words, and runs over 31 characters are
+  split. Each spelled letter counts as a clip; nothing is logged as missing. With the voice off,
+  SAM spells, with A as "AY".
+- The volume chord steps by 10 within 0 to 100 and saves at once. The chord and the
+  Accessibility scene write the same setting.
+- Accessibility scene: momentum_app_scene_accessibility.c, the fourth item of the app's root
+  list, after Misc. When the saved rate or volume is off the scene's grid (set from the
+  console), the row shows the nearest step (volume 75 shows 80); the first Left or Right moves
+  from that step. The app saves on exit.
+- Notes: canvas_tap_hint_note records text with the note flag at position 0, 0 in the secondary
+  font. In the model a note is a row, a focus row when focus is set, never the title and never
+  joined with drawn text. Notes are read before the drawn text (the lock screen's date sits
+  above the top edge while its cover slides down). A screen with only notes has content, so it
+  is not "Home screen". sr screen marks notes NOTE.
+- Desktop: "Home screen" is also said when a desktop screen closes without leaving the desktop,
+  such as the lock menu or the power-off dialog, once the desktop's text is gone. That one does
+  not interrupt and follows the bubble rule: it is spoken only within 2 s of a key press. The
+  lock menu names the selected tile, a switch with "on" or "off", a slider with its level
+  ("Brightness 100", "Volume 95"), and the Volume slider as "Volume muted" in stealth mode. The
+  lock popup's choices are a focus with a position ("Keypad Lock, 1 of 3"). The PIN entry's note
+  says "1 digit entered" or "N digits entered" and is read before "Enter PIN:"; the PIN entry
+  was not exercised on the device.
+- Lock: the reader subscribes to the desktop status pubsub once the desktop record exists
+  (retried on every frame, because the desktop creates the record at the end of its setup) and
+  announces the lock itself, as a new announcement kind ("lock:" in sr watch), interrupting and
+  never suppressed, so an auto-lock is heard without a key press: "Locked, press Back three times
+  to unlock", or "Locked with PIN, press Up to enter it" when the RTC lock flag of a PIN lock is
+  set. For 2 s after it, or until a key press, the desktop says nothing more: not the lock screen
+  arriving, not the bubbles behind its cover, not a late frame of the lock menu. "Unlocked" is
+  said on every locked=false message, which only desktop_unlock publishes, without interrupting,
+  so the "Home screen" that follows is queued behind it. The lock screen keeps its own note for
+  Back plus Up; while its hint shows after a key press, a second note names the key, "Press Back
+  three times to unlock" or "Press Up to enter the PIN", also when the visual prompt is turned
+  off.
+- Infrared: button_panel_item_set_name gives each ButtonItem a name, and the panel hints the
+  selected item's name as a focus note after its icons, so the panel's label stays the title.
+  The universal remotes name all 56 buttons of their 9 scenes, beyond the design's table: Stop,
+  Exit, Fast backward, Fast forward, Power on, Power off, and the LED colours as written. The
+  panels are vertical, so with the device held normally Right and Left move down and up a column
+  and Up and Down move between the columns.
+- NFC-V: as designed. On the device the "Emulating" screen played in full, 11,076 ms, before the
+  listener took the speaker, and an utterance during the emulation was dropped.
+- API 87.2 exports canvas_tap_hint_note and button_panel_item_set_name. The firmware was flashed
+  with flash_usb_full, so every app on the card was rebuilt for it.
+- Vocabulary: the hint words were added by the routine voice_build run (27 clips, among them
+  digit, dry, backward and muted). The PIN note's "digits" is built by printf, which the
+  extraction cannot see, so tools/voice_words.txt lists it.
+- Budget: firmware.bin 875,928 bytes at 6c7469a79, 4,712 spare; phase 3 took 3,880 bytes (8,592
+  spare at d5b77c219). Idle heap about 110 KB free, as before. Lowest free stack seen:
+  InputSrv 580 of 1,020 bytes, TimersSrv 740 of 1,020, DesktopSrv 1,084 of 2,044, GuiSrv 1,108
+  of 2,044, ScreenReaderSrv 2,028 of 3,068, SpeechWorker 2,180 of 3,068.
+- Tests: host checks for chords 73, the model 159, speech text 1,022, the queue 156, PCM 700 and
+  the voice 4,433, plus the 11 SAM cases. On the device, tools/sr_drive.py's third session sends
+  the four chords that change no setting (Back plus Up, Down, OK and OK Long) with `input send`,
+  on the home screen and in the main menu, and checks that each one speaks and leaves the screen
+  as it was: 0 failures. Robin judged the spelling and volume chords by ear: great.
+- Known limits: Sub-GHz runs out of memory with the reader on (opening it restarted the device);
+  the memory plan comes next. Dolphin bubbles behind the lock screen can be read around a lock.
+  The splash screen after an update is dismissed silently. After a PIN unlock "Unlocked" and
+  "Home screen" can swap. The first key press on the home screen after a long idle may open the
+  lock menu, which Up opens by default. Remote control and `sr watch` keys bypass the chords.
+  One unexplained "furi_check failed" reboot happened during phase 3 (15:09:51, the project's
+  third); tools/flipper_log.py now keeps the log, so the next one names its thread.

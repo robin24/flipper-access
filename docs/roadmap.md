@@ -2,6 +2,8 @@
 
 Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focused firmware built on Momentum, rather than a pull request to Momentum.
 
+Status on 2026-09-24: the recorded voice (step 1 of the memory plan) and phase 3, on-device control, are done. Next: the memory plan, from step 2.
+
 ## Why a fork
 
 - Momentum's repository does not accept AI-written contributions; almost all of this code was written by agents under Robin's direction.
@@ -18,6 +20,8 @@ Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focus
 
 ## Memory plan, in order
 
+Where phase 3 left it: firmware.bin is 875,928 bytes, 4,712 spare below the BLE stack; idle free heap is about 110 KB; opening Sub-GHz with the reader on runs out of memory and restarts the device. The next steps make room, in this order.
+
 1. Recorded voice on the card: done 2026-09-24.
    - Size: 2,892 words, in 64 hashed folders, with 0 underruns in the verification.
    - Flash: firmware.bin grew from 869,756 bytes (the spec's baseline at 54794522b, 10,884 spare) to 871,872 bytes (+2,116). That leaves 8,768 bytes spare.
@@ -29,7 +33,7 @@ Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focus
 
 ## Features after the voice
 
-- Phase 3 from the design spec: Back chords (repeat, spell, stop), a settings screen, a device side reader toggle, lock screen and PIN handling, the NFC-V emulation announcement, auto-lock text.
+- Phase 3 from the design spec: done 2026-09-24. Back chords (read the screen and the status bar, repeat and spell the focus, volume), the Accessibility settings screen with the reader toggle, spoken names for the lock menu, the lock screen, the PIN entry and the infrared universal remotes, the lock and the auto-lock announced, and the NFC-V emulation announced before it takes the speaker. As built: section 17 of the design spec. For the user: "Using it on the device" in the README.
 - Pronunciation by ear: ordinals, thousands, remaining acronyms.
 - Phase 4 option: a companion iOS app over BLE that speaks announcements with the phone's voices; the piezo stays the fallback.
 

@@ -116,3 +116,4 @@ of
 selected
 locked
 unlocked
+digits

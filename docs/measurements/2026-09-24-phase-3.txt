@@ -1,0 +1,161 @@
+Phase 3, on-device control: device outputs, 2026-09-24
+
+Tasks 2 to 4 are taken from their task reports; Task 5's runs are at the end, verbatim where they are tool output.
+Device: R0skie on /dev/cu.usbmodemflip_R0skie1, firmware branch screen-reader, the recorded voice on the card.
+Counters are from sr status and sr voice status. A spoken text is recognised by the subsamples of the "last utterance" line:
+"Home screen" 15,972 subsamples, 2 clips.
+"one hundred" 14,716.
+"No focus" 16,399.
+"Volume one hundred" 26,563, 3 clips. "Volume ninety" 20,146.
+"Apps, 1 of 11" 30,272, 4 clips.
+"Apps" spelled 24,961, 4 letter clips.
+"battery one hundred percent" 32,784, 4 clips.
+"No status bar" 22,825.
+
+Flash, from tools/flash_headroom.sh, limit 880,640 bytes
+Before phase 3, at d5b77c219: 872,048 bytes, 8,592 spare.
+Task 1, the filter hook and the chord files: 872,240 bytes, 8,400 spare. The hook costs 192 bytes; nothing called the chord files yet.
+Task 2 at 6187eeb42: 874,048 bytes, 6,592 spare. Its fix round at b6a683b7e: 874,448 bytes, 6,192 spare.
+Task 3 changed only the Momentum settings app on the card: momentum_app.fap 79,300 bytes, then 79,340 after its fix round.
+Task 4 at 6c8da316b: 875,648 bytes, 4,992 spare. Its fix round at 6c7469a79: 875,928 bytes, 4,712 spare.
+Phase 3 in total: 3,880 bytes.
+
+Task 2: the chords in the reader, firmware 6187eeb42
+Idle check: no application, announcements flat at 195 over 90 s.
+Flash: ./fbt flash_usb_full, which rebuilt every app including the cli_input plugin; package f7-update-mntm-screen-reader-6187eeb4; the port was back after 382 s.
+First sr screen: the post-update splash, 0 records. Back dismissed it.
+Check 1, sr chord from the home screen:
+up: "Home screen". down: "one hundred" (the battery; since Task 4 "battery one hundred percent"). ok: "No focus". okhold: "No focus", spoken, not spelled.
+right twice: "Volume one hundred". left: "Volume ninety", and sr status showed volume 90. right: back to 100.
+Each command made one utterance; the announcements counter did not move.
+In the main menu: ok: "Apps, 1 of 11". okhold: the letters of Apps, 4 clips in 1,666 ms. With sr voice off, SAM spelled "AY P P S." with no clips; the voice was turned back on.
+Check 2, real chords through input send, which passes the filter:
+back press, up press, up release, back release: "Home screen", nothing opened.
+back press, ok press, ok short, ok release, back release: "No focus", nothing opened. Back's press passed through and the dolphin drew a bubble, which the command interrupted: aborted +1.
+back press, ok press, ok long, ok release, back release: "No focus".
+back press, up short, back release: the lock menu did not open, and "Home screen" was spoken.
+In the main menu: Back and OK short gave "Apps, 1 of 11" (30,272) and the menu stayed. Back and OK long gave the spelled Apps (24,961) and the menu stayed.
+Check 3, Back alone: ok short opened the main menu, back short returned home, 2 announcements.
+back press, 0.5 s, back release: nothing happened. Console keys have no press timer, so there is no Long.
+input send back long: the "Turn Off Device?" dialog opened and was read, 5,117 ms, with the buttons Battery and Power Off. back short left it.
+Check 4, a chord inside an app, the Momentum settings (loader open Momentum): Back and Up read the whole screen, 9.6 s, 18 clips, with the commit hash spelled. The app stayed on the same screen. back short left it, and "Home screen" was spoken.
+Check 5, the reader off: sr off, then back press, up short, back release: the lock menu opened, because Up went through. sr on, and back short closed the menu.
+Final: home screen, rate 72, volume 100, speech idle, underruns 0, dropped 0, voice on.
+Stacks from top 0, before any physical key: TimersSrv 796 bytes free at the lowest of 1,020; InputSrv 580 of 1,020; SpeechWorker 2,180 of 3,068; ScreenReaderSrv 2,068 of 3,068.
+From -fstack-usage: input_publish_event 32 bytes, sr_input_filter 40, sr_chords_feed 20.
+
+Task 2 fix round: long descriptions in parts, firmware b6a683b7e
+Idle check: no application, announcements 65 and utterances 101 flat. ./fbt flash_usb from 15:05:47 to 15:06:22; the port was back 30 s later.
+Stacks after Robin's key presses on the device (15:05): TimersSrv 740 free, InputSrv 580, SpeechWorker 2,180, ScreenReaderSrv 2,052. Free heap 102,320 with a popup open earlier, minimum 67,872.
+The Apps browser reads "Bluetooth. Games. GPIO. iButton. Parent folder, 1 of 13", 55 characters.
+loader open Sub-GHz crashed the device out of memory: the popup said "Flipper crashed and was rebooted, out of memory", and the uptime was 13 s afterwards. This is the documented Sub-GHz limit.
+A second, unexplained "furi_check failed" reboot happened at 15:09:51, while another agent had the Momentum settings app open. The cause is unknown. Since then tools/flipper_log.py captures the log in the background.
+The longest screens, as "reads as" lengths in characters: About 87, its pages 106, 119, 106, 117, 31 and 43; Storage 78; About Internal Storage 104; About SD Card 101; Power 58; Battery Info 30; System 77; LCD and Notifications 83; Desktop 80; Clock 49; Input 45; Passport 37; Bluetooth 40; Expansion 25.
+None is over 160 characters, so the split into parts is proven by the host tests only.
+(a) Back and Up with real keys on About page 3, 119 characters: one part, clips +40, fallback +1, as the host prediction said; 21,004 ms played; the app stayed on the page.
+(b) sr off, then sr chord up: "screen reader is off", utterances unchanged. Then sr on.
+(c) Back and OK long on the keyboard's "_" key in Text to SAM: "underscore" spoken, one clip, 11,183 subsamples, the same as its focus announcement. Nothing was typed. Back left the app.
+(d) Back and Down on the home screen: "one hundred", 2 clips, and a dolphin bubble drawn after Back's press, read once, 5 clips. Nothing aborted.
+Final at 15:21:15: home screen, rate 72, volume 70, speech idle, utterances 68, aborted 6, dropped 0, underruns 0. Free heap 108,184, minimum 73,304. TimersSrv 796 free, InputSrv 620, ScreenReaderSrv 2,028.
+
+Task 3: the Accessibility scene, momentum_app.fap from firmware deb463f3b, fix round 0bb191c32
+The app was copied to /ext/apps/assets/momentum_app.fap, 79,300 bytes.
+Idle check: no application, announcements flat at 50 for 32 s.
+loader open Momentum. The start list reads "MNTM-DEV 6187EEB4. Protocols. Misc. Interface, 1 of 4".
+Down three times: "Protocols, 2 of 4", "Misc, 3 of 4", "Accessibility, 4 of 4".
+OK: "Voice Recorded. Rate 72. Volume 70. Screen Reader ON, 1 of 5". Further down: "Voice Recorded. Rate 72. Verbosity Normal. Volume 70, 4 of 5".
+On Volume: left gave volume 60 in sr status, right gave 70 again. On Rate: left gave 68, right gave 72 again. Both applied from the next announcement.
+Back twice: no application running. The values stayed, saved when the app closed: rate 72, volume 70, verbosity 1.
+Fix round, the app 79,340 bytes: after sr volume 75 the Accessibility screen showed Volume 80, the nearest step. One left press gave volume 70 in sr status, saved on exit.
+The settings on the card survived a firmware flash in between: rate 72, volume 70, verbosity 1.
+
+Task 4: spoken names for icon-only screens, firmware 61836bdb7 and 6c8da316b, API 87.2
+Flash: ./fbt flash_usb_full from 15:56:50 to 16:00:26 (package 61836bdb), the port back by 16:07:12, the splash, then the home screen; info device showed api minor 2. Then ./fbt flash_usb from 16:14:05 to 16:14:40 for 6c8da316b, the reading order fix.
+1. Infrared, Universal Remotes, TVs: after about 10 s of loading tv.ir, sr screen showed the focus note "Power" and the title "TVs"; it reads as "TVs. Power" (announcements 4 to 5).
+The panel is vertical and the keys are turned: right gave "Channel up"; down at the edge gave nothing; left gave "Power"; up gave "Mute"; right gave "Volume up". Each move was announced once, and sr screen showed the matching focus note.
+Three Backs: "TVs, 1 of 10", "Universal Remotes, 1 of 5", then the home screen. A vanishing bubble was counted as suppressed, with no announcement.
+2. The lock menu, with no keybind file on /int, so the defaults apply and Up opens it: Up gave the focus note "Lock" (435 ms).
+right: "Momentum". right: "Brightness 100". right: "Volume 95". right: "Settings". up: "Left handed off". right: "Dark mode on". right: "Bluetooth on", read only, not switched.
+Back: "Home screen", 15,972 subsamples, the same as at boot. The return from the lock menu is now spoken.
+3. Lock and unlock: Up, then OK on Lock: the popup reads "Keypad Lock, 1 of 3", with PIN Code Lock and PIN Lock + OFF below.
+OK: locked. The note "Locked, press Back three times to unlock", the big time 16:09 and the date 24-09-2026.
+Three Backs: announcements 27 to 31, aborted +1 ("Press 3x to unlock!" cut by the next Back), then a one-clip utterance of 688 ms, "Unlocked".
+sr watch on the final image of this task: focus: Lock; focus: Keypad Lock; change: Locked, press Back three times to unlock. 24-09-2026. 16:14; change: a bubble under the cover; change: 16:15, suppressed; change: Press 3x. to unlock!; lock: Unlocked; home: Home screen.
+4. NFC-V: sr say of a long sentence, then loader open NFC /ext/nfc/sr_nfcv_test.nfc. The sentence was cut (aborted +1). "Emulating. ISO15693-3 (Unk. nown)?. sr_nfcv_test?" played in full, 11,076 ms, utterances +1, dropped +0. Then the listener took the speaker. An sr say during the emulation: dropped +1. Back left.
+10 underruns in the first second, while the NFC app loaded from the card.
+5. PIN entry: not exercised. Setting a PIN unattended could lock the owner out.
+Also: the power-off dialog, then Back: "Home screen", 15,972. sr chord down: "battery one hundred percent", 4 clips, 32,784 subsamples.
+Stacks, lowest free: DesktopSrv 1,084 of 2,044; GuiSrv 1,108 of 2,044; ScreenReaderSrv 2,120; SpeechWorker 2,468; InputSrv 588; TimersSrv 796.
+Free heap 108,216. Minimum 18,088, during the NFC emulation.
+
+Task 4 fix round: locks announced, firmware 6c7469a79
+Lock from the lock menu: "lock: Locked, press Back three times to unlock" in full, 3,639 ms, aborted 0. The lock screen's arrival and a bubble were suppressed.
+One Back after 5 s: "change: Press Back three times to unlock. Press 3x. to unlock!".
+Three quick Backs: "lock: Unlocked", then "home: Home screen". The hint stays 6 s, and the lock screen resets its count of Backs after 600 ms.
+Auto-lock: in the Desktop settings Auto Lock Time set to 10 s, no PIN, no key pressed. The lock was announced in full, 16:50:14 to 16:50:18. Unlocked, and the delay set back to OFF.
+Stealth mode: the lock menu's Volume tile reads "Volume muted".
+Stacks, lowest free: DesktopSrv 1,084; GuiSrv 1,252; ScreenReaderSrv 2,052; SpeechWorker 2,468; InputSrv 596; TimersSrv 796.
+Final: home screen, no application, reader on, voice on, speech idle, rate 72, volume 70, Auto Lock OFF.
+
+Task 5: the vocabulary and the chord session, firmware 6c7469a79
+The background log capture was stopped for the console work (17:03:29) and restarted afterwards.
+info device: commit 6c7469a7, branch screen-reader, API 87.2, system.stealth 1.
+Idle check, 17:03:44 to 17:04:15: no application, announcements flat at 35, speech idle.
+
+Vocabulary: .venv/bin/python tools/voice_build.py --extract --pull-missing --sync
+extract: 6248 distinct strings from the firmware sources, 71 bubble texts.
+extract: 2893 words; 10 with an apostrophe: can't doesn't don't flipper's i'll i'm isn't it's who's you're.
+Pulled 16 missing words from the card; 6 more could not be clips.
+2915 words, 27 to make; made 27 clips, 0 failed, 13 s; vocabulary 2926 words.
+sync: 27 sent, 2899 skipped, 0 missing, 0 failed, 4 s. The voice was silenced for the transfers and restored.
+Wall clock: 18.93 s.
+The 27 new clips: accessibility android backward chord chords chromeos de demos digit dry dvorak es fi fox fr gnome ios muted nown okhold qflipper runs spell spelled terse unk verbose.
+"entered" already had a clip. "digits" got none: the PIN entry builds its note with printf, "%u digit%s entered", so the extraction only sees "digit".
+"digits" was added to tools/voice_words.txt, the base list for words the firmware builds at run time, and the same command ran again:
+pulled 0 missing words; 2902 words, 1 to make; made 1 clip, 1 s; vocabulary 2927 words; sync: 1 sent, 2926 skipped, 0 missing, 0 failed. Wall clock: 3.13 s.
+On the card, each the size of the local clip: digit 6,949 bytes in folder 16; digits 8,723 in 3f; dry 7,722 in 1e; backward 9,170 in 04; muted 7,065 in 10; entered 7,577 in 14.
+sr voice status: voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 107, fallback 1, missing 1, open max 32 ms, last 24 ms.
+sr say Volume muted. 2 digits entered. 1 digit. Dry. Fast backward.
+clips 107 to 117, +10, one per word; fallback and missing unchanged at 1; 6,433 ms played, 101,528 subsamples, 6,345 ms nominal; underruns 0.
+
+Chord session: .venv/bin/python tools/sr_drive.py --chords, started 17:05:59
+     home  desktop, no focus
+ok   home  back + up       utterances +2, aborted +0, dropped +0, announcements +1; last 2570 ms played, 39989 subsamples
+ok   home  back + down     utterances +2, aborted +0, dropped +0, announcements +1; last 1097 ms played, 15972 subsamples
+ok   home  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 1107 ms played, 16399 subsamples
+ok   home  back + ok long  utterances +1, aborted +0, dropped +0, announcements +0; last 1107 ms played, 16399 subsamples
+     menu  fullscreen, FOCUS 1/11 "Apps", reads as: Settings. Sub-GHz. Apps, 1 of 11
+ok   menu  back + up       utterances +1, aborted +0, dropped +0, announcements +0; last 4386 ms played, 68392 subsamples
+ok   menu  back + down     utterances +1, aborted +0, dropped +0, announcements +0; last 1525 ms played, 22825 subsamples
+ok   menu  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 2005 ms played, 30272 subsamples
+ok   menu  back + ok long  utterances +1, aborted +0, dropped +0, announcements +0; last 1674 ms played, 24961 subsamples
+ok   end   home screen expected, got: desktop, no focus
+0 failures
+Wall clock: 25.69 s.
+On the home screen, two chords were followed by an announcement (announcements +1): the chord's Back press counts as a key press, so the dolphin's bubble was read after the chord. After Back and Up the last utterance, 39,989 subsamples, was that bubble; after Back and Down it was the "Home screen" said when the bubble went away, after "battery one hundred percent".
+The main menu is fullscreen and draws no status bar (sr screen: three records, none in the status bar), so Back and Down there says "No status bar", 22,825 subsamples.
+
+All three sessions: .venv/bin/python tools/sr_drive.py, started 17:07:41
+Sessions one and two, the menus and Text to SAM's keyboard: 17 steps, all ok, as before.
+     home  desktop, no focus
+ok   home  back + up       utterances +1, aborted +0, dropped +0, announcements +0; last 1107 ms played, 15972 subsamples
+ok   home  back + down     utterances +1, aborted +0, dropped +0, announcements +0; last 2169 ms played, 32784 subsamples
+ok   home  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 1108 ms played, 16399 subsamples
+ok   home  back + ok long  utterances +2, aborted +0, dropped +0, announcements +1; last 4291 ms played, 67546 subsamples
+     menu  fullscreen, FOCUS 1/11 "Apps", reads as: Settings. Sub-GHz. Apps, 1 of 11
+ok   menu  back + up       utterances +1, aborted +0, dropped +0, announcements +0; last 4387 ms played, 68392 subsamples
+ok   menu  back + down     utterances +1, aborted +0, dropped +0, announcements +0; last 1517 ms played, 22825 subsamples
+ok   menu  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 2013 ms played, 30272 subsamples
+ok   menu  back + ok long  utterances +1, aborted +0, dropped +0, announcements +0; last 1674 ms played, 24961 subsamples
+ok   end   home screen expected, got: desktop, no focus
+0 failures
+Wall clock: 58.72 s.
+Every chord's own utterance matches the lengths above: "Home screen" 15,972; "battery one hundred percent" 32,784; "No focus" 16,399 for both OK chords on the home screen; in the main menu the whole menu 68,392, "No status bar" 22,825, "Apps, 1 of 11" 30,272 and the spelled Apps 24,961. The 67,546 after Back and OK long on the home screen is a bubble read after "No focus".
+State after the sessions: home screen, no application, reader on, voice on, speech idle, utterances 83, aborted 9, dropped 0, underruns 0, clips 235, fallback 1, missing 1, free heap 110,280.
+
+The path to the Accessibility screen, checked for the README with input send and sr screen:
+OK on the home screen: "Settings. Sub-GHz. Apps, 1 of 11". Up: "Settings, 11 of 11". Up: "Momentum, 10 of 11".
+OK: "MNTM-DEV 6C7469A7. Protocols. Misc. Interface, 1 of 4". Up: "Accessibility, 4 of 4".
+OK: "Voice Recorded. Rate 72. Volume 70. Screen Reader ON, 1 of 5".
+Three Backs: the Momentum list, the main menu on "Momentum, 10 of 11", then the home screen. Nothing was changed.
+Final: home screen, no application, reader on, voice on, speech idle, rate 72, volume 70, underruns 0. The log capture restarted at 17:15:37.

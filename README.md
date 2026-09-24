@@ -8,7 +8,8 @@ and the tools in this folder. Last updated 2026-09-24.
 
 - Device name: R0skie. Hardware version 12, region DE. 64 GB microSD card, exFAT.
 - Firmware: Momentum mntm-012 (built 31 December 2025), installed 2026-09-22 from the terminal.
-  Before that it ran official firmware 1.4.3.
+  Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
+  here: on 2026-09-24 that is phase 3, commit 6c7469a79, API version 87.2.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1`, 230400 baud. It disappears while the
   device is in the updater and comes back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
@@ -16,14 +17,169 @@ and the tools in this folder. Last updated 2026-09-24.
 - Sub-GHz loads as an external app from the card into RAM in this firmware base (mntm-012 had
   it in flash). With the reader on, its read mode leaves about 2 KB of heap and the frequency
   analyzer crashes out of memory (numbers in `docs/measurements/`), so avoid Sub-GHz while the
-  reader is enabled until phase 3 addresses memory. Building it into the firmware was tried and
-  reverted: the image did not fit below the BLE stack (see the flash limit under Useful
-  commands). The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F) load as
-  external faps too; NFC read leaves about 24 KB with the reader on.
+  reader is enabled until the memory plan in `docs/roadmap.md` makes room. Building it into the
+  firmware was tried and reverted: the image did not fit below the BLE stack (see the flash
+  limit under Useful commands). The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB,
+  U2F) load as external faps too; NFC read leaves about 24 KB with the reader on.
 - Since the recorded voice's 8 KB speech ring (2026-09-24), the reader holds 4 KB more heap
   than when the numbers above were taken. Idle free heap went from 114,552 to 110,520 bytes.
   So Sub-GHz read is expected to run out of memory with the reader on, and NFC read to leave
-  about 20 KB. Neither was measured again.
+  about 20 KB. On 2026-09-24, during phase 3, just opening Sub-GHz with the reader on ran out of
+  memory and restarted the device. NFC read was not measured again.
+
+## Using it on the device
+
+Since phase 3 (2026-09-24) the screen reader can be controlled from the device alone. Chords with
+the Back button read the screen, the status bar and the focus, spell the focus and set the
+volume. An Accessibility screen in the Momentum settings holds the reader's settings. Screens that
+draw only icons, such as the lock menu, the lock screen and the infrared universal remotes, now
+have spoken names. Everything in this section was checked on R0skie, except where it says
+otherwise. The device outputs are in `docs/measurements/2026-09-24-phase-3.txt`.
+
+### Back chords
+
+Hold Back, press a second key, then let go of Back. The second key goes to the screen reader
+only. The app on the screen never sees it, so a chord never moves the focus or opens anything.
+
+- Back and Up reads the whole screen from the top. The home screen, which draws no text of its
+  own, reads as "Home screen". A long screen is read in several parts, one after the other.
+- Back and Down reads the status bar: the time, when the status bar shows it, and the battery, as
+  "battery 100 percent". A screen without a status bar, such as the main menu, answers "No
+  status bar".
+- Back and a short press of OK repeats the focused item with its position, for example "Apps, 1
+  of 11". With nothing focused it says "No focus".
+- Back and a long press of OK spells the focused item with the recorded letters: Apps is spelled
+  A, P, P, S.
+- Back and Left lowers the speech volume by 10, and Back and Right raises it by 10, between 0 and
+  100. The reader says the new value, such as "Volume 60", and saves it.
+
+More about the chords:
+
+- The speech rate has no chord. Set it on the Accessibility screen, described below, or with
+  `sr rate`.
+- Back on its own works as before: a short press goes back. A long press of Back on its own,
+  which opens the power-off dialog on the home screen, takes effect when you let go of Back, not
+  after the usual 300 ms. That way a slow chord is never mistaken for a long press.
+- The press of Back itself still reaches the app when a chord starts. On the home screen the
+  dolphin may answer it with a speech bubble, which you may hear after the chord.
+- Any other key press silences speech, as before.
+- While the reader is off, the chords are ordinary key presses. Back and Up on the home screen
+  then opens the lock menu.
+- Chords work with the device's buttons and with `input send` on the console. Keys sent from
+  `sr watch`, and from the remote control in qFlipper or the mobile app, bypass the chords.
+
+To run a chord's command from the console without keys:
+
+    .venv/bin/python tools/flipper_cli.py "sr chord up"
+
+The keys are `up`, `down`, `ok`, `okhold`, `left` and `right`, as in the list above.
+
+### The Accessibility settings
+
+The reader's settings are one screen of the Momentum settings app. To get there, press OK on the
+home screen for the main menu. Momentum is the second-last item, just before Settings. The menu
+opens on its first item, Apps, and wraps around, so pressing Up twice reaches Momentum; then
+press OK. The lock menu's Momentum tile opens the same app. The app first reads the firmware
+version, then its list of four: Interface, Protocols, Misc and Accessibility. Press Up once, or
+Down three times, to reach Accessibility, and press OK.
+
+The Accessibility screen has five rows. Up and Down move between them. Left and Right change the
+value of the row you are on.
+
+- Screen Reader, ON or OFF. OFF turns the reader off at once: nothing more is read, and the
+  chords become ordinary keys. If that happens by mistake, press Right straight away. The
+  selection is still on this row, and Right turns the reader back on. The console command
+  `sr on` does the same.
+- Voice, Recorded or SAM. Recorded speaks with the word clips on the SD card, SAM with the
+  built-in synthesizer.
+- Rate, from 40 to 120 in steps of 4. Bigger is slower. The rate changes SAM only: the recorded
+  words play at the speed they were recorded.
+- Volume, from 0 to 100 in steps of 10. This is the same setting the Back and Left or Right
+  chords change.
+- Verbosity, Terse, Normal or Verbose. Terse leaves out the button labels at the bottom of a
+  screen, Normal reads them, and Verbose also says the position, such as "3 of 11", each time
+  the focus moves.
+
+A change applies from the next thing the reader says. The settings are saved when you leave the
+Momentum settings app: press Back until you hear "Home screen".
+
+### The home screen and the lock menu
+
+Coming back to the home screen is announced as "Home screen". That includes closing a dialog of
+the home screen, such as the power-off dialog, or the lock menu. The dolphin's speech bubbles are
+read only when you pressed a key in the last two seconds.
+
+On the home screen, Up opens the lock menu: that is Momentum's default key for it. The lock menu
+is a grid of icons, and the reader names the selected one. It opens on Lock.
+
+- The six square tiles stand in three columns of two: Left handed above Settings, Dark mode above
+  Lock, and Bluetooth above Momentum. To the right of them are two sliders, Brightness and
+  Volume.
+- Left and Right move from column to column and on to the sliders, and wrap around at the ends.
+  Up and Down move between the two tiles of a column. On a slider, Up and Down change its level
+  in steps of 5 percent.
+- You hear "Lock", "Momentum", "Settings", "Left handed on" or "Left handed off", "Dark mode on"
+  or "off", "Bluetooth on" or "off", and the sliders with their level, such as "Brightness 100"
+  and "Volume 95". In stealth mode the Volume slider is "Volume muted".
+- OK uses the selected tile. A switch flips, Settings and Momentum open those apps, Lock offers
+  the ways to lock, described below, and Volume switches stealth mode on or off. Stealth mode
+  mutes the device's own beeps and sounds; the reader keeps speaking.
+- Back closes the lock menu, and you hear "Home screen".
+
+### Locking and unlocking
+
+Select Lock in the lock menu and press OK. A short list offers Keypad Lock, PIN Code Lock and PIN
+Lock + OFF, read as "Keypad Lock, 1 of 3" and so on. Up and Down choose, and OK locks.
+
+When the device locks, from this list or by the auto-lock timer, you hear "Locked, press Back
+three times to unlock". A PIN lock says "Locked with PIN, press Up to enter it". For two seconds
+after that the reader says nothing else about the home screen, so the sentence is heard in full.
+
+Any key pressed on the lock screen brings up its hint, and the reader says "Press Back three
+times to unlock" or "Press Up to enter the PIN". Back and Up reads the whole lock screen,
+including the time and date.
+
+To unlock a keypad lock, press Back three times quickly: each press must come less than 0.6
+seconds after the one before. You hear "Unlocked", then "Home screen".
+
+For a PIN lock, press Up to open the PIN entry. A PIN is a sequence of arrow key presses. The
+reader says how many you have entered, "1 digit entered", "2 digits entered" and so on, never
+which keys. OK confirms the PIN, and Back clears what you entered. The PIN entry has not been
+tried on the device yet: setting a PIN unattended could have locked Robin out of the device.
+
+### Infrared universal remotes
+
+In the Infrared app, Universal Remotes lists TVs, Projectors, Audio, ACs, LEDs, Fans,
+Blu-ray/DVDs, Monitors and Digital Signs. A remote's buttons are icons, and the reader now names
+them. When a remote has loaded its codes, which takes about 10 seconds for TVs, you hear its name
+and the selected button, for example "TVs. Power". Each button you move to is named: "Mute",
+"Volume up", "Channel down", "Cool high", "Dry", "Next" and so on. OK sends the button as before.
+
+The remotes are drawn upright, for the Flipper turned a quarter turn clockwise, and the arrow keys
+are turned with them. With the Flipper held normally, Right moves down a column of buttons and
+Left moves up it; Up moves to the right-hand column and Down to the left-hand one. On the TV
+remote the left column is Power, Channel up and Channel down, and the right column is Mute,
+Volume up and Volume down. Turned a quarter turn clockwise, so that the Right key points down,
+the keys move the way they point.
+
+### NFC-V emulation
+
+When NFC emulates an ISO15693 (NFC-V) card, its "Emulating" screen is read in full first. Then
+the emulation takes over the speaker, and the reader stays silent until you leave with Back.
+
+### Known limits
+
+- Sub-GHz does not fit in memory beside the reader: on 2026-09-24 opening it restarted the device
+  with an out of memory error. Avoid Sub-GHz until the memory plan in `docs/roadmap.md` makes
+  room.
+- The dolphin keeps drawing speech bubbles behind the lock screen, and now and then one is read
+  around a lock.
+- The screen shown after a firmware update is not read. Back closes it.
+- After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
+- After a long idle, the first key press on the home screen may open the lock menu, the menu that
+  Up opens by default. Back closes it.
+- Keys sent from `sr watch` and from remote control bypass the chords, as described under Back
+  chords.
 
 ## Folder contents
 
@@ -35,7 +191,8 @@ and the tools in this folder. Last updated 2026-09-24.
 - `.venv/`: Python virtual environment with pyserial and colorlog (used by the helper scripts).
 - `Momentum-Firmware/`: full source clone, branch `screen-reader`, with the ARM toolchain
   downloaded by fbt.
-  API version 87.1, same as the installed release, so apps built here run on the device.
+  API version 87.2 since phase 3, which exported two calls for the screen reader's spoken names
+  of icons. Apps built here run on the device, and apps built for 87.1 still load.
 - `patches/text2sam-cli-mode.patch`: the change to Text to SAM (applies inside
   `Momentum-Firmware/applications/external`, which is a git submodule).
 - `firmware-packages/`: Momentum mntm-012 and official 1.4.3 update packages.
@@ -43,7 +200,9 @@ and the tools in this folder. Last updated 2026-09-24.
   Momentum install (settings, dolphin state, region data).
 - `tools/sr_drive.py`: scripted check of the screen reader console stream, and with
   `--interactive` a tethered screen reader: arrows, Enter, Backspace drive the device, Tab
-  reads the screen, letters type into text fields, Ctrl-C ends.
+  reads the screen, letters type into text fields, Ctrl-C ends. The scripted check has three
+  sessions: the menus, an app's keyboard, and the Back chords on the home screen and in the main
+  menu. `--chords` runs only the chords. Start it on the home screen.
 - `tools/run_host_tests.sh`: unit tests for the screen model, the SAM port (checked against the
   original C++ synthesizer) and the speech text, queue and PCM helpers, run with clang on the Mac.
 - `tests/host/`: the unit tests.
@@ -67,9 +226,9 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region
 and does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes (this branch on 2026-09-24: 871,872
-bytes, 8,768 spare; before the recorded voice, at 54794522b, it was 869,756 bytes, 10,884
-spare).
+`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after phase 3, at 6c7469a79
+on 2026-09-24: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 bytes, 8,592
+spare. Before the recorded voice, at 54794522b: 869,756 bytes, 10,884 spare.
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
 serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,
@@ -87,6 +246,7 @@ Screen reader console commands (firmware from the `screen-reader` branch):
 
 Speech: announcements are spoken by the device itself. `sr say <text>` speaks text and prints
 timing; `sr stop` silences; `sr rate <40..120>` and `sr volume <0..100>` are saved settings.
+`sr chord up|down|ok|okhold|left|right` runs what Back and that key do (see Back chords above).
 Any button press silences speech. On the home screen the dolphin's speech bubbles are not
 spoken unless a button was pressed in the last two seconds (`sr status` counts them as
 suppressed; `sr watch` still shows them). During NFC-V emulation the reader is silent, because
@@ -226,4 +386,6 @@ sending the backup file to the card.
 4. Done: speech demo; SAM default voice judged intelligible.
 5. Done: phase 1 of the screen reader: text capture, screen model, console mirror.
 6. Done: phase 2, on device speech with SAM and DMA playback.
-7. Next: phase 3, hotkeys, settings screen, and screens that draw no text.
+7. Done: phase 3, on-device control: Back chords, the Accessibility settings screen, and
+   spoken names for screens that draw only icons (2026-09-24).
+8. Next: the memory plan in `docs/roadmap.md`, so that Sub-GHz works with the reader on.
