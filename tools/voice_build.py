@@ -227,14 +227,39 @@ def pull_missing(port):
     return words
 
 
-def sync(port, out_dir):
+def sync(port, out_dir, manifest, force_all=False):
+    """Send voice.txt and the clip files the device actually uses (not .build, not
+    manifest.json). voice/synced.json remembers the settings hash uploaded for each word, so a
+    rerun only sends what's missing or changed instead of asking the device to md5 every file."""
     storage, ops = open_storage(port)
     was_on = False
     try:
         was_on = voice_off(storage)
         t0 = time.time()
-        ops.recursive_send("/ext/sr/voice", out_dir)
-        log(f"sync: done in {time.time() - t0:.0f} s")
+        synced_path = os.path.join(out_dir, "synced.json")
+        synced = {} if force_all else (json.load(open(synced_path)) if os.path.exists(synced_path) else {})
+        made_dirs = set()
+        words = manifest.get("words", {})
+        sent = skipped = 0
+        for i, word in enumerate(sorted(words), 1):
+            h = words[word]
+            if synced.get(word) == h:
+                skipped += 1
+                continue
+            init = initial(word)
+            if init not in made_dirs:
+                ops.mkpath(f"/ext/sr/voice/{init}")
+                made_dirs.add(init)
+            local_path = os.path.join(out_dir, init, word + ".raw")
+            storage.send_file(local_path, f"/ext/sr/voice/{init}/{word}.raw")
+            synced[word] = h
+            sent += 1
+            if i % 100 == 0:
+                log(f"sync: {i} of {len(words)}, {sent} sent, {skipped} skipped, {time.time() - t0:.0f} s")
+                save_manifest(synced, synced_path)
+        storage.send_file(os.path.join(out_dir, "voice.txt"), "/ext/sr/voice/voice.txt")
+        save_manifest(synced, synced_path)
+        log(f"sync: {sent} sent, {skipped} skipped, {time.time() - t0:.0f} s")
     finally:
         if was_on:
             try:
@@ -277,6 +302,7 @@ def main():
     ap.add_argument("--extract", action="store_true", help="add the firmware's strings through the pronunciation layer")
     ap.add_argument("--pull-missing", action="store_true", help="add and clear the device's /ext/sr/missing.txt")
     ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the card")
+    ap.add_argument("--sync-all", action="store_true", help="ignore voice/synced.json and resend everything (for a wiped card)")
     ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them")
     ap.add_argument("--port", default="/dev/cu.usbmodemflip_R0skie1")
     ap.add_argument("--jobs", type=int, default=4)
@@ -339,7 +365,7 @@ def main():
         f.write(settings_line(settings) + "\n")
     log(f"made {made} clips, {failed} failed, {time.time() - t0:.0f} s; vocabulary {len(manifest['words'])} words in {a.out}")
     if a.sync:
-        sync(a.port, a.out)
+        sync(a.port, a.out, manifest, a.sync_all)
     if failed:
         log(f"{failed} clip(s) failed")
     return 1 if failed else 0
