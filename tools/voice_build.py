@@ -28,7 +28,8 @@ python3.
 --extract-all folds in every app under applications/external (hundreds of them); --card-apps
 folds in only the ones actually installed on the card, which is the routine choice, and needs
 the device but only to list it, never to write to it. Both need --extract to have an effect.
---dry builds the word list and prints its counts without making clips or syncing.
+--dry builds the word list and prints its counts without making clips, pulling missing.txt, or
+syncing.
 """
 import argparse, glob, hashlib, json, math, multiprocessing, os, re, subprocess, sys, tempfile, time
 
@@ -174,19 +175,38 @@ def external_app_dirs():
     return sorted(os.path.dirname(p) for p in glob.glob(os.path.join(ext, "*", "application.fam")))
 
 
+def strip_comment(line):
+    """The part of a manifest line before a '#' comment that starts outside a double-quoted
+    string. The manifests use plain double-quoted strings (no escapes to worry about), so
+    toggling on every '"' is enough to tell a real comment from a '#' that could only appear
+    inside one of those strings."""
+    in_string = False
+    for i, ch in enumerate(line):
+        if ch == '"':
+            in_string = not in_string
+        elif ch == "#" and not in_string:
+            return line[:i]
+    return line
+
+
 def manifest_index(roots):
     """Maps a card .fap's base name to the source directory whose application.fam declares it:
     the appid of one of its App(...) blocks -- a manifest may hold several; applications/main/
     nfc/application.fam alone has over sixty, one per NFC parser plugin -- or, for a manifest
-    that names its own build output, its fap_file_name. A later match wins on a collision, which
-    the firmware's own build should not allow in practice."""
+    that names its own build output, its fap_file_name. Comments are stripped line by line
+    first, so a commented-out App(...) block -- for example applications/external/subghz_remote/
+    application.fam's disabled first block, appid "subghz_remote_ofw" sitting right next to the
+    live "subghz_remote", or applications/main/subghz/application.fam's commented "subghz_fap"
+    -- is never indexed. A later match wins on a collision, which the firmware's own build
+    should not allow in practice."""
     index = {}
     for root in roots:
         for path in glob.glob(os.path.join(root, "**", "application.fam"), recursive=True):
             try:
-                text = open(path, encoding="utf-8", errors="replace").read()
+                raw = open(path, encoding="utf-8", errors="replace").read()
             except OSError:
                 continue
+            text = "\n".join(strip_comment(line) for line in raw.splitlines())
             keys = set(FAM_APPID_RE.findall(text)) | set(FAM_FILENAME_RE.findall(text))
             for key in keys:
                 index[key] = os.path.dirname(path)
@@ -533,7 +553,7 @@ def main():
     ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore voice/synced.json and resend everything (for a wiped card)")
     ap.add_argument("--remove-legacy", action="store_true", help="remove the first layout's /ext/sr/voice/<initial>/ clips from the card and clear voice/synced.json")
     ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them")
-    ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips or syncing")
+    ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, or syncing")
     ap.add_argument("--port", default="/dev/cu.usbmodemflip_R0skie1")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new clips (for trials)")
@@ -583,7 +603,10 @@ def main():
     elif a.extract_all or a.card_apps:
         log("--extract-all and --card-apps only add to the word pipeline together with --extract; ignored")
     if a.pull_missing:
-        words |= pull_missing(a.port)
+        if a.dry:
+            log("dry run: missing.txt not pulled")
+        else:
+            words |= pull_missing(a.port)
 
     if a.dry:
         log(f"dry run: {len(words)} words total, no clips made")
