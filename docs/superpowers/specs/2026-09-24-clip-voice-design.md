@@ -4,16 +4,20 @@ Date: 2026-09-24. Status: as built 2026-09-24. Approved by Robin on 2026-09-24: 
 
 As built, the implementation differs from the text below in these points:
 
-- Word sources: only the core apps and services are read. These are `applications/main`, `services`, `settings` and `system`, plus `lib/toolbox`; the rest of `applications/` is left out. The community apps would multiply the vocabulary for nothing.
-- Clip names: a name is lower case letters, up to 16 of them, or a single digit. Words with an apostrophe, words with digits inside and longer words have no clips, so SAM speaks them.
+- Word sources: only the core apps and services are read, plus the dolphin's speech bubble texts. The core apps and services are `applications/main`, `services`, `settings` and `system`, and `lib/toolbox`; the rest of `applications/` is left out. The community apps would multiply the vocabulary for nothing. The bubble texts are the `Text:` lines under `assets/dolphin`.
+- Clip names: a name is lower case letters, up to 16 of them, or a single digit. Apostrophes are left out of the name on the device and in the generator, so "don't" plays `dont.raw`. The generator records that clip from the spoken "don't". Longer words, and words with digits inside, have no clips, so SAM speaks them.
+- Card layout: the clips are in `/ext/sr/voice/<hh>/<word>.raw`, not in `<initial>` folders.
+  - `hh` is the word's FNV-1a hash modulo 64, as two lower case hex digits. It is the same hash as the missing-word set.
+  - The reason: a directory lookup on this exFAT card reads the entries one by one, about 0.17 ms per entry. By first letter the largest folder held 315 clips, and an open at its end took 65 ms. In 64 folders there are 30 to 65 clips each, and the longest open measured is 39 ms.
+- Ring: 8192 bytes, two halves of 82 ms, instead of 4096. The worker opens the next clip and fills one half while the other plays. With 41 ms halves, opens of about 38 ms still underran. The larger ring costs 4 KB of heap.
 - Processing order: high-pass, peak normalise, then gain and limiter. After that, silence is trimmed on the finished signal and 15 ms of zeros are added at each end.
-- Sync: it sends the manifest's clips and voice.txt, and records what it sent in `voice/synced.json`. It does not compare sizes on the card. `--sync-all` resends everything. The recorded voice is off on the device during a transfer and back on afterwards.
-- `sr voice status` shows the settings line read at the first utterance after boot. After a sync that changes the line, the new one shows after a reboot.
-- Open defect in the timing safety of section 5. The assumption that a directory of a few hundred entries keeps an open under 10 ms does not hold.
-  - On the device, a lookup costs about 0.17 ms per directory entry. At the end of the largest folder, with 315 clips, it takes 65 ms.
-  - The worker can only stall for what is left of the playing half of the ring, at most 41 ms, not 82 ms, before the stall counts as an underrun.
-  - Words near the end of the large folders therefore cause underruns: 41 during the rollout verification. The acceptance test of 0 underruns is not met.
-  - Smaller folders are the fix. They are not built yet.
+- Sync: it sends the manifest's clips and voice.txt, and records what it sent in `voice/synced.json`. It does not compare sizes on the card.
+  - `--sync-all` resends everything. `--remove-legacy` removes the first layout.
+  - The recorded voice is off on the device during a transfer and back on afterwards.
+- `sr voice status` shows the first 63 characters of the settings line. It also shows the longest and the latest clip open, in ms. The line is read at the first utterance after boot that uses the voice, so after a sync that changes it, the new one shows after a reboot.
+- Timing safety, section 5: the assumptions of 10 ms per open and an 82 ms budget did not hold with the 4096-byte ring and the first-letter folders. That rollout had 41 underruns.
+  - With the hashed folders and the 8192-byte ring, the fix round verification had 0 underruns, including 100 clips in one announcement.
+  - The acceptance test is met.
 
 ## 1. Goal
 

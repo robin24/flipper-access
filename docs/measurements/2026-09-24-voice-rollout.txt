@@ -1,5 +1,8 @@
 Recorded voice rollout, 2026-09-24
 
+Checks 1 to 7 are the first rollout, with 26 folders by first letter and a 4096-byte ring.
+Fix round 1, at the end, is the current state: 64 hashed folders and an 8192-byte ring.
+
 Setup
 Device: R0skie on /dev/cu.usbmodemflip_R0skie1, firmware branch screen-reader at 1783e081f, 64 GB exFAT card.
 Generator: tools/voice_build.py at 76346f6, settings line "say Samantha rate 175 highpass 500 gain 1.3 soft 16000".
@@ -11,7 +14,7 @@ Strings: 6182 distinct string literals from the firmware's core apps and service
 Base list: tools/voice_words.txt adds 8 words, for 2823 in total. 0 failed.
 With 4 jobs: 22:02.88 wall clock, of which 1322 s for the clips (0.47 s per clip).
 With 8 jobs: 16:19.58 wall clock, of which 979 s for the clips (0.35 s per clip).
-The say command is limited by the macOS speech server, not by the CPU: with 8 jobs it used 95 percent of one core.
+The build is limited by say itself, not by CPU count: with 8 jobs it used 95 percent of one core.
 Clips: 2823 clips, 26,928,695 bytes, or 1683 s of audio. du -sh reports 31M, with an apparent size of 27M.
 Clip length: shortest 0.228 s, median 0.564 s, longest 2.648 s.
 Every clip has 15 ms of silence at both edges and peaks at least 100 away from 128. None is silent.
@@ -24,7 +27,7 @@ Sent: 2828 clips and voice.txt in 442 s. That is 61 kB/s, or 6.4 files per secon
 Guard: the voice was silenced and then restored around both the pull and the sync.
 Card after the sync: 2828 clips. They match the local files by name and size (26,964,198 bytes). voice.txt is 55 bytes, and missing.txt was removed.
 office.raw: the one hand-made Task 2 clip not in the vocabulary. It was removed with storage remove.
-sr voice status right after the sync: vocabulary yes, but still with the old hand-made settings line. The device reads voice.txt once per boot, so the new line showed after the reboot in check 7.
+sr voice status right after the sync: vocabulary yes, but still with the old hand-made settings line, cut at 63 characters and ending in "(hand ma". The device reads voice.txt once per boot, so the new line showed after the reboot in check 7.
 
 Check 1: sr say Settings. Sub-GHz. Apps, 1 of 11. Read RAW. 433.92 MHz. UID: 04 A2 B3 C4.
 The expansion has 28 words.
@@ -48,7 +51,7 @@ Position 300: 62.8 ms.
 Position 315: 64.8 ms.
 A word that is not in the folder: 66.9 ms.
 Folder 0, which holds one clip: 12.7 ms.
-Every directory entry costs about 0.17 ms. One half of the ring holds 41 ms of audio, so an open that takes longer causes an underrun.
+Every directory entry costs about 0.17 ms. One half of the 4096-byte ring holds 41 ms of audio, and the worker also has to fill that half. So an open well under 41 ms can already cause an underrun: "types", at about 38 ms, underran three times out of three.
 
 Check 2: tools/sr_drive.py, both sessions, with the voice on
 Result: 0 failures in 17 steps.
@@ -105,8 +108,79 @@ sr voice status: voice: on, vocabulary yes say Samantha rate 175 highpass 500 ga
 sr status: utterances 1, underruns 0, free heap 114560.
 The 2 clips are the boot announcement "Home screen".
 
-Summary
-All checks behave as specified except underruns.
-Every lookup of a word near the end of a large folder takes longer than one half of the ring, 41 ms.
-The verification caused 41 underruns before the reboot. From the extra check, each one adds about 8 ms to the played time.
-Smaller folders would fix this. That change is not part of this rollout.
+Summary of the first rollout
+All checks behaved as specified except underruns: 41 before the reboot, all from clip opens near the end of large folders.
+When the worker is late, the DMA replays audio from the ring, which is heard as a glitch.
+Fix round 1 below replaces the layout and the ring.
+
+Fix round 1: 64 hashed folders, 8192-byte ring, open timing
+Firmware: screen-reader at 6282541b6, flashed with ./fbt flash_usb in 34 s. The port was back 23 s later.
+Clip folders: /ext/sr/voice/<hh>/<word>.raw, where hh is FNV-1a of the word modulo 64, as two hex digits.
+Clip names leave out apostrophes: "don't" is dont.raw, recorded as "don't".
+The extraction now also reads the dolphin bubble texts.
+Ring: 8192 bytes, two halves of 82 ms.
+The voice status line shows "open max N ms, last M ms": the longest and the latest clip open, found or not, timed with furi_get_tick.
+
+Flash, from tools/flash_headroom.sh:
+Before, at 1783e081f: firmware.bin 871,744 bytes, 8,896 spare.
+After, at 6282541b6: 871,872 bytes, 8,768 spare.
+The spec's baseline at 54794522b, before the recorded voice: 869,756 bytes, 10,884 spare.
+
+Idle heap, from free:
+Before the flash, at 31 minutes of uptime: 114,552 free, minimum 112,392.
+After the flash, 26 s after boot: 110,520 free, minimum 108,432.
+The ring costs 4,032 bytes.
+
+Vocabulary: 2,891 clips before check 5, then 2,892, because "fine" came in through the missing round trip.
+Of the 2,891, 60 were new: bubble words and apostrophe words.
+4 more were remade because their spoken text changed: cant, dont, flippers, its, now spoken as can't, don't, flipper's, it's.
+The local build of those 64 took 22.5 s with 8 jobs.
+Clips per folder: 30 to 65. The largest folder is 2a.
+
+remove-legacy: 2,831 clips removed, 0 not found, 36 of 36 first-letter folders removed, 87 s (1:27.57 wall clock).
+Full resend into the hashed folders: 2,891 clips and voice.txt in 385 s (6:25.93 wall clock). 0 missing, 0 failed.
+The card then held the 64 hashed folders and voice.txt, nothing else. All 2,891 clips match the local files by folder, name and size (27,477,882 bytes).
+
+Check 1: sr voice status after the resend
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 0, fallback 2, missing 2, open max 17 ms, last 17 ms
+The 2 fallback words are the boot announcement, spoken before the resend while the hashed folders did not exist yet.
+
+Check 2: "systems types cycles", three times over, said eight times
+Clips +72. Underruns 0 before and after every one of the eight.
+Open max 32 ms. The latest open after each run was 21 to 24 ms.
+Timing: 6265 ms played, 6144 ms nominal each time.
+
+Check 3: sr_drive.py, both sessions
+0 failures in 17 steps.
+Underruns 0, unchanged. Clips +37, fallback +0.
+Open max 32 ms.
+
+Check 4: long announcements
+30 words: clips +30, underruns 0. 13550 ms played, 215179 subsamples, 13448 ms nominal, as predicted.
+100 words in one sr say of 152 characters, all vocabulary words: clips +100, underruns 0. 51976 ms played, 830099 subsamples, 51881 ms nominal, as predicted.
+The 100 words are twelve frequencies read out, such as "four hundred thirty three point nine two five megahertz". A queue item holds only 159 characters, so 100 plain words do not fit.
+Open max after both: 39 ms.
+
+Check 5: sr say Don't do it, it's fine.
+First say: clips +4 (dont, do, it, its), fallback +1, missing +1. The fallback and missing word is "fine", which is in no firmware string or bubble text.
+Round trip: --pull-missing --sync took 2.99 s. It made 1 clip and sent 1 clip and voice.txt.
+Second say: clips +5, fallback +0. 32960 subsamples, as predicted. Underruns 0.
+
+Check 6: voice off across a reboot
+sr voice off, then power reboot.
+After the reboot: sr screen showed the desktop.
+sr voice status: voice: off, vocabulary no, clips 0, fallback 0, missing 0, open max 0 ms, last 0 ms.
+The vocabulary is looked for only when the voice is on and something is spoken.
+sr voice on replied "voice on".
+
+Check 7: memory over twenty utterances, twice
+Round 1: free 110,632 before, 110,256 after, and 110,256 10 s later.
+Round 2: 110,520 before, 110,120 after, and 110,128 15 s later.
+In a new session afterwards: 110,576.
+Minimum 108,392 to 108,424. Largest block 109,728 to 110,384.
+Underruns 0 in all 40 utterances. Open max 38 ms. Clips 184, fallback 0.
+The dip of about 400 bytes while a console session runs returns in a new session, so there is no leak.
+
+Result of fix round 1
+0 underruns in every check, over 432 clips: 248 before the reboot and 184 after it.
+The longest clip open measured was 39 ms. One half of the ring holds 82 ms.

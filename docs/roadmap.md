@@ -19,12 +19,13 @@ Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focus
 ## Memory plan, in order
 
 1. Recorded voice on the card: done 2026-09-24.
-   - Size: 2,831 words. It costs about 3 KB of flash and about 700 bytes of idle heap.
+   - Size: 2,892 words, in 64 hashed folders, with 0 underruns in the verification.
+   - Flash: firmware.bin grew from 869,756 bytes (the spec's baseline at 54794522b, 10,884 spare) to 871,872 bytes (+2,116). That leaves 8,768 bytes spare.
+   - Heap: the 8192-byte speech ring cost 4,032 bytes of idle heap (114,552 to 110,520 free). The voice state costs about 700 bytes more; that is an estimate from the Task 2 comparison of idle heap.
    - Measurements: `docs/measurements/2026-09-24-voice-rollout.txt`.
-   - Open: words near the end of the largest folders cause underruns. Smaller folders are the fix.
 2. Animations off by default (asset pack or desktop setting; measure the idle heap with and without).
 3. JavaScript engine out of the build (API major bump, all faps rebuilt by the release pipeline); Sub-GHz back into flash with the freed space; re-measure with `tools/ram_probe.py`.
-4. Reader trims if still needed: ring 4096 to 3072, worker stack 3072 to 2048 (high water 812), SAM optional once the voice covers everything.
+4. Reader trims if still needed: worker stack 3072 to 2048 (high water 812), SAM optional once the voice covers everything. The speech ring is not trimmed: the recorded voice needs its 8192 bytes, two halves of 82 ms, because a clip open takes up to 39 ms.
 
 ## Features after the voice
 

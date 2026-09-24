@@ -20,6 +20,10 @@ and the tools in this folder. Last updated 2026-09-24.
   reverted: the image did not fit below the BLE stack (see the flash limit under Useful
   commands). The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB, U2F) load as
   external faps too; NFC read leaves about 24 KB with the reader on.
+- Since the recorded voice's 8 KB speech ring (2026-09-24), the reader holds 4 KB more heap
+  than when the numbers above were taken. Idle free heap went from 114,552 to 110,520 bytes.
+  So Sub-GHz read is expected to run out of memory with the reader on, and NFC read to leave
+  about 20 KB. Neither was measured again.
 
 ## Folder contents
 
@@ -63,8 +67,9 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region
 and does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes (this branch: 868,668 bytes, 11,972
-spare; the Task 6 image was 868,572, about 12 KB spare).
+`build/f7-firmware-C/firmware.bin` and the spare bytes (this branch on 2026-09-24: 871,872
+bytes, 8,768 spare; before the recorded voice, at 54794522b, it was 869,756 bytes, 10,884
+spare).
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
 serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,
@@ -100,32 +105,53 @@ unspoken.
 
 On the card:
 
-- `/ext/sr/voice/<initial>/<word>.raw`: one clip per word. The format is raw unsigned 8-bit
-  mono at 16,000 samples per second, and 128 is silence. `<initial>` is the word's first letter
-  or digit. A word is lower case letters, up to 16 of them, or a single digit.
+- `/ext/sr/voice/<hh>/<word>.raw`: one clip per word.
+  - The format is raw unsigned 8-bit mono at 16,000 samples per second, and 128 is silence.
+  - A word is lower case letters, up to 16 of them, or a single digit. Apostrophes are left
+    out of the name: "don't" is `dont.raw`, recorded as "don't".
+  - `<hh>` is one of 64 folders, chosen by a hash of the word (FNV-1a modulo 64, two hex
+    digits). The reason: finding a file on this exFAT card reads the folder's entries one by
+    one, about 0.17 ms per entry. With 64 folders none holds more than about 65 clips, and a
+    clip opens in under 40 ms.
 - `/ext/sr/voice/voice.txt`: the generator's settings line, which `sr voice status` shows.
 - `/ext/sr/missing.txt`: words the device could not find, one per line, each at most once per
   boot.
 
+The speech ring is 8192 bytes, two halves of 82 ms. While one half plays, the worker opens the
+next clip and fills the other half. This ring costs 4 KB more heap than the 4096-byte ring of
+phase 2.
+
 Console commands:
 
 - `sr voice on` and `sr voice off` switch between the clips and SAM alone. The setting is saved.
-- `sr voice status` prints the settings line, and three counts since boot: words spoken from
-  clips, words that fell back to SAM, and words logged as missing. The settings line is read
-  once per boot, so after a sync that changes it, the new line shows after a reboot.
+- `sr voice status` prints the first 63 characters of the settings line, and these counts since
+  boot:
+  - words spoken from clips;
+  - words that fell back to SAM;
+  - words logged as missing;
+  - the longest and the latest clip open, in ms.
+
+  The settings line is read at the first utterance after boot that uses the voice. So after a
+  sync that changes it, the new line shows after a reboot. With the voice off, the vocabulary
+  shows as "no" until the voice is back on and something is spoken.
 
 Making the vocabulary with `tools/voice_build.py`:
 
-- `tools/voice_build.py --extract --jobs 8` makes a clip for every word. The words come from the
-  base list `tools/voice_words.txt` and from every string in the firmware's core apps and
-  services, run through the reader's own pronunciation code. That is about 2,800 words and
-  27 MB.
+- `tools/voice_build.py --extract --jobs 8` makes a clip for every word, about 2,900 words and
+  27 MB. The words come from:
+  - the base list `tools/voice_words.txt`;
+  - every string in the firmware's core apps and services;
+  - the dolphin's speech bubble texts.
+
+  Everything goes through the reader's own pronunciation code.
   - Time on this Mac: about 16 minutes with `--jobs 8`, or 22 minutes with the default of 4.
-    The limit is the macOS speech server that `say` uses, not the CPU.
+    The build is limited by `say` itself, not by CPU count.
   - A rerun makes only new or changed clips.
+  - Locally the clips sit in `voice/<first letter>/<word>.raw`. The sync puts each one into its
+    hashed folder on the card.
 - `.venv/bin/python tools/voice_build.py --sync` sends new or changed clips and voice.txt to the
   card.
-  - The first sync of the whole vocabulary took about 7.5 minutes. Later syncs send only what
+  - A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what
     changed, which takes seconds.
   - The recorded voice is switched off on the device during the transfer and switched back on
     afterwards.
@@ -133,9 +159,15 @@ Making the vocabulary with `tools/voice_build.py`:
     works only together with `--sync`.
 - `.venv/bin/python tools/voice_build.py --pull-missing --sync` is the missing-word workflow. It
   fetches missing.txt from the card, makes clips for those words, sends them and removes the
-  list. For a few words it takes about 4 seconds.
-- `--sync` and `--pull-missing` need the venv Python, because they use the firmware's serial
-  storage helper.
+  list. For a few words it takes about 3 to 4 seconds.
+- `.venv/bin/python tools/voice_build.py --remove-legacy` removes the first layout from the card:
+  the `/ext/sr/voice/<first letter>/` folders of the 2026-09-24 rollout. Then run `--sync` to
+  send everything into the hashed folders.
+  - It uses `voice/synced.json` to know what to remove, and clears it.
+  - It is only needed once, when a card still has the old folders.
+  - It took about 1.5 minutes for 2,831 clips.
+- `--sync`, `--pull-missing` and `--remove-legacy` need the venv Python, because they use the
+  firmware's serial storage helper.
 - `tools/voice_build.py --check` makes ten test clips in a temporary folder and checks their
   format.
 - The defaults are Robin's choices by ear: `--backend say --voice Samantha --rate 175
@@ -156,15 +188,13 @@ licensed voice model.
 
 Known limits:
 
-- Words with an apostrophe, such as don't, can't and it's, are spoken by SAM for now. So are
-  words longer than 16 letters.
-- The dolphin's speech bubble texts are not extracted. Their words reach the vocabulary through
-  missing.txt.
-- Some words cause underruns. The largest folders, s, c, m, p and d, hold up to 315 clips.
-  Finding a word near the end of one of them takes up to about 65 ms, which is longer than one
-  half of the speech ring (41 ms). Each such word causes a short glitch, counted as an underrun.
-  Smaller folders would fix this. The numbers are in
-  `docs/measurements/2026-09-24-voice-rollout.txt`.
+- Words longer than 16 letters are spoken by SAM.
+- Two words that differ only by an apostrophe share one clip. For example, "ill" plays the clip
+  recorded as "i'll".
+- A word the device logs as missing has already lost its apostrophe. So `--pull-missing` records
+  "wont" as it is spelled, not as "won't". Words from the firmware's own strings keep their
+  spoken form.
+- The measurements are in `docs/measurements/2026-09-24-voice-rollout.txt`.
 
 ## Rolling back to official firmware
 
