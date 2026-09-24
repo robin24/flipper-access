@@ -586,6 +586,17 @@ static void test_note_rows(void) {
     CHECK_STR(s.rows[1].text, "14:05");
     sr_screen_describe(&s, text, sizeof(text));
     CHECK_STR(text, "Locked, press Back three times to unlock. 14:05");
+
+    // Notes are read first, also before text drawn above the top edge: while the lock screen's
+    // cover slides down, its date is still at a negative baseline
+    frame_init(&f, SrLayerDesktop);
+    add(&f, 0, -16, SrLayerDesktop, SrFontSecondary, false, false, 0, 0, "24-09-2026");
+    add(&f, 0, 0, SrLayerDesktop, SrFontBigNumbers, false, false, 0, 0, "16:10");
+    add_note(&f, SrLayerDesktop, false, "Locked, press Back three times to unlock");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 3);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Locked, press Back three times to unlock. 24-09-2026. 16:10");
 }
 
 static void test_note_focus_moves(void) {
