@@ -302,6 +302,93 @@ static void test_spelled_items(void) {
     CHECK(speech_queue_pop(&q, &item) && !item.spell && strcmp(item.text, "change") == 0);
 }
 
+// Pops the next item and checks it is a plain part of generation g, not replaceable.
+static bool pops_part(SpeechQueue* q, SpeechItem* item, uint32_t g) {
+    return speech_queue_pop(q, item) && item->generation == g && !item->replaceable &&
+           !item->file && !item->spell;
+}
+
+// A whole screen read on request: longer than an item, so it goes in parts of at most
+// SPEECH_ITEM_TEXT_MAX - 1 characters, cut after the last ". " or ", " that fits, else at the
+// last space, else at the limit. The first part interrupts, the rest follow it.
+static void test_parts(void) {
+    SpeechQueue q;
+    SpeechItem item;
+    char text[5 * SPEECH_ITEM_TEXT_MAX];
+    speech_queue_init(&q);
+
+    // A text that fits is one interrupting item
+    speech_queue_push(&q, "old", false, false);
+    uint32_t g = q.generation;
+    CHECK(speech_queue_push_parts(&q, "Settings. Bluetooth, 1 of 11") == 1);
+    CHECK(q.generation == g + 1 && speech_queue_count(&q) == 1);
+    CHECK(pops_part(&q, &item, g + 1) && strcmp(item.text, "Settings. Bluetooth, 1 of 11") == 0);
+
+    // Six rows of 38 characters, then the focus and the buttons, which must not be lost: the
+    // first part ends with the fourth row, exactly at the limit, the second holds the rest
+    text[0] = '\0';
+    for(int i = 0; i < 6; i++) {
+        char row[48];
+        snprintf(row, sizeof(row), "%sRow %d with some words in it to be long", i ? ". " : "", i);
+        strcat(text, row);
+    }
+    strcat(text, ". Apps, 3 of 11. buttons: left Back, right OK");
+    speech_queue_push(&q, "old", false, false);
+    g = q.generation;
+    CHECK(speech_queue_push_parts(&q, text) == 2);
+    CHECK(speech_queue_count(&q) == 2);
+    CHECK(pops_part(&q, &item, g + 1) && strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
+    CHECK(strncmp(item.text, "Row 0 ", 6) == 0 && strstr(item.text, ". Row 3 ") != NULL);
+    CHECK(strcmp(item.text + strlen(item.text) - 8, "be long.") == 0);
+    CHECK(pops_part(&q, &item, g + 1) && strncmp(item.text, "Row 4 ", 6) == 0);
+    CHECK(strcmp(item.text + strlen(item.text) - 8, "right OK") == 0);
+
+    // The last ", " counts as much as the last ". ": a list after an early sentence end
+    strcpy(text, "Head.");
+    for(int i = 0; i < 40; i++)
+        strcat(text, " word,");
+    CHECK(speech_queue_push_parts(&q, text) == 2);
+    CHECK(pops_part(&q, &item, q.generation));
+    size_t n = strlen(item.text);
+    CHECK(n > SPEECH_ITEM_TEXT_MAX - 8 && n <= SPEECH_ITEM_TEXT_MAX - 1 && item.text[n - 1] == ',');
+    CHECK(pops_part(&q, &item, q.generation) && strncmp(item.text, "word,", 5) == 0);
+
+    // No ". " or ", ": at the last space, and the space between the parts is dropped
+    text[0] = '\0';
+    for(int i = 0; i < 60; i++)
+        strcat(text, "word ");
+    CHECK(speech_queue_push_parts(&q, text) == 2);
+    CHECK(pops_part(&q, &item, q.generation));
+    n = strlen(item.text);
+    CHECK(n <= SPEECH_ITEM_TEXT_MAX - 1 && strcmp(item.text + n - 4, "word") == 0);
+    CHECK(pops_part(&q, &item, q.generation) && strncmp(item.text, "word", 4) == 0);
+
+    // No space at all: cut at the limit, 159 + 159 + 82
+    memset(text, 'x', 400);
+    text[400] = '\0';
+    CHECK(speech_queue_push_parts(&q, text) == 3);
+    CHECK(pops_part(&q, &item, q.generation) && strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
+    CHECK(pops_part(&q, &item, q.generation) && strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
+    CHECK(pops_part(&q, &item, q.generation) && strlen(item.text) == 400 - 2 * 159);
+
+    // More parts than the queue holds: the first SPEECH_QUEUE_CAPACITY are queued, the rest is
+    // counted as dropped
+    memset(text, 'x', 700);
+    text[700] = '\0';
+    uint32_t dropped = q.dropped;
+    CHECK(speech_queue_push_parts(&q, text) == SPEECH_QUEUE_CAPACITY);
+    CHECK(speech_queue_count(&q) == SPEECH_QUEUE_CAPACITY && q.dropped == dropped + 1);
+    for(unsigned i = 0; i < SPEECH_QUEUE_CAPACITY; i++)
+        CHECK(pops_part(&q, &item, q.generation) && strlen(item.text) == 159);
+
+    // Nothing to say queues nothing and interrupts nothing
+    speech_queue_push(&q, "keep", false, false);
+    g = q.generation;
+    CHECK(speech_queue_push_parts(&q, "") == 0 && speech_queue_push_parts(&q, "   ") == 0);
+    CHECK(q.generation == g && speech_queue_count(&q) == 1);
+    CHECK(speech_queue_pop(&q, &item) && strcmp(item.text, "keep") == 0);
+}
+
 int main(void) {
     SpeechQueue q;
     SpeechItem item;
@@ -373,6 +460,7 @@ int main(void) {
     test_text_limit();
     test_file_items();
     test_spelled_items();
+    test_parts();
 
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;

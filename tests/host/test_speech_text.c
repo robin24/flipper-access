@@ -624,6 +624,50 @@ static void test_beyond_the_rule_list(void) {
     CHECK(small[0] == '\0');
 }
 
+static void expect_spell(const char* in, const char* want) {
+    char out[SPEECH_TEXT_MAX];
+    size_t n = speech_text_spell_copy(in, out, sizeof(out));
+    checks++;
+    if(strcmp(out, want) != 0 || n != strlen(want)) {
+        failures++;
+        printf(
+            "FAIL spell_copy(\"%s\")\n  got  \"%s\" (%u)\n  want \"%s\"\n",
+            in,
+            out,
+            (unsigned)n,
+            want);
+    }
+}
+
+// The text of an item to be spelled: its letters and digits in runs, single spaces between
+// runs, none at the ends
+static void test_spell_copy(void) {
+    expect_spell("Apps, 3 of 11", "Apps 3 of 11");
+    expect_spell("Sub-GHz", "Sub GHz");
+    expect_spell("125 kHz RFID", "125 kHz RFID");
+    // A run of 46 is split after 31 characters, the longest word the clip player takes whole
+    expect_spell(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghij",
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ01234 56789abcdefghij");
+    expect_spell("ABCDEFGHIJKLMNOPQRSTUVWXYZ01234", "ABCDEFGHIJKLMNOPQRSTUVWXYZ01234");
+    // Nothing to spell
+    expect_spell("_", "");
+    expect_spell("!?.,-_ ()", "");
+    expect_spell("", "");
+    // Separators at the ends and in a row, and bytes outside ASCII, leave single spaces only
+    expect_spell("  _Tesla__charge.sub_ ", "Tesla charge sub");
+    expect_spell("caf\xc3\xa9 au lait", "caf au lait");
+
+    // A small buffer cuts the text and never leaves a space at its end; a null text is empty
+    char small[6];
+    CHECK(speech_text_spell_copy("Apps 3 of 11", small, sizeof(small)) == 4);
+    CHECK(strcmp(small, "Apps") == 0);
+    CHECK(speech_text_spell_copy("Sub-GHz", small, sizeof(small)) == 5);
+    CHECK(strcmp(small, "Sub G") == 0);
+    CHECK(speech_text_spell_copy(NULL, small, sizeof(small)) == 0 && small[0] == '\0');
+    CHECK(speech_text_spell_copy("Apps", NULL, 0) == 0);
+}
+
 int main(void) {
     test_words_and_numbers();
     test_acronyms_and_terms();
@@ -645,6 +689,7 @@ int main(void) {
     test_rule13_upper_a();
     test_text_buffer();
     test_beyond_the_rule_list();
+    test_spell_copy();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
