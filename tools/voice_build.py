@@ -230,7 +230,10 @@ def pull_missing(port):
 def sync(port, out_dir, manifest, force_all=False):
     """Send voice.txt and the clip files the device actually uses (not .build, not
     manifest.json). voice/synced.json remembers the settings hash uploaded for each word, so a
-    rerun only sends what's missing or changed instead of asking the device to md5 every file."""
+    rerun only sends what's missing or changed instead of asking the device to md5 every file.
+    A word whose local clip is missing or whose send fails is reported and left out of
+    synced.json, so the next sync tries it again, and the other words still go. Returns the
+    number of such words for main()'s exit code."""
     storage, ops = open_storage(port)
     was_on = False
     try:
@@ -240,26 +243,39 @@ def sync(port, out_dir, manifest, force_all=False):
         synced = {} if force_all else (json.load(open(synced_path)) if os.path.exists(synced_path) else {})
         made_dirs = set()
         words = manifest.get("words", {})
-        sent = skipped = 0
+        sent = skipped = missing = failed = 0
         for i, word in enumerate(sorted(words), 1):
             h = words[word]
             if synced.get(word) == h:
                 skipped += 1
                 continue
             init = initial(word)
-            if init not in made_dirs:
-                ops.mkpath(f"/ext/sr/voice/{init}")
-                made_dirs.add(init)
             local_path = os.path.join(out_dir, init, word + ".raw")
-            storage.send_file(local_path, f"/ext/sr/voice/{init}/{word}.raw")
+            # Checked here, not left to send_file: it removes the card's copy before it opens
+            # the local file, so a missing clip would cost the one already on the card
+            if not os.path.exists(local_path):
+                log(f"sync: missing: {word}: no local clip {init}/{word}.raw, not sent")
+                missing += 1
+                continue
+            try:
+                if init not in made_dirs:
+                    ops.mkpath(f"/ext/sr/voice/{init}")
+                    made_dirs.add(init)
+                storage.send_file(local_path, f"/ext/sr/voice/{init}/{word}.raw")
+            except Exception as e:  # one bad word must not stop the sync
+                log(f"sync: failed: {word}: {type(e).__name__}: {e}")
+                failed += 1
+                continue
             synced[word] = h
             sent += 1
             if i % 100 == 0:
                 log(f"sync: {i} of {len(words)}, {sent} sent, {skipped} skipped, {time.time() - t0:.0f} s")
                 save_manifest(synced, synced_path)
-        storage.send_file(os.path.join(out_dir, "voice.txt"), "/ext/sr/voice/voice.txt")
+        # Saved before voice.txt goes, so a failure there cannot lose the record of what was sent
         save_manifest(synced, synced_path)
-        log(f"sync: {sent} sent, {skipped} skipped, {time.time() - t0:.0f} s")
+        storage.send_file(os.path.join(out_dir, "voice.txt"), "/ext/sr/voice/voice.txt")
+        log(f"sync: {sent} sent, {skipped} skipped, {missing} missing, {failed} failed, {time.time() - t0:.0f} s")
+        return missing + failed
     finally:
         if was_on:
             try:
@@ -365,9 +381,9 @@ def main():
         f.write(settings_line(settings) + "\n")
     log(f"made {made} clips, {failed} failed, {time.time() - t0:.0f} s; vocabulary {len(manifest['words'])} words in {a.out}")
     if a.sync:
-        sync(a.port, a.out, manifest, a.sync_all)
+        failed += sync(a.port, a.out, manifest, a.sync_all)
     if failed:
-        log(f"{failed} clip(s) failed")
+        log(f"{failed} clip(s) failed to build or sync")
     return 1 if failed else 0
 
 
