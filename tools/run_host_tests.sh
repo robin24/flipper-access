@@ -75,3 +75,13 @@ if ! "$OUT/test_speech_voice" > "$OUT/speech_voice.txt"; then
   exit 1
 fi
 echo "speech voice: $(tail -n 1 "$OUT/speech_voice.txt")"
+
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/test_sr_chords" \
+  "$TESTS/test_sr_chords.c" "$SRC/sr_chords.c"
+if ! "$OUT/test_sr_chords" > "$OUT/sr_chords.txt"; then
+  cat "$OUT/sr_chords.txt"
+  echo "chord checks failed"
+  exit 1
+fi
+echo "chords: $(tail -n 1 "$OUT/sr_chords.txt")"
