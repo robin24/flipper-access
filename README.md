@@ -9,8 +9,8 @@ and the tools in this folder. Last updated 2026-09-24.
 - Device name: R0skie. Hardware version 12, region DE. 64 GB microSD card, exFAT.
 - Firmware: Momentum mntm-012 (built 31 December 2025), installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
-  here: on 2026-09-24 that is phase 3 with its final review fixes, commit 859c87c98, API version
-  87.2. The device carries firmware commit 70a60c8f5 plus the settings app of 859c87c98; the
+  here: on 2026-09-24 that is phase 3 and the polish round, commit 22ae265ef, API version
+  87.2. The device carries firmware commit 70a60c8f5 plus the settings app of 22ae265ef; the
   polish round's other fixes are built but not yet flashed.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1`, 230400 baud. It disappears while the
   device is in the updater and comes back after the reboot.
@@ -235,9 +235,10 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region
 and does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after phase 3 and its final
-review fixes, at 859c87c98 on 2026-09-24: 877,036 bytes, 3,604 spare. After phase 3 before those
-fixes, at 6c7469a79: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 bytes,
+`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after the polish round, at
+22ae265ef on 2026-09-24: 877,036 bytes, 3,604 spare. After phase 3 with its final review fixes,
+at af4ee0952: 876,056 bytes, 4,584 spare. After phase 3 before those fixes, at 6c7469a79:
+875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 bytes,
 8,592 spare. Before the recorded voice, at 54794522b: 869,756 bytes, 10,884 spare.
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
