@@ -5,7 +5,7 @@ Device: R0skie on /dev/cu.usbmodemflip_R0skie1, the recorded voice on the card, 
 Console replies are verbatim from tools/flipper_cli.py, sent through its own functions by a small driver that time-stamps each command. The RAM probe's output is verbatim.
 A spoken text is recognised by the subsamples of the "last utterance" line of sr status: "Home screen" is 15,972 subsamples.
 
-Flash
+Section: Flash
 From tools/flash_headroom.sh: firmware.bin against the 880,640 bytes the BLE stack leaves free.
 Round start, 22ae265ef: 877,036 bytes, 3,604 spare.
 Task 2, the JavaScript engine out, 8fe7f533d: 835,748 bytes, 44,892 spare. 41,288 less.
@@ -21,7 +21,7 @@ Excluded 45 external apps by configuration: 4inrow, air_arkanoid, air_labyrinth,
 Manifest check, grep -c -E 'apps/Games/|apps/Scripts/|js_app|cli_js|test_js|apps/Sub-GHz/subghz.fap' build/f7-firmware-C/resources/Manifest: 0. The same after the flash build: 0.
 Also 0 without the slashes: no directory entry D:apps/Games or D:apps/Scripts, no apps_data/js_app. The Manifest lists 11 app folders and 20 files under apps/Sub-GHz. .extapps holds no js_ file, no cli_js, no test_js and no subghz.fap.
 
-Static RAM
+Section: Static RAM
 From python3 tools/map_size.py Momentum-Firmware/build/f7-firmware-C/firmware.elf.map lib over the final map (md5 1950203b9a2c998e73a3593993e672ea, the same after the flash build).
 The totals line: TOTAL flash 866398 static ram 5897
 The screen reader's line: 19798 flash, 8 static RAM, applications/services/screen_reader
@@ -31,20 +31,21 @@ With the linker's alignment fill the two sections are 988 and 5,020 bytes, 6,008
 The screen reader at 22ae265ef: 35,073 bytes of flash, of which SAM 14,251. Now 19,798: 15,275 less.
 The script's flash total, 866,398, is not the image size. The map lists the mergeable string constants of .rodata at their size before the linker merges duplicates (191,331 bytes counted, 186,280 linked), and the script leaves out alignment fill. The image is firmware.bin, 862,588 bytes.
 
-Idle heap
+Section: Idle heap
 Home screen, no application, reader on, voice on, speech idle. Each reading is the free command 30 s after the port came back from the boot, followed by the device's uptime command. Total heap 189,560 bytes each time.
 Animations off, the first boot after the flash (the settings file had no desktop_anims key): free 116,672, minimum 114,096, largest block 116,672, at uptime 0h0m32s.
-Animations on: free 116,736, minimum 114,592, largest block 116,736, at uptime 0h0m32s.
+Animations on: free 116,736, minimum 114,592, largest block 116,736, at uptime 0h0m32s (the built-in new-mail animation was showing, not a card animation; see below).
 Animations off again: free 116,752, minimum 114,608, largest block 116,752, at uptime 0h0m32s.
 The three differ by less than 100 bytes. This pass did not measure the 10 to 26 KB a card animation takes (spec section 7), for the reason below.
-With animations on, the desktop redrew 2.0 times a second (the reader's frame counter went from 433 to 473 in 20 s) and showed no text and no bubble. With animations off the counter stayed at 2 for the whole boot.
-With animations on, free equals the largest block, as with animations off, so no animation frames were loaded from the card: the animation playing was one compiled into flash.
-Its rate and the missing bubble fit the "new mail" animation (6 frames at 2 a second, no bubble slots). The manager shows it instead of an idle animation while a dolphin level up is pending. L1_AnimationError, the only flash animation allowed at idle, runs at 1 frame a second.
-The console cannot show whether a level up is pending, so this is an inference. If one was pending, the first boot could not grant it: nothing there raised a deed or a card event. loader open records no deed; only the Apps browser does (loader_applications.c line 136). This is the minor Task 5's review deferred: a level up pending at boot is granted only at the next deed or card event.
+With animations on, the desktop redrew 2.0 times a second (the reader's frame counter went from 433 to 473 in 20 s) and showed no text and no bubble. With animations off again the counter was 2 at each of the three samples, 10 s, 30 s and 50 s after the port came back.
+No animation frames were loaded from the card: the "on" reading, 116,736, lies between the two "off" readings, 116,672 and 116,752, where a card animation would hold 10 to 26 KB. The animation playing was one compiled into the firmware.
+Its rate and the missing bubble fit the "new mail" animation (6 frames at 2 a second, no bubble slots). The manager shows it instead of an idle animation while a dolphin level up is pending. L1_AnimationError, the only other animation in the firmware that can show at idle with a healthy battery and a card in, runs at 1 frame a second.
+Ruling: a level up is pending on the owner's dolphin, and the built-in "new mail" animation showed while animations were on. With animations off, Task 5 grants a pending level up only at the next dolphin deed or card event, not at boot (the minor its review deferred); the grant at boot when animations are off joins the round's final fix wave. This ruling is the controller's, from the Task 6 review.
+Note, not part of the ruling: the probe's Frequency Analyzer row records a dolphin deed (subghz_scene_start.c line 104), and every deed makes the manager look at the dolphin's state, which with animations off grants a pending level up. So the level up was most likely granted during the probe, at about 04:59. The device was not checked for it.
 Two later samples with animations on, at uptime 3 min 37 s and 3 min 57 s: free 116,872 and 116,768, largest block 116,496 both times.
 For comparison, from Task 4's report and not 30 s after boot: 106,488 free at idle before its flash (the polish round's build: SAM in, animations on, the device up for some time) and 116,648 shortly after it (4bda0a4ae: SAM out, animations on). Both with whichever animation was playing.
 
-RAM probe
+Section: RAM probe
 .venv/bin/python tools/ram_probe.py, without the Doom row (commit f1903a5), from 04:59:06 to 05:01:20, exit 0. The probe reboots the device first; animations were off, the reader on throughout.
 No row reports a reboot. Sub-GHz Read: lowest sampled 53,064 bytes free. Frequency Analyzer: 51,136. On 2026-09-23, with Sub-GHz a fap on the card (docs/measurements/2026-09-23-ram-probe-speech-on.txt), Read went down to 2,080 and the Frequency Analyzer crashed the device.
 NFC Read is now the lowest row: 23,232 sampled, low-water mark 23,160 (23,800 and 23,712 on 2026-09-23, a build without the recorded voice).
@@ -73,7 +74,7 @@ uPython (largest app, expected to fail to load): free before 115920, lowest samp
 Total heap 189560 bytes. Global low-water mark after all apps: 23160 bytes free.
 Lowest sampled free heap: 23232 bytes during 'NFC: Read'.
 
-Device pass
+Section: Device pass
 Every command and its reply, time-stamped, as the driver logged them. The lines "note:" and "(wait ...)" are the driver's own.
 
 Before the flash, the idle check of Task 4 Step 9
@@ -226,7 +227,9 @@ Up opened the lock menu; its focus note "Lock" was said (435 ms).
 OK on the Lock tile opened the lock popup, read as "PIN Code Lock. PIN Lock + OFF. Keypad Lock, 1 of 3", focus on Keypad Lock. A second OK, on Keypad Lock, locked without a PIN. The PIN items were not touched.
 The brief has the first OK lock at once. On this firmware that OK opens the popup, and its first item, Keypad Lock, locks.
 Locked: the screen reads "Locked, press Back 3 times quickly to unlock. 25-09-2026. 04:50". The note was said in full: 8 clips (10 to 18), 4,132 ms, 65,151 subsamples. One change was held back (suppressed 0 to 1), as phase 3 recorded for the lock screen's arrival.
-The three Backs, sent in one invocation of tools/flipper_cli.py, unlocked it. Announcements 6 to 9 and utterances 7 to 10, one cut (aborted 0 to 1), clips 18 to 22, the last "Home screen". Phase 3 recorded the same three: the unlock hint cut by the next Back, "Unlocked", "Home screen". The home screen shows; no application.
+The three Backs, sent in one invocation of tools/flipper_cli.py, unlocked the device: afterwards the home screen shows and no application runs.
+From the sr status before the Backs to the one after: 3 announcements (6 to 9), 3 utterances (7 to 10), 1 aborted (0 to 1), 4 clips (18 to 22), the last utterance 15,972 subsamples, "Home screen".
+That "Unlocked" was said is inferred from these counts; the console does not log the words. Of the three announcements the last is "Home screen" and one was cut by a Back, which leaves one for the unlock.
 
 [04:51:27] note: Step 4.3, lock and unlock
 [04:51:28] == input send up short
@@ -297,7 +300,7 @@ No application is running
 4. The Animations row
 ON: loader open Momentum read "MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4". OK: "Mainmenu. Lockscreen. Statusbar. Graphics, 1 of 6". OK on Graphics: "Asset Pack Default. Anim Speed 100%. Cycle Anims Meta.txt. Animations OFF, 1 of 5": the first row is Animations OFF.
 Right: "Animations ON, 1 of 5"; the change was said (1,334 ms, 19,810 subsamples). Back: Interface. Back: the start list. Back: "Rebooting.... Applying changes...". The port was gone at 04:53:08 and back at 04:53:10.
-After that boot: the battery only on the screen. At 30 s: free 116,736. sr status: announcements 1, suppressed 0, so no bubble was drawn and nothing was said or held back. The frame counter moved: 27 at 10 s, 62 at 30 s. Two more samples near 3 min 40 s: 433 to 473 frames in 20 s, free 116,872 and 116,768.
+After that boot: the battery only on the screen. At 30 s: free 116,736. sr status: announcements 1 and utterances 1, the boot's "Home screen" (15,972 subsamples), and suppressed 0: no bubble was drawn, and nothing else was said or held back. The frame counter moved: 27 at 10 s, 62 at 30 s. Two more samples, at uptime 3 min 37 s and 3 min 57 s: frames 433 and 473, free 116,872 and 116,768.
 OFF again, the same path: the row read "Animations ON, 1 of 5", the saved value. Right on ON does nothing (the row does not wrap), so Left set it: "Animations OFF, 1 of 5", said in 1,334 ms (20,029 subsamples). Back three times, the same popup. The port was gone at 04:57:55 and back at 04:57:57.
 After that boot: the battery only. At 30 s: free 116,752. The frame counter stayed at 2 at 10 s, 30 s and 50 s.
 
@@ -754,6 +757,8 @@ last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack f
 voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 190, fallback 0, missing 0, muted 0, open max 40 ms, last 27 ms
 free heap: 116328
 
+Ruling: the check is void on this device. No screen of this firmware exceeds one 159-character part; phase 3 measured the longest, the About pages, at 119 characters. The parts path (speech_say_parts and speech_queue_push_parts) was not touched this round, and its host tests pass. The chunking that left with SAM was the synthesizer's own input splitting, not the queue's parts. This ruling is the controller's, from the Task 6 review. The 54-character reading above stays as the evidence.
+
 8. Final
 Home screen, no application. Reader enabled; volume 80, verbosity 1, change delay 3000 ms; speech idle; voice on, vocabulary yes, clips 190, fallback 0, missing 0, muted 0.
 free 116,472; largest block 57,880, because the probe's apps left the heap fragmented; minimum 23,160, the probe's NFC row.
@@ -785,7 +790,7 @@ No application is running
 records: 1, content layer: desktop
 status-right x=103 y=  9 battery    inverted "100"
 reads as:
-== storage read /int/.momentum_settings.txt (right after the lines above; only the animation and reader keys kept)
+[about 05:02:40] == storage read /int/.momentum_settings.txt (sent with tools/flipper_cli.py directly, within 2 s after the command above, so its exact second was not logged; only the animation and reader keys kept)
 Size: 959
 anim_speed: 100
 cycle_anims: 0
