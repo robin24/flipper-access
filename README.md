@@ -10,8 +10,8 @@ and the tools in this folder. Last updated 2026-09-25.
 - Firmware: Momentum mntm-012 (built 31 December 2025), installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
   here: on 2026-09-24 that was phase 3 and the polish round; on 2026-09-25 the firmware stripdown
-  round finished and was flashed complete with `./fbt flash_usb_full`, commit cc7212c6c, API
-  version 87.2, firmware.bin 862,588 bytes with 18,052 spare below the BLE stack.
+  round finished, and its final fixes were flashed complete with `./fbt flash_usb_full`: commit
+  08e80106f, API version 87.2, firmware.bin 862,612 bytes with 18,028 spare below the BLE stack.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1`, 230400 baud. It disappears while the
   device is in the updater and comes back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
@@ -57,8 +57,9 @@ More about the chords:
 - Back on its own works as before: a short press goes back. A long press of Back on its own,
   which opens the power-off dialog on the home screen, takes effect when you let go of Back, not
   after the usual 300 ms. That way a slow chord is never mistaken for a long press.
-- The press of Back itself still reaches the app when a chord starts. On the home screen the
-  dolphin may answer it with a speech bubble, which you may hear after the chord.
+- The press of Back itself still reaches the app when a chord starts. With animations on (they
+  are off by default), the dolphin on the home screen may answer it with a speech bubble, which
+  you may hear after the chord.
 - Any other key press silences speech, as before.
 - While the reader is off, the chords are ordinary key presses. Back and Up on the home screen
   then opens the lock menu.
@@ -206,10 +207,13 @@ the emulation takes over the speaker, and the reader stays silent until you leav
   sessions: the menus, an app's keyboard, and the Back chords on the home screen and in the main
   menu. `--chords` runs only the chords. Start it on the home screen.
 - `tools/run_host_tests.sh`: unit tests for the screen model and the speech text, queue and PCM
-  helpers, run with clang on the Mac, finishing with `tests/fbt/test_exclusions.py`.
+  helpers, run with clang on the Mac, finishing with the two Python checks in `tests/fbt/`.
 - `tests/host/`: the unit tests.
 - `tests/fbt/test_exclusions.py`: a plain Python test of the build's app and category exclusions
   (`EXCLUDE_EXT_APPS`, `EXCLUDE_EXT_CATEGORIES` in `fbt_options.py`) over synthetic manifests.
+- `tests/fbt/test_subghz_sources.py`: a plain Python check that every `.c` file of the built-in
+  Sub-GHz app is named in its manifest, `applications/main/subghz/application.fam`, and every
+  named one exists, so a Momentum rebase cannot leave a new scene out of the build unnoticed.
 - `tools/ram_probe.py`: free heap while each core app runs; the logs are in `docs/measurements/`.
 - `tools/voice_build.py`: makes the recorded voice and copies it to the card (see Recorded
   voice below). `tools/clip_make.py` makes a single test clip with the same processing.
@@ -229,11 +233,13 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region
 and does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after the polish round, at
-22ae265ef on 2026-09-24: 877,036 bytes, 3,604 spare. After phase 3 with its final review fixes,
-at af4ee0952: 876,056 bytes, 4,584 spare. After phase 3 before those fixes, at 6c7469a79:
-875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 bytes,
-8,592 spare. Before the recorded voice, at 54794522b: 869,756 bytes, 10,884 spare.
+`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after the firmware
+stripdown and its final fixes, at 08e80106f on 2026-09-25: 862,612 bytes, 18,028 spare. Before
+the stripdown, after the polish round, at 22ae265ef on 2026-09-24: 877,036 bytes, 3,604 spare.
+After phase 3 with its final review fixes, at af4ee0952: 876,056 bytes, 4,584 spare. After phase
+3 before those fixes, at 6c7469a79: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219:
+872,048 bytes, 8,592 spare. Before the recorded voice, at 54794522b: 869,756 bytes, 10,884
+spare.
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
 serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,
@@ -252,11 +258,11 @@ Screen reader console commands (firmware from the `screen-reader` branch):
 Speech: announcements are spoken by the device itself. `sr say <text>` speaks text and prints
 timing; `sr stop` silences; `sr volume <0..100>` and `sr delay <500..10000>` are saved settings.
 `sr chord up|down|ok|okhold|left|right` runs what Back and that key do (see Back chords above).
-Any button press silences speech. On the home screen the dolphin's speech bubbles are not
-spoken unless a button was pressed in the last two seconds (`sr status` counts them as
-suppressed; `sr watch` still shows them). A change dropped while held -- superseded by a newer
-one, or by the quiet rules once it comes due -- never reaches `sr watch`; only the suppressed
-counter (`sr status`) may show it. During NFC-V emulation the reader is silent, because
+Any button press silences speech. With animations on, the dolphin's speech bubbles on the home
+screen are not spoken unless a button was pressed in the last two seconds (`sr status` counts
+them as suppressed; `sr watch` still shows them). A change dropped while held -- superseded by a
+newer one, or by the quiet rules once it comes due -- never reaches `sr watch`; only the
+suppressed counter (`sr status`) may show it. During NFC-V emulation the reader is silent, because
 the emulation borrows the speaker timer; it parks the speaker pin so nothing is heard.
 `sr voice off` mutes until `sr voice on` or a reboot; the generator uses it around a sync.
 
@@ -309,7 +315,8 @@ Console commands:
 
   The settings line is read at the first utterance after boot that uses the voice. So after a
   sync that changes it, the new line shows after a reboot. With the voice off, the vocabulary
-  shows as "no" until the voice is back on and something is spoken.
+  figure keeps its last value: the card is looked at again only when something is spoken with
+  the voice on.
 
 Making the vocabulary with `tools/voice_build.py`:
 
@@ -407,5 +414,5 @@ sending the backup file to the card.
    - The games, the JavaScript engine and SAM removed from the build and the card.
    - Sub-GHz built back into the firmware.
    - Animations off by default, with an Animations row to turn them back on.
-   - Flash 862,588 bytes, 18,052 spare; idle heap 116,672 to 116,752 bytes free, animations off.
+   - Flash 862,612 bytes, 18,028 spare; idle heap 116,672 to 116,752 bytes free, animations off.
 9. Next: the fork and release mechanics.

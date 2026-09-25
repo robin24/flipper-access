@@ -44,7 +44,8 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
    - Flash: 15,344 bytes. Static RAM: 3,683 bytes.
    - The reader now speaks only from the recorded voice's clips, spelling a word, or a letter
      whose own clip is missing, and stays muted with the voice off or without a card.
-   - Final image after the whole memory plan: 862,588 bytes, 18,052 spare below the BLE stack.
+   - Final image after the whole memory plan and the round's final fixes (08e80106f): 862,612
+     bytes, 18,028 spare below the BLE stack.
    - Measurements: `docs/measurements/2026-09-25-stripdown.txt`.
 
 ## Features after the voice
@@ -58,4 +59,7 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
 - Repository with Momentum as upstream remote; branch `screen-reader` becomes the main branch of the fork; tags per release.
 - Release artefacts: the update package (.tgz for qFlipper or the update CLI), the card payload (voice vocabulary made with a freely licensed voice, screen reader files), and an install script that flashes and copies with spoken progress on the host.
 - Licensing: the firmware is GPL-3 like Momentum and the official firmware; the shipped vocabulary must come from a redistributable voice (Piper models with permissive licences), Apple voices are for personal vocabularies only.
-- Documentation for blind users first: install, first boot, the console commands, the voice generator, known limits (NFC-V silence).
+- Documentation for blind users first: install, first boot, the console commands, the voice generator, and the known limits:
+  - NFC-V emulation silences the reader.
+  - The sync guard reads the voice flag once per item: an utterance already playing when `sr voice off` arrives keeps opening clips, and writes the missing list at its end, while the generator has already started the transfer.
+  - `sr play` still plays a file with the voice off, by design.

@@ -1,7 +1,7 @@
 Firmware stripdown: flash, static RAM, idle heap, RAM probe and device pass, 2026-09-25
 
-Firmware: branch screen-reader at cc7212c6c, release configuration (COMPACT=1, DEBUG=0, build directory build/f7-firmware-C).
-Device: R0skie on /dev/cu.usbmodemflip_R0skie1, the recorded voice on the card, flashed once in Task 6 with ./fbt flash_usb_full.
+Firmware: branch screen-reader at cc7212c6c, release configuration (COMPACT=1, DEBUG=0, build directory build/f7-firmware-C). The round's final fix wave, 08e80106f, adds the last lines of the Flash and Static RAM sections and the last step of the Device pass.
+Device: R0skie on /dev/cu.usbmodemflip_R0skie1, the recorded voice on the card, flashed in Task 6 with ./fbt flash_usb_full, and again the same way in the final fix wave.
 Console replies are verbatim from tools/flipper_cli.py, sent through its own functions by a small driver that time-stamps each command. The RAM probe's output is verbatim.
 A spoken text is recognised by the subsamples of the "last utterance" line of sr status: "Home screen" is 15,972 subsamples.
 
@@ -12,14 +12,18 @@ Task 2, the JavaScript engine out, 8fe7f533d: 835,748 bytes, 44,892 spare. 41,28
 Task 3, Sub-GHz built into the firmware, 59140fcd2: 877,776 bytes, 2,864 spare. 42,028 more.
 Task 4, SAM out, 4bda0a4ae: 862,432 bytes, 18,208 spare. 15,344 less.
 Task 5, the Animations setting, cc7212c6c: 862,588 bytes, 18,052 spare. 156 more. Its first commit, 582cad9f3, before the setting was latched at alloc, measured 862,612 bytes, 18,028 spare.
-Final build, cc7212c6c, the image that ships: 862,588 bytes, 18,052 spare. firmware.bin md5 a71e546a69dc990e4995858cd0893102, the same after the flash build.
-The round in total: 14,448 bytes less than at its start.
-The final build: build/f7-firmware-C/resources and build/f7-firmware-C/.extapps deleted, then ./fbt, exit 0, 04:37:23 to 04:37:41. The firmware objects were current from Task 5, so only the version stamp was rebuilt and the image relinked. Then ./fbt resources, exit 0 at 04:39:24.
+Final build of Task 6, cc7212c6c, the image of the device pass below: 862,588 bytes, 18,052 spare. firmware.bin md5 a71e546a69dc990e4995858cd0893102, the same after the flash build.
+Final fix wave, 08e80106f, the image that ships: 862,612 bytes, 18,028 spare. 24 more than cc7212c6c: with one caller the compiler inlined the level-up helper into animation_manager_check_blocking_process; called from animation_manager_alloc as well, it is a function of its own, 48 bytes. animation_manager.c compiled alone with the build's flags: 2,519 bytes of code at cc7212c6c, 2,543 now. firmware.bin md5 325957f1c6a849729a7de747c94646a5, from the flash build.
+The round in total: 14,424 bytes less than at its start, to the image that ships (14,448 to cc7212c6c).
+Task 6's final build: build/f7-firmware-C/resources and build/f7-firmware-C/.extapps deleted, then ./fbt, exit 0, 04:37:23 to 04:37:41. The firmware objects were current from Task 5, so only the version stamp was rebuilt and the image relinked. Then ./fbt resources, exit 0 at 04:39:24.
 ./fbt through the brief's filter (API version, warning, error, Excluded): the two known manifest warnings of the external apps cli_bridge (Invalid appid '.cli_gui') and mtp (Invalid appid '.f0_mtp'); the line below; "API version 87.2 is up to date". No error line.
 Excluded 45 external apps by configuration: 4inrow, air_arkanoid, air_labyrinth, arkanoid, asteroids, blackjack, bomberduck, checkers, chess, cli_js, color_guess, doom, flappy_bird, flipper_pong, game15, game_2048, gameoflife, geometry_dash, heap_defence, jetpack_joyride, js_app, laser_tag, minesweeper_redux, multi_dice, pinball0, quadrastic, reversi, roots_of_life, rubiks_cube_scrambler, scorched_tanks, simon_says, slotmachine, snake20, solitaire, t_rex_runner, tama_p1, tanks, test_js, tetris, tictactoe, umpire_indicator, videopoker, yapinvaders, yatzee, zombiez
 ./fbt resources: the same two manifest warnings, and 20 compiler warnings, all inside the external apps' own sources (the asn1 code of seader, picopass and passy; flipboard; airmouse; mitsubishi_ac_remote), none in a file of this round.
 Manifest check, grep -c -E 'apps/Games/|apps/Scripts/|js_app|cli_js|test_js|apps/Sub-GHz/subghz.fap' build/f7-firmware-C/resources/Manifest: 0. The same after the flash build: 0.
 Also 0 without the slashes: no directory entry D:apps/Games or D:apps/Scripts, no apps_data/js_app. The Manifest lists 11 app folders and 20 files under apps/Sub-GHz. .extapps holds no js_ file, no cli_js, no test_js and no subghz.fap.
+The final fix wave's builds: ./fbt before the commit, exit 0, 06:21:36 to 06:21:55 (animation_manager.c and the three files that include speech.h compiled, the image relinked: 862,612 bytes); ./fbt lint, exit 0; after the commit, build/f7-firmware-C/resources and build/f7-firmware-C/.extapps deleted, then ./fbt flash_usb_full (see the Device pass), which built the image again with the new commit's stamp, 862,612 bytes, and every fap and the resources anew.
+Both builds through the same filter: the two known manifest warnings (cli_bridge, mtp), the line "Excluded 45 external apps by configuration" with the same 45 names as above, "API version 87.2 is up to date"; no error line. The flash build's 20 compiler warnings are all inside the external apps' own sources.
+Manifest check after the flash build: 0, and 0 without the slashes. The Manifest lists 11 app folders and 20 files under apps/Sub-GHz; .extapps holds no js_ file, no cli_js, no test_js and no subghz.fap.
 
 Section: Static RAM
 From python3 tools/map_size.py Momentum-Firmware/build/f7-firmware-C/firmware.elf.map lib over the final map (md5 1950203b9a2c998e73a3593993e672ea, the same after the flash build).
@@ -30,6 +34,7 @@ Static RAM, data plus bss, is 5,897 bytes: 941 of data and 4,956 of bss as the m
 With the linker's alignment fill the two sections are 988 and 5,020 bytes, 6,008 in all, as fbt's "Firmware size" prints them.
 The screen reader at 22ae265ef: 35,073 bytes of flash, of which SAM 14,251. Now 19,798: 15,275 less.
 The script's flash total, 866,398, is not the image size. The map lists the mergeable string constants of .rodata at their size before the linker merges duplicates (191,331 bytes counted, 186,280 linked), and the script leaves out alignment fill. The image is firmware.bin, 862,588 bytes.
+The final fix wave's map, 08e80106f (md5 69f3ce0c961e58eaf686e1106f1f9a40), the same way: TOTAL flash 866430 static ram 5897. Static RAM unchanged; the screen reader's line and the Sub-GHz app's line unchanged. Its image is firmware.bin, 862,612 bytes.
 
 Section: Idle heap
 Home screen, no application, reader on, voice on, speech idle. Each reading is the free command 30 s after the port came back from the boot, followed by the device's uptime command. Total heap 189,560 bytes each time.
@@ -75,6 +80,7 @@ Total heap 189560 bytes. Global low-water mark after all apps: 23160 bytes free.
 Lowest sampled free heap: 23232 bytes during 'NFC: Read'.
 
 Section: Device pass
+The engine checks of the stripdown spec's section 11 (sr say, mute and the muted counter, the spelled focus, the volume chords, the four Accessibility rows, Sub-GHz from the main menu, the apps/assets and apps_data listings) ran on the Task 4 build 4bda0a4ae and are recorded in docs/superpowers/build-logs/2026-09-25-stripdown/task-4-report.md; the engine has not changed since.
 Every command and its reply, time-stamped, as the driver logged them. The lines "note:" and "(wait ...)" are the driver's own.
 
 Before the flash, the idle check of Task 4 Step 9
@@ -800,3 +806,65 @@ sr_volume: 80
 sr_verbosity: 1
 sr_change_ms: 3000
 desktop_anims: false
+
+9. The final fix wave's flash, 08e80106f
+Before it, at 06:23:01, sent with tools/flipper_cli.py directly (the time is the shell's, just before the call): No application is running; sr status as step 8 left it (announcements 56, utterances 57, speech idle), free heap 116,488.
+./fbt flash_usb_full from 06:23:59 to 06:27:41, exit 0, package f7-update-mntm-screen-reader-08e80106, after build/f7-firmware-C/resources and build/f7-firmware-C/.extapps were deleted. Its last three lines: the upload's progress line, ending "<100%, chunk 15 of 15 @ 124.19 kb/s"; "2026-09-25 06:27:38,206 [INFO] Closing current app, if any"; Touch("build/usbinstall.flag").
+The port was gone at 06:27:39 and back at 06:33:43: 364 s, 6 min 4 s.
+sr screen 17 s later: no records on the desktop layer, the post-update splash. Back closed it, and the home screen showed the battery only. info device: 08e80106, dirty (the untouched applications/external), branch screen-reader, API 87.2.
+At uptime 29 s: reader enabled; volume 80, verbosity 1, change delay 3000 ms; frames 3; announcements 1 and utterances 1, the boot's "Home screen" (15,972 subsamples); speech idle; voice on, vocabulary yes, clips 2, fallback 0, missing 0, muted 0. free 116,560, minimum 114,024, largest block 115,888: the fragmentation the RAM probe left (largest block 57,880 in step 8) is gone.
+The device was left there: home screen, no application, reader on, voice on, speech idle. Animations off, as the frame counter shows: 3 at uptime 29 s, where animations on gave 62 at 32 s in step 4.
+
+[06:23:01] == loader info
+No application is running
+[06:23:01] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 345, dropped: 0, announcements: 56, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 57, aborted 32, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2492
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 190, fallback 0, missing 0, muted 0, open max 40 ms, last 27 ms
+free heap: 116488
+[06:34:00] note: Final fix wave, after the flash: port gone 06:27:39, back 06:33:43 (364 s)
+[06:34:00] == sr screen
+records: 0, content layer: desktop
+reads as:
+[06:34:00] == loader info
+No application is running
+[06:34:08] == input send back short
+(no output)
+[06:34:08] (wait 1.5 s)
+[06:34:10] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[06:34:10] == info device
+(the firmware lines only; the hardware, radio and system lines are left out)
+firmware.commit.hash          : 08e80106
+firmware.commit.dirty         : true
+firmware.branch.name          : screen-reader
+firmware.version              : mntm-dev
+firmware.build.date           : 25-09-2026
+firmware.api.major            : 87
+firmware.api.minor            : 2
+[06:34:10] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 3, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+free heap: 116552
+[06:34:10] == sr voice status
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+[06:34:10] == free
+Free heap size: 116560
+Total heap size: 189560
+Minimum heap size: 114024
+Maximum heap block: 115888
+Pool free: 876
+Maximum pool block: 672
+[06:34:10] == uptime
+Uptime: 0h0m29s
+[06:34:10] == loader info
+No application is running

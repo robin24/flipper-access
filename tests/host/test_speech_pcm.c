@@ -135,7 +135,7 @@ static void test_volume(void) {
     speech_pcm_reset(&pcm);
     CHECK(pcm.slots == 0 && pcm.now_ns == 0 && pcm.next_slot_ns == 0);
     CHECK(pcm.subsamples == 0 && pcm.nominal_us == 0);
-    CHECK(pcm.lut[v[0]] == full[v[0]] || pcm.lut[v[0]] > full[v[0]]);
+    CHECK(pcm.lut[v[0]] > full[v[0]]);
 }
 
 // Recorded clips: every sample held for the same time, through the slot accumulator.

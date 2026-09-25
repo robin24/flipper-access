@@ -697,16 +697,17 @@ sections above stay as history.
 
 Build options: two new options in `fbt_options.py`, tracked, next to `SKIP_EXTERNAL` and
 `EXTRA_EXT_APPS`: `EXCLUDE_EXT_APPS = ["js_app", "cli_js", "test_js"]` and
-`EXCLUDE_EXT_CATEGORIES = ["Games"]`, plumbed the same way as `EXTRA_EXT_APPS` (through
-`site_scons/commandline.scons`, `firmware.scons`, `fbt_apps.py` and `appmanifest.py`). An
-excluded app's plugins leave with it, and the build prints "Excluded 45 external apps by
-configuration". Two deviations from the stripdown spec: `test_js`, the JavaScript engine's own
-unit-test plugin, had to be named in `EXCLUDE_EXT_APPS` too, because the plugin grouping keeps a
-plugin when any of its parents is still built, and `test_js`'s other parent is the unit-test
-runner, which stays; `js_app` also had to be dropped from the `system_apps` metapackage in
-`applications/system/application.fam`, because that metapackage is what deployed the example
-scripts to the card. A plain Python test over synthetic manifests, `tests/fbt/test_exclusions.py`,
-now runs as the last step of `tools/run_host_tests.sh`.
+`EXCLUDE_EXT_CATEGORIES = ["Games"]`, plumbed through `site_scons/commandline.scons`,
+`scripts/fbt_tools/fbt_apps.py` and `scripts/fbt/appmanifest.py`; `firmware.scons` was not
+touched, since the values reach the firmware environment through the base environment's
+variables. An excluded app's plugins leave with it, and the build prints "Excluded 45 external
+apps by configuration". Two deviations from the stripdown spec: `test_js`, the JavaScript
+engine's own unit-test plugin, had to be named in `EXCLUDE_EXT_APPS` too, because the plugin
+grouping keeps a plugin when any of its parents is still built, and `test_js`'s other parent is
+the unit-test runner, which stays; `js_app` also had to be dropped from the `system_apps`
+metapackage in `applications/system/application.fam`, because that metapackage is what deployed
+the example scripts to the card. A plain Python test over synthetic manifests,
+`tests/fbt/test_exclusions.py`, now runs in `tools/run_host_tests.sh`.
 
 JavaScript engine out: `lib/SConscript` drops `mjs`; `targets/f7/api_symbols.csv` drops its 82
 functions and 8 headers. The API version stays 87.2 (the build prints "API version 87.2 is up to
@@ -717,7 +718,10 @@ browser's `.js` handling stay in place as inert code. Saving: 41,288 bytes of fl
 
 Sub-GHz built in: `applications/main/subghz/application.fam` becomes the version of commit
 1c113c28a, `apptype APP` with an explicit source list; no `subghz.fap` is produced any more.
-Cost: 42,028 bytes of flash (835,748 to 877,776).
+Cost: 42,028 bytes of flash (835,748 to 877,776). Since the round's final fixes,
+`tests/fbt/test_subghz_sources.py`, the last step of `tools/run_host_tests.sh`, fails when a `.c`
+file under `applications/main/subghz` is not named in that manifest or a named one is missing,
+so a Momentum rebase that adds a scene cannot leave it out of the build unnoticed.
 
 SAM out of the speech engine: the engine now plays clips and spelled letters only. With the voice
 off (`sr voice off`) or without `/ext/sr/voice` on the card, a text item completes at once,
@@ -738,13 +742,17 @@ gone. Two comments crediting Momentum's Text to SAM demo app, for the loudness c
 Animations off by default: a new setting, `desktop_anims` (file key `desktop_anims`, default
 false). The Momentum settings app shows it as the row "Animations", first under Momentum,
 Interface, Graphics, OFF then ON; changing it sets the app's reboot flag, so leaving the app
-shows "Rebooting..." and the device reboots. Guards in `animation_manager.c`, each an early
-return on `!momentum_settings.desktop_anims`: `animation_manager_alloc`;
-`animation_manager_check_blocking_process`, which first applies a pending level-up before
-returning; `animation_manager_new_idle_process`, `animation_manager_unload_and_stall_animation`
-and `animation_manager_load_and_continue_animation`, which just return; and
-`animation_manager_interact_process`, which returns false. A pending level up is granted at the
-next dolphin deed or card event, or at boot once the final fix of this round is in.
+shows "Rebooting..." and the device reboots. The guards in `animation_manager.c` test the field
+`anims_enabled`, which `animation_manager_alloc` latches from `momentum_settings.desktop_anims`
+(the first deviation below). `animation_manager_alloc` has no early return: with animations off
+it skips its loading block, the first blocking check and the first idle animation, and in the
+`else` branch grants a pending level up. The five other entry points return early:
+`animation_manager_check_blocking_process`, which first grants a pending level up;
+`animation_manager_new_idle_process`, `animation_manager_unload_and_stall_animation` and
+`animation_manager_load_and_continue_animation`, which just return; and
+`animation_manager_interact_process`, which returns false. A pending level up is granted at boot
+and at every later check, which the manager runs after every dolphin deed and every card event
+(the second deviation below).
 
 Deviation from the stripdown spec: the animation manager latches the `desktop_anims` setting once,
 at allocation, into a field of its own, and every guard tests that field rather than the live
@@ -753,8 +761,17 @@ the manager, between the row changing and the reboot happening, while the manage
 `animation_manager_load_and_continue_animation` does not handle, which crashes. Latching the
 setting at allocation closes that window.
 
-Flash for the animations step: 156 bytes (862,432 to 862,588). The final image: 862,588 bytes,
-18,052 spare below the BLE stack.
+A second deviation from the stripdown spec, made by the round's final fixes: its section 7 had a
+pending level up granted only at the manager's next check, after a dolphin deed or a card event,
+and not at boot, because nothing should run against the dolphin while the desktop is still being
+set up. The grant at boot is safe all the same: upstream's `animation_manager_alloc` already
+calls `dolphin_stats` at that point, through `animation_manager_check_blocking`, on the desktop's
+thread. The grant adds that one call and, when a level is pending, `dolphin_upgrade_level`, which
+only queues an event for the dolphin's own thread.
+
+Flash for the animations step: 156 bytes (862,432 to 862,588). The round's final fixes, at
+08e80106f, add 24 bytes. The final image, 08e80106f: 862,612 bytes, 18,028 spare below the BLE
+stack.
 
 The card, after the first full flash: the updater removed the games, the Scripts folder, the
 JavaScript runner and its modules, and the old `subghz.fap`, by itself, because none of them are
@@ -765,8 +782,9 @@ Figures from the Task 6 device pass (docs/measurements/2026-09-25-stripdown.txt)
 each step, against the BLE stack's 880,640-byte limit: round start 877,036 bytes (3,604 spare);
 the JavaScript engine out, 835,748 bytes (44,892 spare, 41,288 less); Sub-GHz built in, 877,776
 bytes (2,864 spare, 42,028 more); SAM out, 862,432 bytes (18,208 spare, 15,344 less); the
-animations setting, 862,588 bytes (18,052 spare, 156 more). The round in total: 14,448 bytes less
-than at its start. Idle heap, 30 seconds after boot: with animations off, 116,672 bytes free on
+animations setting, 862,588 bytes (18,052 spare, 156 more). The round in total, to that image:
+14,448 bytes less than at its start; to the final image, after the round's final fixes: 14,424
+less. Idle heap, 30 seconds after boot: with animations off, 116,672 bytes free on
 the first boot and 116,752 on a second; with animations on, 116,736 -- but that reading caught the
 firmware's own built-in "new mail" animation, not a card animation (a dolphin level-up was
 pending), so it does not measure what a card animation costs. The stripdown spec's estimate of 10

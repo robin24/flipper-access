@@ -1,6 +1,7 @@
 #!/bin/zsh
 # Build and run the host tests for the screen reader: the screen model, the speech helpers, the
-# chords, the throttle and the build's exclusion filter. Uses clang from Xcode.
+# chords, the throttle, the build's exclusion filter and the built-in Sub-GHz app's source list.
+# Uses clang from Xcode.
 set -e
 ROOT="${0:A:h:h}"
 SRC="$ROOT/Momentum-Firmware/applications/services/screen_reader"
@@ -80,3 +81,10 @@ if ! python3 "$ROOT/tests/fbt/test_exclusions.py" > "$OUT/fbt_exclusions.txt"; t
   exit 1
 fi
 echo "$(tail -n 1 "$OUT/fbt_exclusions.txt")"
+
+if ! python3 "$ROOT/tests/fbt/test_subghz_sources.py" > "$OUT/subghz_sources.txt"; then
+  cat "$OUT/subghz_sources.txt"
+  echo "Sub-GHz source list checks failed"
+  exit 1
+fi
+echo "$(tail -n 1 "$OUT/subghz_sources.txt")"
