@@ -96,3 +96,10 @@ if ! "$OUT/test_sr_throttle" > "$OUT/sr_throttle.txt"; then
   exit 1
 fi
 echo "throttle: $(tail -n 1 "$OUT/sr_throttle.txt")"
+
+if ! python3 "$ROOT/tests/fbt/test_exclusions.py" > "$OUT/fbt_exclusions.txt"; then
+  cat "$OUT/fbt_exclusions.txt"
+  echo "fbt exclusion checks failed"
+  exit 1
+fi
+echo "fbt exclusions: $(tail -n 1 "$OUT/fbt_exclusions.txt")"
