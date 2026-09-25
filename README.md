@@ -14,7 +14,7 @@ and the tools in this folder. Last updated 2026-09-25.
   round finished, and its final fixes were flashed complete with `./fbt flash_usb_full` (commit
   08e80106f). The dolphin in words, the crash address, and then the reader toggle with the
   Passport's next level followed the same day with `./fbt flash_usb`: the device now runs commit
-  4a4420439, API version 87.3, firmware.bin 864,396 bytes with 16,244 spare below the BLE stack.
+  a9e4e7b94, API version 87.3, firmware.bin 864,428 bytes with 16,212 spare below the BLE stack.
   The Passport on the card, `/ext/apps/assets/passport.fap`, was rebuilt for it.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1` (`/dev/cu.usbmodemflip_R0skie1`
   before the rename), 230400 baud. It disappears while the device is in the updater and comes
@@ -289,7 +289,8 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
 `build/f7-firmware-C/firmware.bin` and the spare bytes. This branch with the reader toggle and the
-Passport's next level, at 4a4420439 on 2026-09-25: 864,396 bytes, 16,244 spare (864,420 at
+Passport's next level, at 4a4420439 on 2026-09-25: 864,396 bytes, 16,244 spare; the Archive's
+menus naming their selection, at a9e4e7b94: 864,428 bytes, 16,212 spare (864,420 at
 f9f1e168f, before the review fixes). With the crash address, at 9028a8499: 863,644 bytes, 16,996
 spare. After the dolphin in words, at c502de5ab: 863,284 bytes, 17,356 spare. After the firmware
 stripdown and its final fixes, at 08e80106f: 862,612 bytes, 18,028 spare. Before the stripdown,
