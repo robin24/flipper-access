@@ -28,7 +28,7 @@ static void test_words_and_numbers(void) {
     expect("Settings. Bluetooth, 1 of 11", "Settings. Bluetooth, one of eleven");
     expect("125 kHz RFID", "one hundred twenty five kilohertz R F I D");
     expect("433.92 MHz", "four hundred thirty three point nine two megahertz");
-    expect("Mood: Happy. Level: 1. 18/100", "Mood, Happy. Level, one. eighteen slash one hundred");
+    expect("Mood: Happy. Level: 1. 18/100", "Mood, Happy. Level, one. eighteen of one hundred");
     expect("Battery: 87%", "Battery, eighty seven percent");
     expect("2026", "two thousand twenty six");
     expect("1234567", "one two three four five six seven");
@@ -375,6 +375,15 @@ static void test_rule13_upper_a(void) {
     expect("A.", "ay.");
 }
 
+// Rule 14: a slash between two digits is "of", as the Passport's points read; a slash next to a
+// letter or at the start stays "slash". The Passport's line at the top level has no slash.
+static void test_rule14_slash_of(void) {
+    expect("1/3", "one of three");
+    expect("/ext/apps", "slash ext slash apps");
+    expect("a/b", "a slash b");
+    expect("Max Level!", "Max Level!");
+}
+
 // SPEECH_TEXT_MAX: a 160 character hex dump expands without being cut. The dump mixes the
 // pair shapes of a real screen; each expected word comes from rules 5, 6 and 7.
 static void test_text_buffer(void) {
@@ -511,6 +520,7 @@ int main(void) {
     test_rule11_minus();
     test_rule12_ranges();
     test_rule13_upper_a();
+    test_rule14_slash_of();
     test_text_buffer();
     test_beyond_the_rule_list();
     test_spell_copy();

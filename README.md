@@ -42,9 +42,10 @@ third key pressed while the second is still held goes to the app as a normal key
 
 - Back and Up reads the whole screen from the top. The home screen, which draws no text of its
   own, reads as "Home screen". A long screen is read in several parts, one after the other.
-- Back and Down reads the status bar: the time, when the status bar shows it, and the battery, as
-  "battery 100 percent". A screen without a status bar, such as the main menu, answers "No
-  status bar".
+- Back and Down reads the status bar, then the dolphin's level and mood: the time, when the
+  status bar shows it, the battery, as "battery 100 percent", then "level 3, mood happy". The
+  mood is happy, okay or angry, as the Passport shows it. A screen without a status bar, such as
+  the main menu, answers with the level and the mood alone.
 - Back and a short press of OK repeats the focused item with its position, for example "Apps, 1
   of 11". With nothing focused it says "No focus".
 - Back and a long press of OK spells the focused item with the recorded letters: Apps is spelled
@@ -111,6 +112,14 @@ card. To turn animations on, go to Momentum, Interface, Graphics; Animations is 
 OFF or ON. Changing it reboots the device: leaving the app shows "Rebooting..." and the device
 restarts. With animations on, the dolphin's speech bubbles are read only when you pressed a key
 in the last two seconds.
+
+When the dolphin reaches a new level, the reader says "Level up, level 4" about a second later:
+after the new screen that usually comes with it has been read, and without cutting off what it
+is saying. Like all speech, it is silenced by a key pressed before it has been said. With
+animations off, the level up is granted at the deed that completes the level's points, the
+moment an app such as Sub-GHz or NFC records something you did, or at boot when one was left
+pending; with animations on, when you press a key on the home screen's mail animation. The
+Passport, which Right opens on R0skie's home screen, shows the level, the mood and the points.
 
 On the home screen, Up opens the lock menu: that is Momentum's default key for it. The lock menu
 is a grid of icons, and the reader names the selected one. It opens on Lock.
@@ -183,6 +192,10 @@ the emulation takes over the speaker, and the reader stays silent until you leav
   is not explained. Up, not OK, is the default key for the lock menu. Back closes it.
 - Keys sent from `sr watch` and from remote control bypass the chords, as described under Back
   chords.
+- A slash between two numbers is read as "of": the Passport's points, "18/100", are "eighteen
+  of one hundred", and counts such as "Keys found: 5/32" read the same way. So does a date drawn
+  with slashes, which only a few NFC card parsers show; that was not tried on R0skie. Any other
+  slash is "slash": "/ext/apps" is "slash ext slash apps".
 
 ## Folder contents
 

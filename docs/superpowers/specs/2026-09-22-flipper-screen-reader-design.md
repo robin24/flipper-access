@@ -793,3 +793,33 @@ from this round. On the RAM probe, with the reader on throughout: Sub-GHz Read k
 free at its lowest, and the Frequency Analyzer 51,136, where on 2026-09-23, with Sub-GHz still a
 fap on the card, Read went down to 2,080 bytes and the Frequency Analyzer crashed the device out
 of memory. NFC Read is now the heaviest core app, at 23,232 bytes free.
+
+The dolphin in words (2026-09-25). With the animations off, the dolphin's state reaches a blind
+user only in words, so three small changes followed the round. The pronunciation layer has a rule
+14: a slash between two digits is "of", so the Passport's "18/100" is "eighteen of one hundred";
+any other slash stays "slash". The dolphin service now publishes `DolphinPubsubEventUpdate` after a
+level up as it does after a deed (two lines in `dolphin.c`; the event enum is unchanged). The
+reader sets up the dolphin the way it subscribes to the desktop: at its start and on every frame
+until the dolphin's record exists, then it opens the record, subscribes, and reads the starting
+level into `last_level`. In a special boot (an update) the dolphin never starts; the check stays
+cheap and the reader keeps reading the update's screens. The callback only sets `SR_FLAG_DOLPHIN`,
+because `dolphin_stats` waits on the dolphin's own event loop, the thread that runs the callback.
+On the flag the service thread reads the stats. A higher level is held for a second
+(`SR_LEVEL_HOLD_MS`; a second rise meanwhile only updates the level to be said, and the loop's wait
+includes the due time as it does a held change's), then, once no frame is settling, said as "Level
+up, level N" without interrupting, so it follows the announcement of the screen change that usually
+comes with a deed. It has a kind of its own, `SrAnnLevel` ("level" in `sr watch`), goes through
+`sr_say_event` (formerly `sr_say_lock`), and is never kept quiet; with the reader off when it comes
+due it is dropped, the level kept. A lower level, set by hand in Momentum, Misc, Dolphin, is only
+noted. Back and Down appends the level and the mood to the status bar: "battery 87 percent, level
+3, mood happy", or the dolphin part alone where there is no status bar; "No status bar" is left
+only for a special boot, where there is no dolphin. The mood is happy for a butthurt of at most 4,
+okay at most 9, angry above: the Passport's thresholds
+(`applications/settings/dolphin_passport/passport.c`), repeated on purpose since the Passport is an
+app of its own. `sr_status_text` in the model is unchanged. Flash: 496 bytes (862,612 to 863,108,
+17,532 spare); static RAM unchanged at 5,897 bytes. On R0skie: Back and Down on the home screen
+said "battery one hundred percent, level two, mood happy", 8 clips; the Passport's "7/100" was read
+as "seven of one hundred" from clips; after a deed in the Frequency Analyzer with the points one
+short of level 3, "Level up, level 3" was announced 972 ms after the analyzer's screen announcement
+and played in full behind it. An earlier trial, with Back pressed six seconds after OK while that
+long screen announcement still played, silenced both, as any key does.
