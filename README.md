@@ -10,8 +10,10 @@ and the tools in this folder. Last updated 2026-09-25.
 - Firmware: Momentum mntm-012 (built 31 December 2025), installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
   here: on 2026-09-24 that was phase 3 and the polish round; on 2026-09-25 the firmware stripdown
-  round finished, and its final fixes were flashed complete with `./fbt flash_usb_full`: commit
-  08e80106f, API version 87.2, firmware.bin 862,612 bytes with 18,028 spare below the BLE stack.
+  round finished, and its final fixes were flashed complete with `./fbt flash_usb_full` (commit
+  08e80106f). The dolphin in words and the crash address followed the same day with
+  `./fbt flash_usb`: the device now runs commit 9028a8499, API version 87.2, firmware.bin 863,644
+  bytes with 16,996 spare below the BLE stack.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1`, 230400 baud. It disappears while the
   device is in the updater and comes back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
@@ -249,16 +251,17 @@ Build the patched app and copy it to the card:
 `-p /dev/cu.usbmodemflip_R0skie1`.)
 
 Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 for ble_light
-1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region
-and does not know this, and the updater refuses a larger image before writing. Run
+1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region and
+does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch after the firmware
-stripdown and its final fixes, at 08e80106f on 2026-09-25: 862,612 bytes, 18,028 spare. Before
-the stripdown, after the polish round, at 22ae265ef on 2026-09-24: 877,036 bytes, 3,604 spare.
-After phase 3 with its final review fixes, at af4ee0952: 876,056 bytes, 4,584 spare. After phase
-3 before those fixes, at 6c7469a79: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219:
-872,048 bytes, 8,592 spare. Before the recorded voice, at 54794522b: 869,756 bytes, 10,884
-spare.
+`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch with the crash address, at
+9028a8499 on 2026-09-25: 863,644 bytes, 16,996 spare. After the dolphin in words, at c502de5ab:
+863,284 bytes, 17,356 spare. After the firmware stripdown and its final fixes, at 08e80106f:
+862,612 bytes, 18,028 spare. Before the stripdown, after the polish round, at 22ae265ef on
+2026-09-24: 877,036 bytes, 3,604 spare. After phase 3 with its final review fixes, at af4ee0952:
+876,056 bytes, 4,584 spare. After phase 3 before those fixes, at 6c7469a79: 875,928 bytes, 4,712
+spare. Before phase 3, at d5b77c219: 872,048 bytes, 8,592 spare. Before the recorded voice, at
+54794522b: 869,756 bytes, 10,884 spare.
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
 serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,
@@ -292,28 +295,34 @@ When the device crashes, it reboots and shows a popup, which the reader reads: "
 and was rebooted", the message, most often "furi_check failed", and since 2026-09-25 a last line
 with "at" and an address of eight hexadecimal digits, such as "at 0803ABCD". The reader says the
 address character by character, except that one to three digits after a letter are said as a
-number unless they start with 0 ("AB20" is "ay B twenty", "AB05" is "ay B zero five"). `sr status`
-shows the address exactly, as "last crash: at 0803ABCD", or "last crash: none" when no crash has
-left one. Back closes the popup; `sr status` keeps the address until the next crash. The address
-is where the failed check would have returned to. For an address starting with 08, in the
-firmware's flash, subtract 2 and give the result to addr2line, from the project folder; for "at
-0803ABCD":
+number unless they start with 0 ("AB20" is "ay B twenty", "AB05" is "ay B zero five"), and four
+digits at the start followed by a letter are said as a number too ("2001ABCD" is "two thousand one
+ay B C D"). `sr status` shows the address exactly, with the build that recorded it: "last crash:
+at 2001384F in build 9028a849"; "in build unknown" when a build older than 9028a849 recorded it;
+"last crash: none" when no crash has left one. Back closes the popup; the address stays, across
+reboots and firmware updates, until the next crash.
 
-    Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -C -a 0x0803ABCB
+To find the line of code on the Mac, for an address starting with 08, in the firmware's flash:
+subtract 2, and give the result to addr2line with the `firmware.elf` of the build `sr status`
+names, from the project folder; for "at 0803ABCD":
 
-It prints the function, then a file and line. Without the 2 subtracted it names the instruction
-after the check's call: often a later line, and sometimes another function, since that call never
-returns. Even with it, the line is not always the failed check's own: the compiler often lets
-several checks of one function share a single call to the crash routine, and the line named is
-then one of those checks, in that function or in one inlined into it. In
-`ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one call and addr2line
-always names the last. The elf must be the build of the commit that `info device` names in its
-`firmware.commit.hash` line; if the build directory has moved on, build that commit in a git
-worktree: builds are reproducible, so the addresses match. An address starting with 2000 is in
-RAM, inside an app loaded from the card: the firmware's elf cannot name it, and the app's own elf
-would need the address the app was loaded at, which is not kept. When the message names a fault
-rather than a failed check, such as "HardFault" or "BusFault", the address is inside the
-firmware's fault handler, not where the fault happened.
+    Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -i -C -a 0x0803ABCB
+
+It prints the function with its file and line, and with `-i` also the functions inlined at that
+point. The build directory holds only the latest build: if it has moved on from the build
+`sr status` names, build that commit in a git worktree and use its elf. Builds are reproducible,
+so the addresses match.
+
+The caveats. The address is where the failed check would have returned to: without the 2
+subtracted, addr2line names the instruction after the check's call, often a later line and
+sometimes another function, since that call never returns. Even with it, the line is not always
+the failed check's own: the compiler often lets several checks of one function share a single call
+to the crash routine, and the line named is then one of those checks, in that function or in one
+inlined into it. In `ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one
+call and addr2line always names the last. An address starting with 20 (2000 to 2003) is in RAM,
+inside an app loaded from the card: the firmware's elf cannot name it, and the app's own elf would
+need the address the app was loaded at, which is not kept. For any message other than "furi_check
+failed" or "Check serial logs", the address is in the routine that reported the crash.
 
 ## Recorded voice
 

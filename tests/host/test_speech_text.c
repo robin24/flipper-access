@@ -136,6 +136,9 @@ static void test_rule3_terms(void) {
     // "XP" is the Passport's points label, spoken as a word rather than spelled
     expect("XP 7/100", "experience seven of one hundred");
     expect("Dolphin XP", "Dolphin experience");
+    // Only the exact token: lower case is copied, a longer upper case token is spelled (rule 7)
+    expect("xp", "xp");
+    expect("XPS", "X P S");
 }
 
 // Rule 4: periods split at every period with "dot" between the parts; hyphens split into parts
