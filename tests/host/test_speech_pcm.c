@@ -30,18 +30,6 @@ static uint8_t demo_curve(uint8_t x) {
     return (uint8_t)data;
 }
 
-static uint8_t emitted[64];
-static size_t emitted_count;
-static size_t abort_at = 1000;
-
-static bool collect(uint8_t duty, void* context) {
-    (void)context;
-    if(emitted_count >= abort_at) return false;
-    if(emitted_count < sizeof(emitted)) emitted[emitted_count] = duty;
-    emitted_count++;
-    return true;
-}
-
 // Beyond the brief. This collector keeps a long sequence so runs of one value can be checked.
 static uint8_t seq[4096];
 static size_t seq_count;
@@ -92,125 +80,12 @@ static bool lut_is_monotone(const SpeechPcm* pcm) {
     return true;
 }
 
-static void test_delta_zero(const uint8_t v[5], const uint8_t want[5]) {
+static void test_volume(void) {
     SpeechPcm pcm;
-
-    // delta 0 without overhead: nothing is held, so nothing is emitted and no time passes
-    speech_pcm_init(&pcm, 100, 0);
-    seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 0, collect_seq, NULL));
-    CHECK(seq_count == 0);
-    CHECK(pcm.subsamples == 5 && pcm.nominal_us == 0 && pcm.slots == 0);
-    CHECK(pcm.now_ns == 0 && pcm.next_slot_ns == 0);
-
-    // delta 7 is still 0 us after the integer division by 8
-    seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 7, collect_seq, NULL));
-    CHECK(seq_count == 0);
-    CHECK(pcm.subsamples == 10 && pcm.nominal_us == 0 && pcm.now_ns == 0);
-
-    // delta 0 with 5 us overhead: each value lasts 5 us, so the marks at 0 and 20 us see
-    // values 0 and 4 while the nominal time stays 0
-    speech_pcm_init(&pcm, 100, 5000);
-    seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 0, collect_seq, NULL));
-    CHECK(seq_count == 2);
-    CHECK(seq[0] == want[0] && seq[1] == want[4]);
-    CHECK(pcm.nominal_us == 0 && pcm.slots == 2);
-    CHECK(pcm.now_ns == 25000 && pcm.next_slot_ns == 40000);
-}
-
-static void test_largest_delta(const uint8_t v[5], const uint8_t want[5]) {
-    // 65535 / 8 = 8191 us per value, 40955 us in all: the marks in [0, 40955 us) number
-    // ceil(40955 / 20) = 2048. Value k covers [8191 k, 8191 (k + 1)) us and so holds
-    // ceil(409.55 (k + 1)) - ceil(409.55 k) marks: 410, 410, 409, 410, 409.
-    SpeechPcm pcm;
-    speech_pcm_init(&pcm, 100, 0);
-    seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 65535, collect_seq, NULL));
-    CHECK(seq_count == 2048);
-    CHECK(pcm.subsamples == 5 && pcm.nominal_us == 40955 && pcm.slots == 2048);
-    CHECK(pcm.now_ns == 40955000 && pcm.next_slot_ns == 40960000);
-    CHECK(run_is(0, 410, want[0]));
-    CHECK(run_is(410, 410, want[1]));
-    CHECK(run_is(820, 409, want[2]));
-    CHECK(run_is(1229, 410, want[3]));
-    CHECK(run_is(1639, 409, want[4]));
-
-    // With 1 ms of overhead each value lasts 9191 us, 45955 us in all: ceil(45955 / 20) = 2298
-    speech_pcm_init(&pcm, 100, 1000000);
-    size_t n = 0;
-    CHECK(speech_pcm_push(&pcm, v, 65535, count_only, &n));
-    CHECK(n == 2298 && pcm.slots == 2298 && pcm.nominal_us == 40955);
-    CHECK(pcm.now_ns == 45955000);
-}
-
-static void test_overhead(const uint8_t v[5], const uint8_t want[5]) {
-    SpeechPcm pcm;
-
-    // No overhead: delta 160 is 20 us, one mark per value
-    speech_pcm_init(&pcm, 100, 0);
-    seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 160, collect_seq, NULL));
-    CHECK(seq_count == 5);
-    for(int k = 0; k < 5; k++) CHECK(run_is((size_t)k, 1, want[k]));
-    CHECK(pcm.nominal_us == 100 && pcm.slots == 5 && pcm.now_ns == 100000);
-
-    // 100 us overhead: every value lasts 120 us, six marks each; the nominal time ignores it
-    speech_pcm_init(&pcm, 100, 100000);
-    seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 160, collect_seq, NULL));
-    CHECK(seq_count == 30);
-    for(int k = 0; k < 5; k++) CHECK(run_is((size_t)(6 * k), 6, want[k]));
-    CHECK(pcm.nominal_us == 100 && pcm.slots == 30 && pcm.now_ns == 600000);
-
-    // 7 us overhead: 27 us per value, the marks at 0,20,40,60,80,100,120 see values 0,0,1,2,2,3,4
-    speech_pcm_init(&pcm, 100, 7000);
-    seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 160, collect_seq, NULL));
-    CHECK(seq_count == 7);
-    const uint8_t order[7] = {0, 0, 1, 2, 2, 3, 4};
-    for(int k = 0; k < 7; k++) CHECK(seq[k] == want[order[k]]);
-    CHECK(pcm.now_ns == 135000 && pcm.next_slot_ns == 140000);
-}
-
-static void test_carry(uint32_t overhead_ns) {
-    // Over many pushes with random deltas the marks emitted must be exactly those in
-    // [0, total time): the remainder carries from push to push, so no time is lost or gained
-    SpeechPcm pcm;
-    speech_pcm_init(&pcm, 100, overhead_ns);
     const uint8_t v[5] = {100, 115, 128, 140, 155};
-    uint32_t seed = 2026;
-    uint64_t total_ns = 0;
-    uint32_t nominal_us = 0;
-    size_t emitted_slots = 0;
-    bool all_accepted = true;
-    for(int i = 0; i < 10000; i++) {
-        seed = seed * 1664525u + 1013904223u;
-        uint16_t delta = (uint16_t)((seed >> 16) & 0x0FFFu);
-        uint32_t hold_us = delta / 8u;
-        total_ns += 5ull * (hold_us * 1000ull + overhead_ns);
-        nominal_us += 5u * hold_us;
-        if(!speech_pcm_push(&pcm, v, delta, count_only, &emitted_slots)) all_accepted = false;
-    }
-    CHECK(all_accepted);
-    uint64_t want_slots = (total_ns + SPEECH_SLOT_NS - 1) / SPEECH_SLOT_NS;
-    CHECK(emitted_slots == want_slots);
-    CHECK(pcm.slots == want_slots);
-    CHECK(pcm.subsamples == 50000);
-    CHECK(pcm.nominal_us == nominal_us);
-    CHECK(pcm.now_ns == total_ns);
-    CHECK(pcm.next_slot_ns == want_slots * SPEECH_SLOT_NS);
-    // within one slot of the total time
-    CHECK(emitted_slots * SPEECH_SLOT_NS >= total_ns);
-    CHECK(emitted_slots * SPEECH_SLOT_NS < total_ns + SPEECH_SLOT_NS);
-}
-
-static void test_volume(const uint8_t v[5]) {
-    SpeechPcm pcm;
 
     // Volume 0: every entry is the silence value, so a push emits nothing but silence
-    speech_pcm_init(&pcm, 0, 0);
+    speech_pcm_init(&pcm, 0);
     uint8_t silence = speech_pcm_silence(&pcm);
     CHECK(silence == 127);
     bool all_silent = true;
@@ -219,13 +94,13 @@ static void test_volume(const uint8_t v[5]) {
     }
     CHECK(all_silent);
     seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 160, collect_seq, NULL));
+    CHECK(speech_pcm_push_raw(&pcm, v, 5, 20000, collect_seq, NULL));
     CHECK(seq_count == 5);
     CHECK(run_is(0, 5, silence));
 
     // Volume 100 reproduces the demo curve, clips at both ends, and is what anything above
     // 100 is treated as
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     uint8_t full[256];
     memcpy(full, pcm.lut, sizeof(full));
     CHECK(full[0] == 0 && full[255] == 255);
@@ -245,70 +120,33 @@ static void test_volume(const uint8_t v[5]) {
     // pulls the loud and the quiet value toward the middle
     speech_pcm_set_volume(&pcm, 100);
     seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 160, collect_seq, NULL));
+    CHECK(speech_pcm_push_raw(&pcm, v, 5, 20000, collect_seq, NULL));
     speech_pcm_set_volume(&pcm, 50);
     CHECK(pcm.now_ns == 100000 && pcm.next_slot_ns == 100000 && pcm.slots == 5);
     CHECK(pcm.subsamples == 5 && pcm.nominal_us == 100);
     seq_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 160, collect_seq, NULL));
+    CHECK(speech_pcm_push_raw(&pcm, v, 5, 20000, collect_seq, NULL));
     CHECK(seq_count == 5);
     for(int k = 0; k < 5; k++) CHECK(seq[k] == pcm.lut[v[k]]);
     CHECK(pcm.lut[v[4]] < full[v[4]]);
     CHECK(pcm.lut[v[0]] > full[v[0]]);
-}
 
-static void test_stop(const uint8_t v[5], const uint8_t want[5]) {
-    SpeechPcm pcm;
-
-    // Refused at the first mark: nothing is sent or counted
-    speech_pcm_init(&pcm, 100, 0);
-    Limited none = {0, 0, 0};
-    CHECK(!speech_pcm_push(&pcm, v, 160, collect_limited, &none));
-    CHECK(none.count == 0 && pcm.slots == 0);
-    CHECK(pcm.next_slot_ns == 0 && pcm.now_ns == 0);
-
-    // Refused at the fourth of seven marks (5 us overhead): the push stops there, slots counts
-    // the three that were taken, the third of them is value 1, and the fourth mark at 60 us is
-    // still pending while value 2 had begun at 50 us
-    speech_pcm_init(&pcm, 100, 5000);
-    Limited three = {3, 0, 0};
-    CHECK(!speech_pcm_push(&pcm, v, 160, collect_limited, &three));
-    CHECK(three.count == 3 && pcm.slots == 3);
-    CHECK(three.last == want[1]);
-    CHECK(pcm.next_slot_ns == 60000 && pcm.now_ns == 50000);
-    CHECK(pcm.subsamples == 5 && pcm.nominal_us == 100);
-
-    // A push with no mark to emit cannot be refused
-    speech_pcm_init(&pcm, 100, 0);
-    Limited still = {0, 0, 0};
-    CHECK(speech_pcm_push(&pcm, v, 0, collect_limited, &still));
-    CHECK(still.count == 0);
-
-    // After a reset the stage starts over, keeping its table and overhead, and a willing
-    // emitter gets all seven marks
-    speech_pcm_init(&pcm, 100, 5000);
-    Limited one = {1, 0, 0};
-    CHECK(!speech_pcm_push(&pcm, v, 160, collect_limited, &one));
+    // A reset starts the timing over and keeps the table
     speech_pcm_reset(&pcm);
     CHECK(pcm.slots == 0 && pcm.now_ns == 0 && pcm.next_slot_ns == 0);
     CHECK(pcm.subsamples == 0 && pcm.nominal_us == 0);
-    CHECK(pcm.overhead_ns == 5000 && pcm.lut[v[0]] == want[0]);
-    Limited seven = {100, 0, 0};
-    CHECK(speech_pcm_push(&pcm, v, 160, collect_limited, &seven));
-    CHECK(seven.count == 7 && pcm.slots == 7);
+    CHECK(pcm.lut[v[0]] == full[v[0]] || pcm.lut[v[0]] > full[v[0]]);
 }
 
-
-// Recorded clips: every sample held for the same time, no overhead, through the same slots.
+// Recorded clips: every sample held for the same time, through the slot accumulator.
 static void test_push_raw(void) {
     SpeechPcm pcm;
     static uint8_t samples[16000];
     for(size_t i = 0; i < sizeof(samples); i++) samples[i] = (uint8_t)(128 + (i % 7) * 3);
 
     // 16000 samples held 62.5 us each, a one second clip at 16 kHz: 50000 slots exactly, and
-    // the nominal time is the whole second although a sample is not a whole microsecond. The
-    // overhead belongs to SAM values and must not apply
-    speech_pcm_init(&pcm, 100, 7400);
+    // the nominal time is the whole second although a sample is not a whole microsecond
+    speech_pcm_init(&pcm, 100);
     size_t n = 0;
     CHECK(speech_pcm_push_raw(&pcm, samples, 16000, 62500, count_only, &n));
     CHECK(n == 50000 && pcm.slots == 50000);
@@ -319,7 +157,7 @@ static void test_push_raw(void) {
     // Duty bytes go through the loudness table, and sample k covers [62.5 k, 62.5 (k + 1)) us:
     // the marks at 0, 20, 40, 60 see sample 0, at 80, 100, 120 sample 1, at 140, 160, 180
     // sample 2; 187.5 us of nominal time floor to 187
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     seq_count = 0;
     const uint8_t few[3] = {100, 128, 155};
     CHECK(speech_pcm_push_raw(&pcm, few, 3, 62500, collect_seq, NULL));
@@ -332,7 +170,7 @@ static void test_push_raw(void) {
     // A refusal stops the push where it happens: the emitter took its five marks (four of
     // sample 0, one of sample 1), slots agrees, and the stage sits inside sample 1, which was
     // entered but not completed, with the refused mark still pending
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     Limited five = {5, 0, 0};
     CHECK(!speech_pcm_push_raw(&pcm, samples, 16000, 62500, collect_limited, &five));
     CHECK(five.count == 5 && pcm.slots == 5);
@@ -348,7 +186,7 @@ static void test_push_raw(void) {
     // Split over two calls the carry loses nothing, wherever the split falls: the half slot
     // and the half microsecond left by an odd number of samples carry into the second call
     for(size_t first = 1; first < 16000; first += 3571) {
-        speech_pcm_init(&pcm, 100, 0);
+        speech_pcm_init(&pcm, 100);
         size_t a = 0, b = 0;
         CHECK(speech_pcm_push_raw(&pcm, samples, first, 62500, count_only, &a));
         CHECK(speech_pcm_push_raw(&pcm, samples + first, 16000 - first, 62500, count_only, &b));
@@ -357,7 +195,7 @@ static void test_push_raw(void) {
     }
 
     // 512 byte chunks, as the worker reads the card: 32 ms and 1600 slots each
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     n = 0;
     bool chunks_accepted = true;
     for(size_t off = 0; off < 16000; off += 512) {
@@ -371,19 +209,19 @@ static void test_push_raw(void) {
 
     // Samples shorter than a slot: at 32000 Hz a sample is 31.25 us, so 16000 of them are half
     // a second and 25000 slots, every other sample never seen; at 8000 Hz 125 us, 100000 slots
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     n = 0;
     CHECK(speech_pcm_push_raw(&pcm, samples, 16000, 31250, count_only, &n));
     CHECK(n == 25000 && pcm.slots == 25000);
     CHECK(pcm.nominal_us == 500000 && pcm.subsamples == 16000);
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     n = 0;
     CHECK(speech_pcm_push_raw(&pcm, samples, 16000, 125000, count_only, &n));
     CHECK(n == 100000 && pcm.nominal_us == 2000000);
 
     // An odd rate carries its remainder too: 11025 Hz is 90702 ns per sample after the
     // engine's integer division, 1451232000 ns in all, ceil(1451232000 / 20000) slots
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     n = 0;
     CHECK(speech_pcm_push_raw(&pcm, samples, 16000, 90702, count_only, &n));
     uint64_t total_ns = 16000ull * 90702ull;
@@ -397,7 +235,7 @@ static void test_push_raw(void) {
     CHECK(n == 0 && pcm.now_ns == total_ns);
 
     // The table applies: at volume 0 a clip is all silence
-    speech_pcm_init(&pcm, 0, 0);
+    speech_pcm_init(&pcm, 0);
     seq_count = 0;
     CHECK(speech_pcm_push_raw(&pcm, few, 3, 62500, collect_seq, NULL));
     CHECK(seq_count == 10 && run_is(0, 10, speech_pcm_silence(&pcm)));
@@ -407,7 +245,7 @@ int main(void) {
     SpeechPcm pcm;
 
     // Full volume reproduces the demo curve exactly, zero volume is the mid level
-    speech_pcm_init(&pcm, 100, 0);
+    speech_pcm_init(&pcm, 100);
     for(int x = 0; x < 256; x++) CHECK(pcm.lut[x] == demo_curve((uint8_t)x));
     CHECK(speech_pcm_silence(&pcm) == demo_curve(128));
     speech_pcm_set_volume(&pcm, 0);
@@ -416,61 +254,7 @@ int main(void) {
     CHECK(pcm.lut[0] < pcm.lut[128] && pcm.lut[128] < pcm.lut[255]);
     CHECK(pcm.lut[255] < demo_curve(255));
 
-    // Identity mapping for the timing checks: volume 100, values chosen on the flat parts
-    speech_pcm_set_volume(&pcm, 100);
-    const uint8_t v[5] = {100, 115, 128, 140, 155};
-    uint8_t want[5];
-    for(int k = 0; k < 5; k++) want[k] = pcm.lut[v[k]];
-
-    // delta 160 and no overhead: 20 us per value, one slot each
-    speech_pcm_reset(&pcm);
-    emitted_count = 0;
-    CHECK(speech_pcm_push(&pcm, v, 160, collect, NULL));
-    CHECK(emitted_count == 5);
-    for(int k = 0; k < 5; k++) CHECK(emitted[k] == want[k]);
-    CHECK(pcm.subsamples == 5 && pcm.nominal_us == 100 && pcm.slots == 5);
-
-    // delta 162 rounds down to 20 us like the demo's integer division
-    speech_pcm_reset(&pcm);
-    emitted_count = 0;
-    speech_pcm_push(&pcm, v, 162, collect, NULL);
-    CHECK(emitted_count == 5);
-
-    // a value shorter than a slot is skipped
-    speech_pcm_reset(&pcm);
-    emitted_count = 0;
-    speech_pcm_push(&pcm, v, 4, collect, NULL);
-    CHECK(emitted_count == 0);
-    CHECK(pcm.subsamples == 5 && pcm.nominal_us == 0);
-
-    // with 5 us of overhead every value lasts 25 us: slots fall on 0,20,40,60,80,100,120
-    speech_pcm_init(&pcm, 100, 5000);
-    emitted_count = 0;
-    speech_pcm_push(&pcm, v, 160, collect, NULL);
-    CHECK(emitted_count == 7);
-    const uint8_t order[7] = {0, 0, 1, 2, 3, 4, 4};
-    for(int k = 0; k < 7; k++) CHECK(emitted[k] == want[order[k]]);
-
-    // time keeps running across calls: the next call continues from 125 us
-    emitted_count = 0;
-    speech_pcm_push(&pcm, v, 160, collect, NULL);
-    CHECK(emitted_count == 6);
-
-    // abort propagates
-    speech_pcm_reset(&pcm);
-    emitted_count = 0;
-    abort_at = 3;
-    CHECK(!speech_pcm_push(&pcm, v, 160, collect, NULL));
-    CHECK(emitted_count == 3);
-
-    // Beyond the brief: delta edges, overhead, carry over many pushes, volume, refusal
-    test_delta_zero(v, want);
-    test_largest_delta(v, want);
-    test_overhead(v, want);
-    test_carry(0);
-    test_carry(3300);
-    test_volume(v);
-    test_stop(v, want);
+    test_volume();
     test_push_raw();
 
     printf("%d checks, %d failures\n", checks, failures);

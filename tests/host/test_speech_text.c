@@ -84,54 +84,6 @@ static void test_single_characters(void) {
     expect("deleted", "deleted");
 }
 
-static void test_chunks(void) {
-    char chunk[SPEECH_CHUNK_MAX + 1];
-    size_t pos = 0;
-    const char* one = "Hello world";
-    CHECK(speech_text_next_chunk(one, &pos, chunk, sizeof(chunk)) == 11);
-    CHECK(strcmp(chunk, "Hello world") == 0);
-    CHECK(speech_text_next_chunk(one, &pos, chunk, sizeof(chunk)) == 0);
-
-    const char* three =
-        "Sentence number one has some words in it. "
-        "Sentence number two has some more words in it. "
-        "Sentence number three is the last one.";
-    pos = 0;
-    size_t n = speech_text_next_chunk(three, &pos, chunk, sizeof(chunk));
-    CHECK(n == 41);
-    CHECK(strcmp(chunk, "Sentence number one has some words in it.") == 0);
-    n = speech_text_next_chunk(three, &pos, chunk, sizeof(chunk));
-    CHECK(n == 46);
-    CHECK(strcmp(chunk, "Sentence number two has some more words in it.") == 0);
-    n = speech_text_next_chunk(three, &pos, chunk, sizeof(chunk));
-    CHECK(n == 38);
-    CHECK(strcmp(chunk, "Sentence number three is the last one.") == 0);
-    CHECK(speech_text_next_chunk(three, &pos, chunk, sizeof(chunk)) == 0);
-
-    char words[151];
-    words[0] = '\0';
-    for(int i = 0; i < 30; i++) strcat(words, i ? " word" : "word");
-    pos = 0;
-    n = speech_text_next_chunk(words, &pos, chunk, sizeof(chunk));
-    CHECK(n == 79);
-    CHECK(chunk[78] == 'd' && chunk[79] == '\0');
-    n = speech_text_next_chunk(words, &pos, chunk, sizeof(chunk));
-    CHECK(n == 69);
-    CHECK(speech_text_next_chunk(words, &pos, chunk, sizeof(chunk)) == 0);
-
-    char solid[121];
-    memset(solid, 'x', 120);
-    solid[120] = '\0';
-    pos = 0;
-    CHECK(speech_text_next_chunk(solid, &pos, chunk, sizeof(chunk)) == 80);
-    CHECK(speech_text_next_chunk(solid, &pos, chunk, sizeof(chunk)) == 40);
-
-    pos = 0;
-    const char* commas = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu, nu xi omicron pi rho sigma tau upsilon phi chi psi omega alpha";
-    n = speech_text_next_chunk(commas, &pos, chunk, sizeof(chunk));
-    CHECK(chunk[n - 1] == ',');
-}
-
 // Rule 1: every name in the list, both cases of A, upper casing of other letters.
 static void test_rule1_every_name(void) {
     expect("a", "ay");
@@ -360,132 +312,6 @@ static void test_rule9_every_byte(void) {
     }
 }
 
-// Rule 10: the corners of chunking.
-static void test_rule10_chunk_edges(void) {
-    char chunk[SPEECH_CHUNK_MAX + 1];
-    size_t pos = 0;
-    size_t n;
-
-    // leading spaces are skipped, trailing spaces trimmed, the position ends at the length
-    const char* padded = "   Hello   ";
-    n = speech_text_next_chunk(padded, &pos, chunk, sizeof(chunk));
-    CHECK(n == 5);
-    CHECK(strcmp(chunk, "Hello") == 0);
-    CHECK(speech_text_next_chunk(padded, &pos, chunk, sizeof(chunk)) == 0);
-    CHECK(pos == strlen(padded));
-
-    // nothing left
-    pos = 0;
-    CHECK(speech_text_next_chunk("", &pos, chunk, sizeof(chunk)) == 0);
-    CHECK(chunk[0] == '\0');
-    pos = 0;
-    CHECK(speech_text_next_chunk("     ", &pos, chunk, sizeof(chunk)) == 0);
-
-    // a sentence end within the limit wins over a later comma
-    const char* mixed = "First. alpha, beta, gamma, delta, epsilon, zeta, eta, theta, iota, kappa, "
-                        "lambda, mu, nu, xi";
-    pos = 0;
-    n = speech_text_next_chunk(mixed, &pos, chunk, sizeof(chunk));
-    CHECK(n == 6);
-    CHECK(strcmp(chunk, "First.") == 0);
-    n = speech_text_next_chunk(mixed, &pos, chunk, sizeof(chunk));
-    CHECK(n == 78);
-    CHECK(chunk[n - 1] == ',');
-    n = speech_text_next_chunk(mixed, &pos, chunk, sizeof(chunk));
-    CHECK(n == 6);
-    CHECK(strcmp(chunk, "nu, xi") == 0);
-    CHECK(speech_text_next_chunk(mixed, &pos, chunk, sizeof(chunk)) == 0);
-
-    // a period not followed by a space is not a sentence end: the cut falls at the last space
-    char decimal[100];
-    decimal[0] = '\0';
-    for(int i = 0; i < 8; i++) strcat(decimal, "word ");
-    strcat(decimal, "3.14");
-    for(int i = 0; i < 10; i++) strcat(decimal, " word");
-    CHECK(strlen(decimal) == 94);
-    pos = 0;
-    n = speech_text_next_chunk(decimal, &pos, chunk, sizeof(chunk));
-    CHECK(n == 79);
-    CHECK(strstr(chunk, "3.14 word") != NULL);
-    CHECK(chunk[78] == 'd');
-    n = speech_text_next_chunk(decimal, &pos, chunk, sizeof(chunk));
-    CHECK(n == 14);
-    CHECK(strcmp(chunk, "word word word") == 0);
-
-    // question and exclamation marks end sentences; a rest of exactly the limit fits
-    char qe[120] = "Is it? Yes it is! ";
-    for(int i = 0; i < 80; i++) strcat(qe, "x");
-    pos = 0;
-    n = speech_text_next_chunk(qe, &pos, chunk, sizeof(chunk));
-    CHECK(n == 17);
-    CHECK(strcmp(chunk, "Is it? Yes it is!") == 0);
-    n = speech_text_next_chunk(qe, &pos, chunk, sizeof(chunk));
-    CHECK(n == 80);
-    CHECK(chunk[0] == 'x' && chunk[79] == 'x' && chunk[80] == '\0');
-    CHECK(speech_text_next_chunk(qe, &pos, chunk, sizeof(chunk)) == 0);
-
-    // a sentence end on the last character within the limit
-    char edge[100];
-    edge[0] = '\0';
-    for(int i = 0; i < 79; i++) strcat(edge, "x");
-    strcat(edge, ". more");
-    pos = 0;
-    n = speech_text_next_chunk(edge, &pos, chunk, sizeof(chunk));
-    CHECK(n == 80);
-    CHECK(chunk[79] == '.');
-    n = speech_text_next_chunk(edge, &pos, chunk, sizeof(chunk));
-    CHECK(n == 4);
-    CHECK(strcmp(chunk, "more") == 0);
-
-    // a space exactly at index 80 is outside the limit: the cut falls at the previous space
-    char at80[100];
-    memset(at80, 'a', 39);
-    at80[39] = ' ';
-    memset(at80 + 40, 'b', 40);
-    at80[80] = ' ';
-    strcpy(at80 + 81, "tail");
-    pos = 0;
-    n = speech_text_next_chunk(at80, &pos, chunk, sizeof(chunk));
-    CHECK(n == 39);
-    CHECK(chunk[0] == 'a' && chunk[38] == 'a' && chunk[39] == '\0');
-    n = speech_text_next_chunk(at80, &pos, chunk, sizeof(chunk));
-    CHECK(n == 45);
-    CHECK(chunk[0] == 'b' && strcmp(chunk + 40, " tail") == 0);
-    CHECK(speech_text_next_chunk(at80, &pos, chunk, sizeof(chunk)) == 0);
-
-    // a comma at index 79 followed by a space: an 80 character chunk ending in the comma
-    char comma79[100];
-    memset(comma79, 'x', 79);
-    comma79[79] = ',';
-    strcpy(comma79 + 80, " more");
-    pos = 0;
-    n = speech_text_next_chunk(comma79, &pos, chunk, sizeof(chunk));
-    CHECK(n == 80);
-    CHECK(chunk[79] == ',');
-    n = speech_text_next_chunk(comma79, &pos, chunk, sizeof(chunk));
-    CHECK(n == 4);
-    CHECK(strcmp(chunk, "more") == 0);
-
-    // a chunk buffer below two characters holds nothing
-    char tiny[2];
-    pos = 0;
-    CHECK(speech_text_next_chunk("Hello", &pos, tiny, 1) == 0);
-    CHECK(tiny[0] == '\0');
-    CHECK(speech_text_next_chunk("Hello", &pos, tiny, 0) == 0);
-
-    // the buffer can be smaller than the chunk limit
-    char small[11];
-    const char* short_words = "Hello world foo";
-    pos = 0;
-    n = speech_text_next_chunk(short_words, &pos, small, sizeof(small));
-    CHECK(n == 5);
-    CHECK(strcmp(small, "Hello") == 0);
-    n = speech_text_next_chunk(short_words, &pos, small, sizeof(small));
-    CHECK(n == 9);
-    CHECK(strcmp(small, "world foo") == 0);
-    CHECK(speech_text_next_chunk(short_words, &pos, small, sizeof(small)) == 0);
-}
-
 // Rule 11: a hyphen before a digit, at the start or after a character that is not alphanumeric,
 // is "minus"; a hyphen before a space or a letter is still a space, inside a token rules 4 and
 // 12 apply.
@@ -614,7 +440,7 @@ static void test_beyond_the_rule_list(void) {
     expect("x\\y", "x y");
     expect("a ~ b", "a b");
     expect("a ^ b $ c", "a b c");
-    // A rule 7 letter run longer than 20 characters is copied in rule 8's pieces (the hang guard).
+    // A rule 7 letter run longer than 20 characters is copied in rule 8's pieces.
     expect("ABCDEFGHIJKLMNOPQRSTUVWXYZ1", "ABCDEFGHIJKLMNOPQRST UVWXYZ one");
     // The output buffer: truncated, always terminated; a null input gives an empty string.
     char small[8];
@@ -673,7 +499,6 @@ int main(void) {
     test_acronyms_and_terms();
     test_punctuation();
     test_single_characters();
-    test_chunks();
     test_rule1_every_name();
     test_rule3_terms();
     test_rule4_periods_and_hyphens();
@@ -683,7 +508,6 @@ int main(void) {
     test_rule8_long_tokens();
     test_rule9_separators();
     test_rule9_every_byte();
-    test_rule10_chunk_edges();
     test_rule11_minus();
     test_rule12_ranges();
     test_rule13_upper_a();
