@@ -2,32 +2,28 @@
 
 Working notes for making a Flipper Zero usable without sight. The background research is in
 `flipper-zero-accessibility-investigation.md`. This file records the current state of the device
-and the tools in this folder. Last updated 2026-09-24.
+and the tools in this folder. Last updated 2026-09-25.
 
 ## Device state
 
 - Device name: R0skie. Hardware version 12, region DE. 64 GB microSD card, exFAT.
 - Firmware: Momentum mntm-012 (built 31 December 2025), installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
-  here: on 2026-09-24 that is phase 3 and the polish round, commit 22ae265ef, API version
-  87.2. The device carries firmware commit 70a60c8f5 plus the settings app of 22ae265ef; the
-  polish round's other fixes are built but not yet flashed.
+  here: on 2026-09-24 that was phase 3 and the polish round; on 2026-09-25 the firmware stripdown
+  round finished and was flashed complete with `./fbt flash_usb_full`, commit cc7212c6c, API
+  version 87.2, firmware.bin 862,588 bytes with 18,052 spare below the BLE stack.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1`, 230400 baud. It disappears while the
   device is in the updater and comes back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
-  speaks its launch argument. Its on-screen behaviour is unchanged.
-- Sub-GHz loads as an external app from the card into RAM in this firmware base (mntm-012 had
-  it in flash). With the reader on, its read mode leaves about 2 KB of heap and the frequency
-  analyzer crashes out of memory (numbers in `docs/measurements/`), so avoid Sub-GHz while the
-  reader is enabled until the memory plan in `docs/roadmap.md` makes room. Building it into the
-  firmware was tried and reverted: the image did not fit below the BLE stack (see the flash
-  limit under Useful commands). The other main apps (NFC, RFID, infrared, iButton, GPIO, Bad USB,
-  U2F) load as external faps too; NFC read leaves about 24 KB with the reader on.
-- Since the recorded voice's 8 KB speech ring (2026-09-24), the reader holds 4 KB more heap
-  than when the numbers above were taken. Idle free heap went from 114,552 to 110,520 bytes.
-  So Sub-GHz read is expected to run out of memory with the reader on, and NFC read to leave
-  about 20 KB. On 2026-09-24, during phase 3, just opening Sub-GHz with the reader on ran out of
-  memory and restarted the device. NFC read was not measured again.
+  speaks its launch argument. Its on-screen behaviour is unchanged. It is Momentum's own demo
+  app, separate from the screen reader's speech engine.
+- The games, the JavaScript runner and its modules, and the screen reader's own SAM synthesizer
+  are gone from the firmware and the card as of the stripdown round: the reader now speaks only
+  from the recorded voice's clips. See Known limits and Recorded voice below.
+- Sub-GHz is built into the firmware again, not loaded from the card, and works with the reader
+  on: Read keeps 53,064 bytes free at its lowest and the Frequency Analyzer 51,136, where it used
+  to crash the device out of memory. The other main apps (NFC, RFID, infrared, iButton, GPIO,
+  Bad USB, U2F) still load as external faps; NFC read is now the heaviest, 23,232 bytes free.
 
 ## Using it on the device
 
@@ -58,8 +54,6 @@ third key pressed while the second is still held goes to the app as a normal key
 
 More about the chords:
 
-- The speech rate has no chord. Set it on the Accessibility screen, described below, or with
-  `sr rate`.
 - Back on its own works as before: a short press goes back. A long press of Back on its own,
   which opens the power-off dialog on the home screen, takes effect when you let go of Back, not
   after the usual 300 ms. That way a slow chord is never mistaken for a long press.
@@ -86,17 +80,13 @@ press OK. The lock menu's Momentum tile opens the same app. The app first reads 
 version, then its list of four: Interface, Protocols, Misc and Accessibility. Press Up once, or
 Down three times, to reach Accessibility, and press OK.
 
-The Accessibility screen has five rows with the recorded voice, six with SAM. Up and Down move
-between them. Left and Right change the value of the row you are on.
+The Accessibility screen has four rows. Up and Down move between them. Left and Right change the
+value of the row you are on.
 
 - Screen Reader, ON or OFF. OFF turns the reader off at once: nothing more is read, and the
   chords become ordinary keys. If that happens by mistake, press Right straight away. The
   selection is still on this row, and Right turns the reader back on and the screen is read
   again: you hear "Screen Reader ON". The console command `sr on` does the same.
-- Voice, Recorded or SAM. Recorded speaks with the word clips on the SD card, SAM with the
-  built-in synthesizer.
-- Rate, from 40 to 120 in steps of 4. Bigger is slower. Shown only when Voice is SAM; the
-  recorded voice's words play at the speed they were recorded, so there is nothing to set.
 - Volume, from 0 to 100 in steps of 10. This is the same setting the Back and Left or Right
   chords change.
 - Verbosity, Terse, Normal or Verbose. Terse leaves out the button labels at the bottom of a
@@ -112,8 +102,14 @@ Momentum settings app: press Back until you hear "Home screen".
 ### The home screen and the lock menu
 
 Coming back to the home screen is announced as "Home screen". That includes closing a dialog of
-the home screen, such as the power-off dialog, or the lock menu. The dolphin's speech bubbles are
-read only when you pressed a key in the last two seconds.
+the home screen, such as the power-off dialog, or the lock menu.
+
+Animations are off by default, so the dolphin never plays an idle animation or draws a speech
+bubble: the home screen has nothing else to read, and returning to it reads nothing from the
+card. To turn animations on, go to Momentum, Interface, Graphics; Animations is the first row,
+OFF or ON. Changing it reboots the device: leaving the app shows "Rebooting..." and the device
+restarts. With animations on, the dolphin's speech bubbles are read only when you pressed a key
+in the last two seconds.
 
 On the home screen, Up opens the lock menu: that is Momentum's default key for it. The lock menu
 is a grid of icons, and the reader names the selected one. It opens on Lock.
@@ -177,11 +173,8 @@ the emulation takes over the speaker, and the reader stays silent until you leav
 
 ### Known limits
 
-- Sub-GHz does not fit in memory beside the reader: on 2026-09-24 opening it restarted the device
-  with an out of memory error. Avoid Sub-GHz until the memory plan in `docs/roadmap.md` makes
-  room.
-- The dolphin keeps drawing speech bubbles behind the lock screen, and now and then one is read
-  around a lock.
+- Without the SD card, or without `/ext/sr/voice`, the reader is silent: SAM is gone, and on this
+  base a device without a card has no main apps either.
 - The screen shown after a firmware update is not read. Back closes it.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
 - Twice, after a long idle, the first OK that the scripted driver `tools/sr_drive.py` sent on the
@@ -212,11 +205,12 @@ the emulation takes over the speaker, and the reader stays silent until you leav
   reads the screen, letters type into text fields, Ctrl-C ends. The scripted check has three
   sessions: the menus, an app's keyboard, and the Back chords on the home screen and in the main
   menu. `--chords` runs only the chords. Start it on the home screen.
-- `tools/run_host_tests.sh`: unit tests for the screen model, the SAM port (checked against the
-  original C++ synthesizer) and the speech text, queue and PCM helpers, run with clang on the Mac.
+- `tools/run_host_tests.sh`: unit tests for the screen model and the speech text, queue and PCM
+  helpers, run with clang on the Mac, finishing with `tests/fbt/test_exclusions.py`.
 - `tests/host/`: the unit tests.
+- `tests/fbt/test_exclusions.py`: a plain Python test of the build's app and category exclusions
+  (`EXCLUDE_EXT_APPS`, `EXCLUDE_EXT_CATEGORIES` in `fbt_options.py`) over synthetic manifests.
 - `tools/ram_probe.py`: free heap while each core app runs; the logs are in `docs/measurements/`.
-- `tools/sam_calibrate.py`: timing calibration of the speech engine against the Text to SAM demo.
 - `tools/voice_build.py`: makes the recorded voice and copies it to the card (see Recorded
   voice below). `tools/clip_make.py` makes a single test clip with the same processing.
 - `voice/`: the built vocabulary, not in git. Do not delete it; see Recorded voice.
@@ -256,8 +250,7 @@ Screen reader console commands (firmware from the `screen-reader` branch):
 `sr watch` is interactive; use `tools/sr_drive.py --interactive`.
 
 Speech: announcements are spoken by the device itself. `sr say <text>` speaks text and prints
-timing; `sr stop` silences; `sr rate <40..120>`, `sr volume <0..100>` and `sr delay <500..10000>`
-are saved settings.
+timing; `sr stop` silences; `sr volume <0..100>` and `sr delay <500..10000>` are saved settings.
 `sr chord up|down|ok|okhold|left|right` runs what Back and that key do (see Back chords above).
 Any button press silences speech. On the home screen the dolphin's speech bubbles are not
 spoken unless a button was pressed in the last two seconds (`sr status` counts them as
@@ -265,19 +258,19 @@ suppressed; `sr watch` still shows them). A change dropped while held -- superse
 one, or by the quiet rules once it comes due -- never reaches `sr watch`; only the suppressed
 counter (`sr status`) may show it. During NFC-V emulation the reader is silent, because
 the emulation borrows the speaker timer; it parks the speaker pin so nothing is heard.
-`tools/sam_calibrate.py --verify` checks the voice still matches the Text to SAM demo's timing.
+`sr voice off` mutes until `sr voice on` or a reboot; the generator uses it around a sync.
 
 Phase 1 marks the focused main menu item only in the List style; other menu styles are read by
 inversion where possible and will get hints in a later phase.
 
 ## Recorded voice
 
-The reader speaks with recorded word clips from the SD card instead of SAM. The clips are made
-on the Mac from a high quality voice (Samantha by default) and played word by word.
+The reader speaks with recorded word clips from the SD card. The clips are made on the Mac from
+a high quality voice (Samantha by default) and played word by word.
 
 A word without a clip is spelled letter by letter with the recorded letters and digits, 60 ms
-between letters, and noted on the card, so nothing is left unspoken. SAM speaks a letter only
-when its clip is missing too, and everything when the voice is off. The letters are recorded by
+between letters, and noted on the card, so nothing is left unspoken. A letter whose clip is
+missing too is skipped and noted; with the voice off nothing is played. The letters are recorded by
 their names, so "NFC" is heard as "en eff see", not "capital N capital F capital C". The names
 live in `tools/voice_names.txt`. The letter A is recorded from "a": `say` reads "ay" as "aye",
 which sounds exactly like the letter I. A spelled word gets its own clip at the next run of the
@@ -304,12 +297,14 @@ phase 2.
 
 Console commands:
 
-- `sr voice on` and `sr voice off` switch between the clips and SAM alone. The setting is saved.
+- `sr voice on` and `sr voice off` mute and unmute the reader. Off, a text item completes at
+  once, playing nothing. The setting is not saved: the reader is on again after every reboot.
 - `sr voice status` prints the first 63 characters of the settings line, and these counts since
   boot:
   - words, and letters of spelled words, spoken from clips;
   - words spelled letter by letter because they had no clip;
   - words logged as missing;
+  - items completed muted, with the voice off or no vocabulary on the card;
   - the longest and the latest clip open, in ms.
 
   The settings line is read at the first utterance after boot that uses the voice. So after a
@@ -341,8 +336,7 @@ Making the vocabulary with `tools/voice_build.py`:
     changed, which takes seconds.
   - The recorded voice is switched off on the device during the transfer and switched back on
     afterwards. If a transfer dies hard (power loss, a killed process, a dead port), the
-    restore may not run: the saved setting then stays off, and the device speaks with SAM
-    until `sr voice on` is typed.
+    restore may not run: the device stays muted until `sr voice on` is typed or it reboots.
   - After the card was wiped or replaced, add `--sync-all` to resend everything. `--sync-all`
     works only together with `--sync`.
 - `.venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync` is the
@@ -409,4 +403,9 @@ sending the backup file to the card.
 6. Done: phase 2, on device speech with SAM and DMA playback.
 7. Done: phase 3, on-device control: Back chords, the Accessibility settings screen, and
    spoken names for screens that draw only icons (2026-09-24).
-8. Next: the memory plan in `docs/roadmap.md`, so that Sub-GHz works with the reader on.
+8. Done: the firmware stripdown (2026-09-25), so that Sub-GHz works with the reader on.
+   - The games, the JavaScript engine and SAM removed from the build and the card.
+   - Sub-GHz built back into the firmware.
+   - Animations off by default, with an Animations row to turn them back on.
+   - Flash 862,588 bytes, 18,052 spare; idle heap 116,672 to 116,752 bytes free, animations off.
+9. Next: the fork and release mechanics.
