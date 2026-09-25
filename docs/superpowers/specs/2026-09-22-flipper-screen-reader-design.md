@@ -837,3 +837,43 @@ c502de5a, after a deed in the Frequency Analyzer with the points one short of le
 level 3" came 1,998 ms after the analyzer's screen announcement and played in full behind it when
 the analyzer was left open, and with Back pressed 1.2 s after OK it came 1,996 ms after the menu's
 screen announcement and played in full.
+
+The crash address (2026-09-25). The device rebooted now and then with the generic "furi_check
+failed" popup, and the crash handler prints its registers only to the debug UART, which the USB
+console never sees. Now `__furi_crash_implementation` (`furi/core/check.c`), in its release branch,
+right after `furi_hal_rtc_set_fault_data`, also keeps the lr it stored on entry
+(`__furi_check_registers[12]`, the return address into the function whose check failed) in a new
+RTC backup register, `FuriHalRtcRegisterFaultLr`, added last, before `FuriHalRtcRegisterMAX`: index
+8 of the STM32WB55's 20, no existing index moved. The RTC's header register holds only a magic and
+a version, no count or checksum, so nothing else had to change; every reset of the registers, such
+as a factory reset, clears the new one with the rest. The API stays 87.2, since an enum value
+changes no symbol. The desktop's crash popup (`desktop_scene_fault.c`) builds its text in a static
+buffer of 64 characters, because the popup keeps the pointer: the message, then a line "at
+0803ABCD", eight upper case hex digits without "0x" (the message is cut if it must be, so the
+address line always fits; with no address kept the popup shows the message alone). Leaving the
+popup clears the fault message as before but not the address. `sr status` prints "last crash: at
+0803ABCD", or "last crash: none" for 0, after its "enabled" line. Decoding: an address in flash
+(08...) minus 2, given to `arm-none-eabi-addr2line -f -C -a` with the `firmware.elf` of the commit
+`info device` names, gives the function and the line of a check. Minus 2 because the address itself
+is the instruction after the call: in the build before this change, of 1,848 calls to the crash
+routine, the address itself named the call's own line at only 55 and another function at 154; the
+address minus 2 named a check's line at every one of a sample of twelve. That line is the failed
+check's own only when the check has a call of its own: the compiler lets checks of one function
+share a single call, and a rough count of the branches into each call, in the build with this
+change, found about 700 of its 1,848 calls entered from more than one source line (in
+`ble_svc_serial_notify_buffer_is_empty` four checks share one call, and addr2line names the last).
+So the function named, or the one it is inlined into, is the one that failed, and the line is one
+of its checks. An address in RAM (2000...) is inside an app loaded from the card, which the
+firmware's elf cannot name. A fault such as HardFault is reported from its handler, so its address
+points into the handler. The Passport's points line is now labelled, "XP 7/100", and rule 3's table
+has XP as "experience", so it reads "experience seven of one hundred"; the label fits, since the
+longest line, "XP 9999/9999", is 59 pixels wide in the 5x7 font and ends at x 117. Flash: 184 bytes
+(863,284 to 863,468, 17,172 spare). On R0skie with a2dfdd28: the Passport read "XP 7/100";
+"experience" was not yet in the vocabulary, so the first time it was spelled from letter clips and
+logged as missing, and after `tools/voice_build.py --extract --card-apps --pull-missing --sync` the
+line played 15 clips, R0skie the only word spelled; `sr say "Dolphin XP"` played two clips. The
+crash test's Check item (`furi_check(false)` in an app from the card) rebooted the device, and the
+popup read "Flipper crashed", "and was rebooted", "furi_check failed", "at 200137DF", spoken as "at
+two zero zero one three seven D F" from 17 clips in all; `sr status` said "last crash: at 200137DF"
+before and after Back closed the popup. The call sits at offset 0x20 of the app's code, so the app
+had been loaded at 0x200137BC.

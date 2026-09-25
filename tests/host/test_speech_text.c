@@ -133,6 +133,9 @@ static void test_rule3_terms(void) {
     expect("Pin", "Pin");
     expect("HZ", "H Z");
     expect("Sub-GHz: Read", "sub gigahertz, Read");
+    // "XP" is the Passport's points label, spoken as a word rather than spelled
+    expect("XP 7/100", "experience seven of one hundred");
+    expect("Dolphin XP", "Dolphin experience");
 }
 
 // Rule 4: periods split at every period with "dot" between the parts; hyphens split into parts

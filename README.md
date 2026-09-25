@@ -124,7 +124,8 @@ starting level only after the grant; the status chord tells you the level at any
 animations on, when you press a key on the home screen's mail animation. A level
 raised by hand in Momentum, Misc, Dolphin is said as a level up at the next deed; a level
 lowered by hand is only noted. The Passport, which Right opens on R0skie's home screen, shows
-the level, the mood and the points.
+the level, the mood and the points. The points line is labelled XP, which the reader says as
+"experience": with 7 of the 100 points of the level it reads "experience seven of one hundred".
 
 On the home screen, Up opens the lock menu: that is Momentum's default key for it. The lock menu
 is a grid of icons, and the reader names the selected one. It opens on Lock.
@@ -286,6 +287,33 @@ the emulation borrows the speaker timer; it parks the speaker pin so nothing is 
 
 Phase 1 marks the focused main menu item only in the List style; other menu styles are read by
 inversion where possible and will get hints in a later phase.
+
+When the device crashes, it reboots and shows a popup, which the reader reads: "Flipper crashed
+and was rebooted", the message, most often "furi_check failed", and since 2026-09-25 a last line
+with "at" and an address of eight hexadecimal digits, such as "at 0803ABCD". The reader says the
+address character by character, except that one to three digits after a letter are said as a
+number unless they start with 0 ("AB20" is "ay B twenty", "AB05" is "ay B zero five"). `sr status`
+shows the address exactly, as "last crash: at 0803ABCD", or "last crash: none" when no crash has
+left one. Back closes the popup; `sr status` keeps the address until the next crash. The address
+is where the failed check would have returned to. For an address starting with 08, in the
+firmware's flash, subtract 2 and give the result to addr2line, from the project folder; for "at
+0803ABCD":
+
+    Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -C -a 0x0803ABCB
+
+It prints the function, then a file and line. Without the 2 subtracted it names the instruction
+after the check's call: often a later line, and sometimes another function, since that call never
+returns. Even with it, the line is not always the failed check's own: the compiler often lets
+several checks of one function share a single call to the crash routine, and the line named is
+then one of those checks, in that function or in one inlined into it. In
+`ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one call and addr2line
+always names the last. The elf must be the build of the commit that `info device` names in its
+`firmware.commit.hash` line; if the build directory has moved on, build that commit in a git
+worktree: builds are reproducible, so the addresses match. An address starting with 2000 is in
+RAM, inside an app loaded from the card: the firmware's elf cannot name it, and the app's own elf
+would need the address the app was loaded at, which is not kept. When the message names a fault
+rather than a failed check, such as "HardFault" or "BusFault", the address is inside the
+firmware's fault handler, not where the fault happened.
 
 ## Recorded voice
 
