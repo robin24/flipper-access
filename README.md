@@ -345,6 +345,16 @@ names, from the project folder; for "at 0803ABCD":
 
     Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -i -C -a 0x0803ABCB
 
+With the Wi-Fi dev board on the GPIO header and its own USB-C cable in the Mac (its factory
+firmware is the Black Magic Probe), the crash handler's full dump reaches the Mac: the board
+bridges the Flipper's pins 13 and 14, where the firmware writes its debug console once the Debug
+flag is on (`sysctl debug 1`, kept across reboots) at the level set with `sysctl log_level debug`.
+`tools/uart_log.py <file>` captures that console with time stamps and reopens the port when the
+board re-enumerates after a reboot; run it with `nohup` in the background like the USB log
+capture. A crash then leaves the registers, the thread and the stack in that file, followed by the
+reboot, without changing the device's sleep behaviour (attaching a real debugger session would
+keep it from deep sleep).
+
 It prints the function with its file and line, and with `-i` also the chain of functions the
 named code was inlined into. The build directory holds only the latest build: if it has moved on from the build
 `sr status` names, build that commit in a git worktree and use its elf. Builds are reproducible,
