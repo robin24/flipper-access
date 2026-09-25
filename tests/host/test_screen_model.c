@@ -779,6 +779,20 @@ static void test_positioned_note(void) {
     sr_screen_describe(&s, text, sizeof(text));
     CHECK_STR(text, "Delphi. Mood: Happy. Level: 2. XP 7/100 to level 3");
 
+    // Off the baseline of the text beside it, a note with a place begins a row of its own, in
+    // its place, and that row is no title
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 59, 34, SrLayerFullscreen, SrFontPrimary, false, false, 0, 0, "Level: 2");
+    add(&f, 59, 42, SrLayerFullscreen, SrFontBatteryPercent, false, false, 0, 0, "XP 7/100");
+    add_note_at(&f, 100, 38, SrLayerFullscreen, "to level 3");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 3);
+    CHECK_STR(s.rows[1].text, "to level 3");
+    CHECK(s.rows[1].note);
+    CHECK(s.title_row == -1);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Level: 2. to level 3. XP 7/100");
+
     // A plain note, at x 0, y 0, is still read first, a row of its own
     frame_init(&f, SrLayerFullscreen);
     add(&f, 59, 42, SrLayerFullscreen, SrFontBatteryPercent, false, false, 0, 0, "XP 7/100");

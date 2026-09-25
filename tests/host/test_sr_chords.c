@@ -218,6 +218,20 @@ static void test_chord_down_outlives_back(void) {
     CHECK(feed(InputKeyDown, InputTypePress, 700) == SrChordNone && !drop); // plain again
 }
 
+static void test_off_down_outlives_back(void) {
+    // With the reader off, Back let go before Down's Long: no chord had run yet, so Back's Short
+    // passes as Back's own, and Down, still the chord key, toggles at its Long all the same
+    sr_chords_init(&s);
+    CHECK(feed_off(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyDown, InputTypePress, 100) == SrChordNone && drop);
+    CHECK(feed_off(InputKeyBack, InputTypeShort, 200) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyBack, InputTypeRelease, 200) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyDown, InputTypeLong, 400) == SrChordToggleReader && drop);
+    CHECK(feed(InputKeyDown, InputTypeRepeat, 550) == SrChordNone && drop);
+    CHECK(feed(InputKeyDown, InputTypeRelease, 600) == SrChordNone && drop);
+    CHECK(feed(InputKeyDown, InputTypePress, 700) == SrChordNone && !drop); // plain again
+}
+
 static void test_down_long_without_back(void) {
     // Down held long without Back is Down held long, with the reader on or off
     sr_chords_init(&s);
@@ -355,7 +369,7 @@ static void test_console_toggle_sequence(void) {
     CHECK(feed(InputKeyDown, InputTypePress, 20) == SrChordNone && drop);
     CHECK(feed(InputKeyDown, InputTypeLong, 20) == SrChordToggleReader && drop);
     CHECK(feed_off(InputKeyDown, InputTypeRelease, 20) == SrChordNone && drop);
-    CHECK(feed_off(InputKeyDown, InputTypeRelease, 30) == SrChordNone);
+    CHECK(feed_off(InputKeyDown, InputTypeRelease, 30) == SrChordNone && !drop);
     CHECK(feed_off(InputKeyBack, InputTypeRelease, 40) == SrChordNone && !drop && !elong);
 }
 
@@ -375,6 +389,7 @@ int main(void) {
     test_chord_down_long_after_back_long();
     test_chord_down_long_then_short();
     test_chord_down_outlives_back();
+    test_off_down_outlives_back();
     test_down_long_without_back();
     test_off_back_up_passes();
     test_off_back_alone();

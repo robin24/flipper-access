@@ -14,7 +14,7 @@ and the tools in this folder. Last updated 2026-09-25.
   round finished, and its final fixes were flashed complete with `./fbt flash_usb_full` (commit
   08e80106f). The dolphin in words, the crash address, and then the reader toggle with the
   Passport's next level followed the same day with `./fbt flash_usb`: the device now runs commit
-  f9f1e168f, API version 87.3, firmware.bin 864,420 bytes with 16,220 spare below the BLE stack.
+  4a4420439, API version 87.3, firmware.bin 864,396 bytes with 16,244 spare below the BLE stack.
   The Passport on the card, `/ext/apps/assets/passport.fap`, was rebuilt for it.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1` (`/dev/cu.usbmodemflip_R0skie1`
   before the rename), 230400 baud. It disappears while the device is in the updater and comes
@@ -51,8 +51,9 @@ third key pressed while the second is still held goes to the app as a normal key
   time, when the status bar shows it, the battery, as "battery 100 percent", then "level 3, mood
   happy". The mood is happy, okay or angry, as the Passport shows it. A screen without a status
   bar, such as the main menu, answers with the level and the mood alone.
-- Back and Down held for about a second: the reader off, or on again, with "Screen reader off"
-  or "Screen reader on" followed by the screen. Works while the reader is off.
+- Back and Down held until the long press registers, about a third of a second: the reader off,
+  or on again, with "Screen reader off" or "Screen reader on" followed by the screen. Works while
+  the reader is off, and on every screen, the lock screen and the PIN entry included.
 - Back and a short press of OK repeats the focused item with its position, for example "Apps, 1
   of 11". With nothing focused it says "No focus".
 - Back and a long press of OK spells the focused item with the recorded letters: Apps is spelled
@@ -74,8 +75,8 @@ More about the chords:
   which turns the reader on again. Back and Up on the home screen then opens the lock menu. A
   short press of Down while Back is held does nothing then: the reader holds Down back until it
   is held long.
-- While the device is locked, Back and Down held does nothing: the lock screen has its own use
-  for Back.
+- Back and Down held works on the lock screen too, where Back with Down means nothing else: after
+  a reboot into a lock with the reader off, it is the way to get speech back.
 - Chords work with the device's buttons and with `input send` on the console. Keys sent from
   `sr watch`, and from the remote control in qFlipper or the mobile app, bypass the chords.
 
@@ -102,9 +103,10 @@ value of the row you are on.
 - Screen Reader, ON or OFF. OFF turns the reader off at once: nothing more is read, and the
   chords become ordinary keys, all but Back and Down held. If that happens by mistake, press
   Right straight away. The selection is still on this row, and Right turns the reader back on
-  and the screen is read again: you hear "Screen Reader ON". Or, on any screen, hold Back and
-  then Down for about a second: you hear "Screen reader on" and the screen. The console command
-  `sr on` does the same.
+  and the screen is read again: you hear "Screen Reader ON". Or, on any screen, including the
+  lock screen, hold Back and then Down until the long press registers, about a third of a second:
+  you hear "Screen reader on" and the screen. The console command `sr on` also turns the reader
+  on; it reads the screen, without saying "Screen reader on" first.
 - Volume, from 0 to 100 in steps of 10. This is the same setting the Back and Left or Right
   chords change.
 - Verbosity, Terse, Normal or Verbose. Terse leaves out the button labels at the bottom of a
@@ -273,15 +275,15 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region and
 does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch with the reader toggle and
-the Passport's next level, at f9f1e168f on 2026-09-25: 864,420 bytes, 16,220 spare. With the
-crash address, at 9028a8499: 863,644 bytes, 16,996 spare. After the dolphin in words, at c502de5ab:
-863,284 bytes, 17,356 spare. After the firmware stripdown and its final fixes, at 08e80106f:
-862,612 bytes, 18,028 spare. Before the stripdown, after the polish round, at 22ae265ef on
-2026-09-24: 877,036 bytes, 3,604 spare. After phase 3 with its final review fixes, at af4ee0952:
-876,056 bytes, 4,584 spare. After phase 3 before those fixes, at 6c7469a79: 875,928 bytes, 4,712
-spare. Before phase 3, at d5b77c219: 872,048 bytes, 8,592 spare. Before the recorded voice, at
-54794522b: 869,756 bytes, 10,884 spare.
+`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch with the reader toggle and the
+Passport's next level, at 4a4420439 on 2026-09-25: 864,396 bytes, 16,244 spare (864,420 at
+f9f1e168f, before the review fixes). With the crash address, at 9028a8499: 863,644 bytes, 16,996
+spare. After the dolphin in words, at c502de5ab: 863,284 bytes, 17,356 spare. After the firmware
+stripdown and its final fixes, at 08e80106f: 862,612 bytes, 18,028 spare. Before the stripdown,
+after the polish round, at 22ae265ef on 2026-09-24: 877,036 bytes, 3,604 spare. After phase 3 with
+its final review fixes, at af4ee0952: 876,056 bytes, 4,584 spare. After phase 3 before those fixes,
+at 6c7469a79: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 bytes, 8,592 spare.
+Before the recorded voice, at 54794522b: 869,756 bytes, 10,884 spare.
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
 serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,
