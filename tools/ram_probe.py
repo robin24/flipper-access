@@ -29,7 +29,6 @@ APPS = [
     ("Text to SAM (keyboard screen)", "/ext/apps/Media/text2sam.fap", [], 3),
     ("TOTP (large app)", "/ext/apps/Tools/totp.fap", [], 4),
     ("uPython (largest app, expected to fail to load)", "/ext/apps/Tools/upython.fap", [], 4),
-    ("Doom (game)", "/ext/apps/Games/doom.fap", [], 4),
 ]
 
 def run(ser, cmd, timeout=15.0):
