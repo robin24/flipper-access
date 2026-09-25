@@ -47,11 +47,13 @@ KEYBOARD_APP = "/ext/apps/Media/text2sam.fap"
 # passes the input filter as the device's own keys do (sr watch's keys and remote control do not).
 # input send ok short and ok long publish OK's Press, Short or Long and Release themselves; the
 # ok press before and ok release after them are the plan's sequence, and show that stray OK events
-# around a chord do not navigate either. A chord must speak (the utterance counter rises) and must
-# never navigate (the screen reads the same before and after).
+# around a chord do not navigate either. Down, like OK, names its chord on its Short (the status
+# bar) or its Long (the reader off, which is left out here: the session needs the reader on). A
+# chord must speak (the utterance counter rises) and must never navigate (the screen reads the
+# same before and after).
 CHORDS = [
     ("back + up", ["back press", "up press", "up release", "back release"]),
-    ("back + down", ["back press", "down press", "down release", "back release"]),
+    ("back + down", ["back press", "down press", "down short", "down release", "back release"]),
     ("back + ok", ["back press", "ok press", "ok short", "ok release", "back release"]),
     ("back + ok long", ["back press", "ok press", "ok long", "ok release", "back release"]),
 ]

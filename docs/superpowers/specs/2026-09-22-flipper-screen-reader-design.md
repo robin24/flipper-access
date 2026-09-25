@@ -895,3 +895,65 @@ Back closed the popup. With 9028a849 flashed, `sr status` said "last crash: at 2
 unknown"; a second trial gave "at 2001384F" in the popup and "last crash: at 2001384F in build
 9028a849" in `sr status`, before and after Back. The call sits at offset 0x20 of the app's code, so
 the app had been loaded at 0x200137BC and then at 0x2001382C.
+
+The reader toggle and the positioned note (2026-09-25). Back held with Down held long now turns the
+reader off, or on again, also while it is off. The chord machine (`sr_chords.c`) splits Down as it
+splits OK: Down pressed while Back is held becomes the chord key and is swallowed until its
+release; its Short is `SrChordStatus` and its Long `SrChordToggleReader`, once, with no Status
+after it (`key_long_seen`, formerly `ok_long_seen`, serves both keys). `sr_chords_feed` takes
+`reader_on`, which the input filter passes from the setting at every event, instead of resetting
+the machine while the reader is off. With the reader off the toggle is the only chord: only Down
+starts one, held back from its Press, and it becomes a chord at its Long, which then drops Back's
+own Short and cancels a held-back Long, as any chord does with the reader on; a short Down with
+Back held is lost, since its Press cannot be given back; Up, OK, Left and Right while Back is held
+pass untouched. Back itself is handled alike in both modes: its Short at once, its Long held back
+to the release. The brief had Back's own Long pass as an ordinary key while the reader is off, but
+at Back's Long the machine cannot tell yet whether Down will follow, and a Long passed at 300 ms
+would open the power-off dialog on the home screen before the usual slow chord, with Back held
+first; so the chord drops what it drops with the reader on, and a long Back alone still reaches the
+app, on its release. The chord key stays swallowed across a change of mode, so the reader turning
+on or off in the middle of the chord drops the rest of it all the same. The reader runs the toggle
+on its service thread whether it is on or off, and ignores it while the desktop is locked:
+`desktop_locked` follows the desktop's status pubsub, with the reader off too, and is seeded from
+the RTC PIN flag when the reader subscribes, since only a PIN lock at boot can come before the
+subscription. Off: as `screen_reader_set_enabled(sr, false)` does it (the setting saved, speech
+stopped), then "Screen reader off" through `speech_say`, interrupting, which the engine plays with
+the reader off, as it plays `sr say`. On: the setting saved; a frame asked for with `gui_update`
+and awaited as the loop lets a screen settle (50 ms after the last frame, 300 ms at most); that
+frame, which the tap marks as a new screen, modelled without its announcements, so it is the screen
+announced and its next frame brings no news; then one `speech_say_parts` utterance, "Screen reader
+on. " and the text Back and Up reads for the screen (`sr_read_all_text`, now shared with the
+ReadAll command, "Home screen" on the bare desktop), the confirmation first and the screen right
+after it; "Screen reader on" alone when no frame came in time. A held change is dropped on either
+toggle. `sr chord downhold` runs it, also with the reader off, when the other chord keys still
+answer "screen reader is off". The Accessibility row and `sr on|off` read and write the same
+setting.
+
+The positioned note: `canvas_tap_hint_note_at(canvas, x, y, text)` records a note as
+`canvas_tap_hint_note` does (not drawn, the secondary font, never the title, never a focus) but at
+x and y plus the canvas offset, where `canvas_draw_str` would record the text. The model reads a
+note at x 0, y 0 as before, first and a row of its own, and a placed note in reading order among
+the drawn text, by baseline and x, joined to the row on its baseline as drawn text is. The model
+joins by row kind and a 2-pixel baseline tolerance, with no gap rule, so the note needs no width:
+its x only orders it within the row. A row that a note begins is never the title. The Passport
+records "to level N" at x 59 plus the points' width in the battery font plus 2, y 42: the next
+level; the last one, 30, while OK shows the points in total (a refinement of the brief, whose next
+level would misstate the total); none at "Max Level!". API 87.3: one new entry in
+`targets/f7/api_symbols.csv` and the version bumped by hand; the build prints "API version 87.3 is
+up to date"; apps built for 87.2 keep loading, and only the Passport was rebuilt (`./fbt
+fap_passport`) and copied to `/ext/apps/assets/passport.fap`.
+
+Flash: 776 bytes (863,644 to 864,420, 16,220 spare); static RAM unchanged at 5,961 bytes. Host
+tests: the chords 200 checks (73 before), the model 190 (174 before). On Delphi with f9f1e168: the
+chord on the home screen said "Screen reader off" (3 clips, 1,512 ms) and the settings file then
+read `screen_reader: false`; the chord again said "Screen reader on. Home screen" as one utterance
+(5 clips, 2,820 ms, nothing aborted), the frame counter one up and the announcement counter
+unchanged, and nothing more in the next 4 seconds; `sr chord downhold` twice turned it off (3
+clips) and on (5 clips); Back with a short Down still read "battery one hundred percent, level two,
+mood happy" (8 clips). With the reader off, Back and Up opened the lock menu, and the toggle made
+there said "Screen reader on. Lock" (4 clips), the screen as it was then, not the one from before
+the reader went off. On the lock screen of a keypad lock, the chord and `sr chord downhold` changed
+nothing; after the unlock both worked again. The Passport read "Delphi. Mood, Happy. Level, two.
+experience seven of one hundred to level three", 13 clips, no fallback, the note recorded at x 100,
+y 42; with OK, "XP 107/9999 to level 30", the note at x 115. `tools/sr_drive.py --chords`, whose
+Down step now sends Down's Short, passed all eight chords on the home screen and in the main menu.

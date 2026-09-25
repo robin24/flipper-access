@@ -66,6 +66,13 @@ static void add_note(SrFrame* f, uint8_t layer, bool focus, const char* text) {
     f->records[f->count - 1].note = true;
 }
 
+/** A note as canvas_tap_hint_note_at records it: at the start and baseline it names, the
+ * secondary font, normal colour, never a focus. */
+static void add_note_at(SrFrame* f, int x, int y, uint8_t layer, const char* text) {
+    add(f, x, y, layer, SrFontSecondary, false, false, 0, 0, text);
+    f->records[f->count - 1].note = true;
+}
+
 static void test_normalize(void) {
     char out[SR_TEXT_MAX];
     sr_normalize("  Hello   World ", out, sizeof(out));
@@ -729,6 +736,76 @@ static void test_note_only_screen_is_read(void) {
     CHECK_STR(out[0].text, "Lock");
 }
 
+/** The Passport at level 2 with 7 of its 100 points: four lines drawn at x 59, the points in the
+ * battery font, and after them the note naming the level they lead to. */
+static SrFrame passport_frame(void) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 59, 10, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Delphi");
+    add(&f, 59, 22, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Mood: Happy");
+    add(&f, 59, 34, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Level: 2");
+    add(&f, 59, 42, SrLayerFullscreen, SrFontBatteryPercent, false, false, 0, 0, "XP 7/100");
+    add_note_at(&f, 100, 42, SrLayerFullscreen, "to level 3");
+    return f;
+}
+
+static void test_positioned_note(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_DESCRIBE_TEXT_MAX];
+
+    // A note with a place joins the row on its baseline, after the text drawn to its left
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 59, 42, SrLayerFullscreen, SrFontBatteryPercent, false, false, 0, 0, "XP 7/100");
+    add_note_at(&f, 100, 42, SrLayerFullscreen, "to level 3");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK_STR(s.rows[0].text, "XP 7/100 to level 3");
+    CHECK(s.rows[0].kind == SrRowNormal);
+
+    // Its place decides where it is read, not the order it was recorded in
+    frame_init(&f, SrLayerFullscreen);
+    add_note_at(&f, 100, 42, SrLayerFullscreen, "to level 3");
+    add(&f, 59, 42, SrLayerFullscreen, SrFontBatteryPercent, false, false, 0, 0, "XP 7/100");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK_STR(s.rows[0].text, "XP 7/100 to level 3");
+
+    // The whole Passport: the points line keeps its place, after the level
+    f = passport_frame();
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 4);
+    CHECK(s.title_row == -1);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Delphi. Mood: Happy. Level: 2. XP 7/100 to level 3");
+
+    // A plain note, at x 0, y 0, is still read first, a row of its own
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 59, 42, SrLayerFullscreen, SrFontBatteryPercent, false, false, 0, 0, "XP 7/100");
+    add_note_at(&f, 100, 42, SrLayerFullscreen, "to level 3");
+    add_note(&f, SrLayerFullscreen, false, "Passport");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 2);
+    CHECK_STR(s.rows[0].text, "Passport");
+    CHECK_STR(s.rows[1].text, "XP 7/100 to level 3");
+
+    // A note with a place is never the title, even in the primary font at the top of the
+    // screen; text drawn after it on its baseline joins its row, which stays no title
+    frame_init(&f, SrLayerWindow);
+    add_note_at(&f, 2, 12, SrLayerWindow, "Settings");
+    f.records[0].font = SrFontPrimary;
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK(s.title_row == -1);
+    frame_init(&f, SrLayerWindow);
+    add_note_at(&f, 2, 12, SrLayerWindow, "Wi-Fi");
+    add(&f, 40, 12, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Settings");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK_STR(s.rows[0].text, "Wi-Fi Settings");
+    CHECK(s.title_row == -1);
+}
+
 static void test_overflow_is_mentioned(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -768,6 +845,7 @@ int main(void) {
     test_note_focus_moves();
     test_desktop_text_gone_says_home();
     test_note_only_screen_is_read();
+    test_positioned_note();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

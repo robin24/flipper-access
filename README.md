@@ -6,16 +6,19 @@ and the tools in this folder. Last updated 2026-09-25.
 
 ## Device state
 
-- Device name: R0skie. Hardware version 12, region DE. 64 GB microSD card, exFAT.
+- Device name: Delphi since 2026-09-25, R0skie before. Hardware version 12, region DE. 64 GB
+  microSD card, exFAT.
 - Firmware: Momentum mntm-012 (built 31 December 2025), installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
   here: on 2026-09-24 that was phase 3 and the polish round; on 2026-09-25 the firmware stripdown
   round finished, and its final fixes were flashed complete with `./fbt flash_usb_full` (commit
-  08e80106f). The dolphin in words and the crash address followed the same day with
-  `./fbt flash_usb`: the device now runs commit 9028a8499, API version 87.2, firmware.bin 863,644
-  bytes with 16,996 spare below the BLE stack.
-- Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1`, 230400 baud. It disappears while the
-  device is in the updater and comes back after the reboot.
+  08e80106f). The dolphin in words, the crash address, and then the reader toggle with the
+  Passport's next level followed the same day with `./fbt flash_usb`: the device now runs commit
+  f9f1e168f, API version 87.3, firmware.bin 864,420 bytes with 16,220 spare below the BLE stack.
+  The Passport on the card, `/ext/apps/assets/passport.fap`, was rebuilt for it.
+- Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1` (`/dev/cu.usbmodemflip_R0skie1`
+  before the rename), 230400 baud. It disappears while the device is in the updater and comes
+  back after the reboot.
 - The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
   speaks its launch argument. Its on-screen behaviour is unchanged. It is Momentum's own demo
   app, separate from the screen reader's speech engine.
@@ -44,10 +47,12 @@ third key pressed while the second is still held goes to the app as a normal key
 
 - Back and Up reads the whole screen from the top. The home screen, which draws no text of its
   own, reads as "Home screen". A long screen is read in several parts, one after the other.
-- Back and Down reads the status bar, then the dolphin's level and mood: the time, when the
-  status bar shows it, the battery, as "battery 100 percent", then "level 3, mood happy". The
-  mood is happy, okay or angry, as the Passport shows it. A screen without a status bar, such as
-  the main menu, answers with the level and the mood alone.
+- Back and a short press of Down reads the status bar, then the dolphin's level and mood: the
+  time, when the status bar shows it, the battery, as "battery 100 percent", then "level 3, mood
+  happy". The mood is happy, okay or angry, as the Passport shows it. A screen without a status
+  bar, such as the main menu, answers with the level and the mood alone.
+- Back and Down held for about a second: the reader off, or on again, with "Screen reader off"
+  or "Screen reader on" followed by the screen. Works while the reader is off.
 - Back and a short press of OK repeats the focused item with its position, for example "Apps, 1
   of 11". With nothing focused it says "No focus".
 - Back and a long press of OK spells the focused item with the recorded letters: Apps is spelled
@@ -59,13 +64,18 @@ More about the chords:
 
 - Back on its own works as before: a short press goes back. A long press of Back on its own,
   which opens the power-off dialog on the home screen, takes effect when you let go of Back, not
-  after the usual 300 ms. That way a slow chord is never mistaken for a long press.
+  after the usual 300 ms. That way a slow chord is never mistaken for a long press. This holds
+  while the reader is off too, since Back and Down held works then.
 - The press of Back itself still reaches the app when a chord starts. With animations on (they
   are off by default), the dolphin on the home screen may answer it with a speech bubble, which
   you may hear after the chord.
 - Any other key press silences speech, as before.
-- While the reader is off, the chords are ordinary key presses. Back and Up on the home screen
-  then opens the lock menu.
+- While the reader is off, the chords are ordinary key presses, all but Back and Down held,
+  which turns the reader on again. Back and Up on the home screen then opens the lock menu. A
+  short press of Down while Back is held does nothing then: the reader holds Down back until it
+  is held long.
+- While the device is locked, Back and Down held does nothing: the lock screen has its own use
+  for Back.
 - Chords work with the device's buttons and with `input send` on the console. Keys sent from
   `sr watch`, and from the remote control in qFlipper or the mobile app, bypass the chords.
 
@@ -73,7 +83,9 @@ To run a chord's command from the console without keys:
 
     .venv/bin/python tools/flipper_cli.py "sr chord up"
 
-The keys are `up`, `down`, `ok`, `okhold`, `left` and `right`, as in the list above.
+The keys are `up`, `down`, `ok`, `okhold`, `downhold`, `left` and `right`, as in the list above.
+`downhold` works while the reader is off, as the chord does; the others then answer "screen
+reader is off".
 
 ### The Accessibility settings
 
@@ -88,9 +100,11 @@ The Accessibility screen has four rows. Up and Down move between them. Left and 
 value of the row you are on.
 
 - Screen Reader, ON or OFF. OFF turns the reader off at once: nothing more is read, and the
-  chords become ordinary keys. If that happens by mistake, press Right straight away. The
-  selection is still on this row, and Right turns the reader back on and the screen is read
-  again: you hear "Screen Reader ON". The console command `sr on` does the same.
+  chords become ordinary keys, all but Back and Down held. If that happens by mistake, press
+  Right straight away. The selection is still on this row, and Right turns the reader back on
+  and the screen is read again: you hear "Screen Reader ON". Or, on any screen, hold Back and
+  then Down for about a second: you hear "Screen reader on" and the screen. The console command
+  `sr on` does the same.
 - Volume, from 0 to 100 in steps of 10. This is the same setting the Back and Left or Right
   chords change.
 - Verbosity, Terse, Normal or Verbose. Terse leaves out the button labels at the bottom of a
@@ -125,9 +139,13 @@ pending (a level granted at boot is usually not announced, because the reader ma
 starting level only after the grant; the status chord tells you the level at any time); with
 animations on, when you press a key on the home screen's mail animation. A level
 raised by hand in Momentum, Misc, Dolphin is said as a level up at the next deed; a level
-lowered by hand is only noted. The Passport, which Right opens on R0skie's home screen, shows
+lowered by hand is only noted. The Passport, which Right opens on Delphi's home screen, shows
 the level, the mood and the points. The points line is labelled XP, which the reader says as
-"experience": with 7 of the 100 points of the level it reads "experience seven of one hundred".
+"experience", and it now ends with the level the points lead to, "to level 3", which the reader
+says but the screen does not show: at level 2 with 7 of its 100 points the Passport reads
+"Delphi. Mood, Happy. Level, two. experience seven of one hundred to level three". OK in the
+Passport shows the points in total instead, and the line then ends with the last level, "to
+level 30"; at the last level the line is "Max Level!", with nothing after it.
 
 On the home screen, Up opens the lock menu: that is Momentum's default key for it. The lock menu
 is a grid of icons, and the reader names the selected one. It opens on Lock.
@@ -215,8 +233,9 @@ the emulation takes over the speaker, and the reader stays silent until you leav
 - `.venv/`: Python virtual environment with pyserial and colorlog (used by the helper scripts).
 - `Momentum-Firmware/`: full source clone, branch `screen-reader`, with the ARM toolchain
   downloaded by fbt.
-  API version 87.2 since phase 3, which exported two calls for the screen reader's spoken names
-  of icons. Apps built here run on the device, and apps built for 87.1 still load.
+  API version 87.3 since 2026-09-25, which exported `canvas_tap_hint_note_at` for words placed
+  among the drawn text; 87.2, since phase 3, exported two calls for the screen reader's spoken
+  names of icons. Apps built here run on the device, and apps built for 87.1 and 87.2 still load.
 - `patches/text2sam-cli-mode.patch`: the change to Text to SAM (applies inside
   `Momentum-Firmware/applications/external`, which is a git submodule).
 - `firmware-packages/`: Momentum mntm-012 and official 1.4.3 update packages.
@@ -254,8 +273,9 @@ Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region and
 does not know this, and the updater refuses a larger image before writing. Run
 `tools/flash_headroom.sh` before every `./fbt flash_usb`: it prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch with the crash address, at
-9028a8499 on 2026-09-25: 863,644 bytes, 16,996 spare. After the dolphin in words, at c502de5ab:
+`build/f7-firmware-C/firmware.bin` and the spare bytes. This branch with the reader toggle and
+the Passport's next level, at f9f1e168f on 2026-09-25: 864,420 bytes, 16,220 spare. With the
+crash address, at 9028a8499: 863,644 bytes, 16,996 spare. After the dolphin in words, at c502de5ab:
 863,284 bytes, 17,356 spare. After the firmware stripdown and its final fixes, at 08e80106f:
 862,612 bytes, 18,028 spare. Before the stripdown, after the polish round, at 22ae265ef on
 2026-09-24: 877,036 bytes, 3,604 spare. After phase 3 with its final review fixes, at af4ee0952:
@@ -279,7 +299,8 @@ Screen reader console commands (firmware from the `screen-reader` branch):
 
 Speech: announcements are spoken by the device itself. `sr say <text>` speaks text and prints
 timing; `sr stop` silences; `sr volume <0..100>` and `sr delay <500..10000>` are saved settings.
-`sr chord up|down|ok|okhold|left|right` runs what Back and that key do (see Back chords above).
+`sr chord up|down|ok|okhold|downhold|left|right` runs what Back and that key do (see Back chords
+above); `downhold` also while the reader is off.
 Any button press silences speech. With animations on, the dolphin's speech bubbles on the home
 screen are not spoken unless a button was pressed in the last two seconds (`sr status` counts
 them as suppressed; `sr watch` still shows them). A change dropped while held -- superseded by a
