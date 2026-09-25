@@ -554,7 +554,8 @@ def main():
     ap.add_argument("--remove-legacy", action="store_true", help="remove the first layout's /ext/sr/voice/<initial>/ clips from the card and clear voice/synced.json")
     ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them")
     ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, or syncing")
-    ap.add_argument("--port", default="/dev/cu.usbmodemflip_R0skie1")
+    ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0],
+                    help="serial port, default: the first /dev/cu.usbmodemflip_* (the device's name is part of it)")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new clips (for trials)")
     for key, value in DEFAULTS.items():
