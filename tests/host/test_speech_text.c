@@ -376,11 +376,13 @@ static void test_rule13_upper_a(void) {
 }
 
 // Rule 14: a slash between two digits is "of", as the Passport's points read; a slash next to a
-// letter or at the start stays "slash". The Passport's line at the top level has no slash.
+// letter, even with a digit on its other side, or at the start stays "slash". The Passport's line
+// at the highest level (Max Level!) has no slash.
 static void test_rule14_slash_of(void) {
     expect("1/3", "one of three");
     expect("/ext/apps", "slash ext slash apps");
     expect("a/b", "a slash b");
+    expect("a/5", "a slash five");
     expect("Max Level!", "Max Level!");
 }
 

@@ -113,13 +113,16 @@ OFF or ON. Changing it reboots the device: leaving the app shows "Rebooting..." 
 restarts. With animations on, the dolphin's speech bubbles are read only when you pressed a key
 in the last two seconds.
 
-When the dolphin reaches a new level, the reader says "Level up, level 4" about a second later:
-after the new screen that usually comes with it has been read, and without cutting off what it
-is saying. Like all speech, it is silenced by a key pressed before it has been said. With
+When the dolphin reaches a new level, the reader says "Level up, level 4". It is queued about
+two seconds after the deed, later when a screen change follows within those two seconds, but at
+most five seconds after the deed, so it is heard after the new screen has been read. A key
+pressed while it waits in the speech queue or plays silences it, like all speech. With
 animations off, the level up is granted at the deed that completes the level's points, the
 moment an app such as Sub-GHz or NFC records something you did, or at boot when one was left
-pending; with animations on, when you press a key on the home screen's mail animation. The
-Passport, which Right opens on R0skie's home screen, shows the level, the mood and the points.
+pending; with animations on, when you press a key on the home screen's mail animation. A level
+raised by hand in Momentum, Misc, Dolphin is said as a level up at the next deed; a level
+lowered by hand is only noted. The Passport, which Right opens on R0skie's home screen, shows
+the level, the mood and the points.
 
 On the home screen, Up opens the lock menu: that is Momentum's default key for it. The lock menu
 is a grid of icons, and the reader names the selected one. It opens on Lock.

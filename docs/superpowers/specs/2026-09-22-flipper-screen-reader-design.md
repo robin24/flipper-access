@@ -799,27 +799,40 @@ user only in words, so three small changes followed the round. The pronunciation
 14: a slash between two digits is "of", so the Passport's "18/100" is "eighteen of one hundred";
 any other slash stays "slash". The dolphin service now publishes `DolphinPubsubEventUpdate` after a
 level up as it does after a deed (two lines in `dolphin.c`; the event enum is unchanged). The
-reader sets up the dolphin the way it subscribes to the desktop: at its start and on every frame
-until the dolphin's record exists, then it opens the record, subscribes, and reads the starting
-level into `last_level`. In a special boot (an update) the dolphin never starts; the check stays
-cheap and the reader keeps reading the update's screens. The callback only sets `SR_FLAG_DOLPHIN`,
-because `dolphin_stats` waits on the dolphin's own event loop, the thread that runs the callback.
-On the flag the service thread reads the stats. A higher level is held for a second
-(`SR_LEVEL_HOLD_MS`; a second rise meanwhile only updates the level to be said, and the loop's wait
-includes the due time as it does a held change's), then, once no frame is settling, said as "Level
-up, level N" without interrupting, so it follows the announcement of the screen change that usually
-comes with a deed. It has a kind of its own, `SrAnnLevel` ("level" in `sr watch`), goes through
-`sr_say_event` (formerly `sr_say_lock`), and is never kept quiet; with the reader off when it comes
-due it is dropped, the level kept. A lower level, set by hand in Momentum, Misc, Dolphin, is only
-noted. Back and Down appends the level and the mood to the status bar: "battery 87 percent, level
-3, mood happy", or the dolphin part alone where there is no status bar; "No status bar" is left
-only for a special boot, where there is no dolphin. The mood is happy for a butthurt of at most 4,
-okay at most 9, angry above: the Passport's thresholds
-(`applications/settings/dolphin_passport/passport.c`), repeated on purpose since the Passport is an
-app of its own. `sr_status_text` in the model is unchanged. Flash: 496 bytes (862,612 to 863,108,
-17,532 spare); static RAM unchanged at 5,897 bytes. On R0skie: Back and Down on the home screen
-said "battery one hundred percent, level two, mood happy", 8 clips; the Passport's "7/100" was read
-as "seven of one hundred" from clips; after a deed in the Frequency Analyzer with the points one
-short of level 3, "Level up, level 3" was announced 972 ms after the analyzer's screen announcement
-and played in full behind it. An earlier trial, with Back pressed six seconds after OK while that
-long screen announcement still played, silenced both, as any key does.
+reader sets up the dolphin the way it subscribes to the desktop: at its start, after its own record
+and console so that a wait for the dolphin cannot delay them, and on every frame until the
+dolphin's record exists; then it opens the record, subscribes (the handle is kept), and reads the
+starting level into `last_level`. In a special boot (an update) the dolphin never starts; the check
+stays cheap and the reader keeps reading the update's screens. The callback only sets
+`SR_FLAG_DOLPHIN`, because `dolphin_stats` waits on the dolphin's own event loop, the thread that
+runs the callback. On the flag the service thread reads the stats. A higher level is held for two
+seconds (`SR_LEVEL_HOLD_MS`), and while it is held every interrupting announcement (in
+`sr_announce`: a new screen, a focus, the home screen, a lock) holds it two seconds more from then,
+at most five seconds after the level rose (`SR_LEVEL_HOLD_MAX_MS`); a second rise meanwhile only
+updates the level to be said, and the loop's wait includes the due time as it does a held change's.
+Then, once no frame is settling, it is said as "Level up, level N" without interrupting, so it
+follows the screens a deed brings: a Save's "Saved!" popup, which closes by itself after 1.5 s (the
+longest of the core apps' popups), and the screen after it. One second, the first value, was too
+short: on R0skie a proxy of the Save flow (OK on Frequency Analyzer, Back 1.2 s later) queued the
+level up before the Back, which silenced it. It has a kind of its own, `SrAnnLevel` ("level" in `sr
+watch`), goes through `sr_say_event` (formerly `sr_say_lock`), is never kept quiet, and keeps a
+held change: only a lock or an unlock drops one. With the reader off when it comes due it is
+dropped, the level kept. A level raised by hand in Momentum, Misc, Dolphin publishes nothing and is
+said as a level up at the next deed; a level lowered by hand is only noted. After a card mount the
+reader notes the level afresh, silently: when the card was not ready as the dolphin started, the
+dolphin loads its state on the mount and publishes nothing. The reader subscribes to the storage
+pubsub (the handle is kept) and its callback sets `SR_FLAG_STORAGE` on a mount only; it hears of
+the mount before the dolphin, since pubsub calls the newest subscriber first, so it pauses 50 ms
+(`SR_MOUNT_SETTLE_MS`) before asking, and the dolphin's reload goes first in its queue. Back and
+Down appends the level and the mood to the status bar: "battery 87 percent, level 3, mood happy",
+or the dolphin part alone where there is no status bar; "No status bar" is left only for a special
+boot, where there is no dolphin. The mood is happy for a butthurt of at most 4, okay at most 9,
+angry above: the Passport's thresholds (`applications/settings/dolphin_passport/passport.c`),
+repeated on purpose since the Passport is an app of its own. `sr_status_text` in the model is
+unchanged. Flash: 672 bytes (862,612 to 863,284, 17,356 spare); static RAM unchanged at 5,897
+bytes. On R0skie: Back and Down on the home screen said "battery one hundred percent, level two,
+mood happy", 8 clips; the Passport's "7/100" was read as "seven of one hundred" from clips; with
+c502de5a, after a deed in the Frequency Analyzer with the points one short of level 3, "Level up,
+level 3" came 1,998 ms after the analyzer's screen announcement and played in full behind it when
+the analyzer was left open, and with Back pressed 1.2 s after OK it came 1,996 ms after the menu's
+screen announcement and played in full.
