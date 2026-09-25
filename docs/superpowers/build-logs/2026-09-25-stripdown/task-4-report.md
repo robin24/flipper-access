@@ -1,0 +1,56 @@
+# Task 4 report (SAM out) — written by the controller from the implementer's final message, which the implementer could not save itself
+
+Status: DONE_WITH_CONCERNS. Commits: firmware 4bda0a4ae "SAM out: the engine plays clips and spelled letters only, mutes when the voice is off or no vocabulary is on the card; rate and the Voice setting removed"; project 8964447 "Host tests without SAM: PCM raw path only, chunking gone".
+
+## What I did
+- Step 1, tests first. test_speech_pcm.c: the SAM timing tests and the emitted/collect/abort_at helper are gone; test_volume and main are the brief's text; the 11 speech_pcm_init calls in test_push_raw take two arguments; the "overhead belongs to SAM values" sentence is gone; "The Text to SAM app's SetAUDIO curve" stays. test_speech_text.c: test_chunks and its call are gone.
+- Step 2, PCM and text layer, per the brief: speech_pcm.h/.c new header comment, no overhead field, two-argument init, no speech_pcm_push; speech_text.h/.c new comment, no SPEECH_CHUNK_MAX, no speech_text_next_chunk.
+- Step 3, the engine: speech.c and speech.h follow the brief item by item: muted counter; the four SAM functions deleted; a missing letter clip logged like a missing word; the new speech_speak_item completes a muted item at once; speech_set_volume replaces speech_set_voice; the words SAM and sam no longer appear in speech.c.
+- Step 4: reader: sr_push_volume used in two places; the volume chord and the service start call speech_set_volume; the start no longer sets the voice. Console: the rate usage line and the rate command gone; sr voice on/off print the new texts and save nothing; voice status shows muted; sr status shows volume, verbosity, change delay; sr_cli_set_volume replaces sr_cli_set_number. Settings: sr_rate and sr_voice gone from the struct, the defaults and the table.
+- Step 5: the Accessibility scene file replaced whole with the brief's text.
+- Step 6: git rm of the SAM port (firmware) and of test_sam_port.c, sam_cases.h, sam_ref/, sam_calibrate.py (project). run_host_tests.sh: new header comment, SAM block gone, exclusion block kept, its last line now `echo "$(tail -n 1 "$OUT/fbt_exclusions.txt")"` (the doubled prefix fixed).
+
+## Deviations (each on purpose)
+1. test_rule10_chunk_edges deleted too: it used speech_text_next_chunk and SPEECH_CHUNK_MAX (the spec says the chunking tests go).
+2. Comments describing SAM behaviour beyond the brief's list were reworded: speech_pcm.h (subsamples/nominal_us "values", "delta / 8 without overhead", "(no overhead)"); speech_text.c (header drops "and chunking"; rule 8's reason now "each short enough for a clip name"; rule 10 "Retired: the text is no longer cut into chunks, the clips play it word by word", numbering kept); screen_reader.c sr_announce "(at the volume as saved)"; test_speech_pcm.c "through the slot accumulator"; test_speech_text.c "(the hang guard)" dropped.
+3. The speech_set_voice_clips comment says "a text item", not "an item": file items from sr play still play with the voice off, as the spec says.
+4. Project commit: the brief's `git add ... tools/sam_calibrate.py` fails after git rm; the two existing paths were added and the commit made with the brief's full path list; it contains all 10 changes.
+
+## TDD evidence
+After Step 1 (tools/run_host_tests.sh, exit 1): model 174 checks 0 failures; port checks 0 failures; SAM port matches the original on 11 cases; speech text 959; speech queue 156; then `tests/host/test_speech_pcm.c:88:28: error: too few arguments to function call, expected 3, have 2` (same at lines 103, 149, 160, 173, 189, 198, 212, 217, 224, 238, 248), 12 errors generated.
+After Step 2 (exit 0): 174/0; port 0; SAM port 11 cases; speech text 959/0; speech queue 156/0; speech PCM 597/0; speech voice 4433/0; chords 73/0; throttle 119/0; "fbt exclusions: fbt exclusions: 0 failures".
+After Step 6 (exit 0, re-run on the committed state, same result): 174/0; speech text 959/0; speech queue 156/0; speech PCM 597/0; speech voice 4433/0; chords 73/0; throttle 119/0; "fbt exclusions: 0 failures". tests/host/speech_expand.c still compiles and runs.
+
+## Build, lint, headroom
+./fbt exit 0; only the two known manifest warnings; "Excluded 45 external apps by configuration: ..."; "API version 87.2 is up to date". ./fbt lint exit 0. tools/flash_headroom.sh: firmware.bin 862432 bytes, limit 880640, spare 18208 bytes (15,344 smaller than before; the same after the flash build). nm firmware.elf: no sam_* or speech_sam* symbol; speech_set_volume present. An old sam/sam.o from earlier builds is still under build/ but the map shows it is not linked. git status before the commit listed only the brief's files and the deleted sam/, plus the untouched applications/external.
+
+## Greps
+- `grep -rn "sr_rate\|sr_voice\b\|speech_set_voice(" applications lib`: empty after Step 5.
+- Brief Step 7 grep: 4 hits, all in applications/external (text2sam's stm32_sam.h includes, and chess, excluded from the build); empty with --exclude-dir=external.
+- Word SAM in the firmware, 3 hits kept: speech_pcm.c:10 "The Text to SAM app's curve" (the source of the curve); speech_hw.c:31 "50 kHz carrier, as in the Text to SAM app" (file not in the brief); speech_text.c:192 the word "SAM" in the pronunciation layer's list of words read whole (data; expect("Text to SAM", "Text to SAM") needs it).
+- Project grep (tests tools): test_speech_pcm.c:16 (the curve comment, kept by the brief), test_speech_text.c:55, tools/ram_probe.py:29, tools/say.sh:2.
+
+## Device checks (Step 9), sent with a small driver over one open port with waits
+Idle check at 03:40:08 and 03:40:45: No application is running; enabled yes; rate 76, volume 80, verbosity 1, change delay 3000 ms; frames 73246 then 73417; announcements 351 both; utterances 381 both; voice on, vocabulary yes, clips 1146, fallback 0, missing 0, open max 51 ms; free heap 106488 then 106528.
+Flash: `rm -rf build/f7-firmware-C/resources build/f7-firmware-C/.extapps && ./fbt flash_usb_full` from 03:41:00, exit 0 at 03:44:52 (package f7-update-mntm-screen-reader-4bda0a4a). Port dropped 03:44:50, back 03:51:05 (6 min 15 s); 10 s wait.
+1. sr screen: records 0, desktop (the post-update splash); loader info: No application is running; input send back short; sr screen: 1 record, status-right battery "100"; info device: firmware.commit.hash 4bda0a4a, dirty true, branch screen-reader, build.date 25-09-2026, api 87.2. sr status: enabled yes; "volume: 80, verbosity: 1, change delay: 3000 ms"; frames 22, announcements 1; speech idle, utterances 1, aborted 0, dropped 0, underruns 0; last utterance 1090 ms played, 15972 subsamples; voice on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms; free heap 116648.
+2. sr say hello world: "queued 11 characters"; after 2 s: utterances 2, last utterance 1093 ms played, 15813 subsamples; clips 4, muted 0.
+3. Mute: sr voice off → "voice off: muted until sr voice on or a reboot"; sr say hello → queued; sr voice status → voice off, clips 4, muted 1; sr status → utterances 2 unchanged, last utterance unchanged; sr voice on → "voice on"; sr voice status → voice on, clips 4, muted 1.
+4. Chords: sr chord up → "back + up: read the screen", utterances 3, last 1098 ms / 15972 subsamples ("Home screen"), clips 6. input send ok short → menu; sr screen "Settings. Sub-GHz. Apps, 1 of 11", utterances 4, last 521 ms / 7837 subsamples, clips 7. sr chord okhold → "back + okhold: spell the focus", utterances 5, last 1666 ms / 24961 subsamples, clips 11 (four letter clips for Apps). sr chord right → "volume up", volume 90, last 1339 ms / 20146 subsamples ("Volume ninety"), clips 13. sr chord left → "volume down", volume 80, last 1175 ms / 18077 subsamples, clips 15. input send back short → home (battery record); loader info: No application is running.
+5. Accessibility: loader open Momentum → Application "Momentum" is running; screen "MNTM-DEV 4BDA0A4A. Protocols. Misc. Interface, 1 of 4"; input send up short → "Accessibility, 4 of 4"; input send ok short; sr screen: 15 records "Volume 80. Verbosity Normal. Change delay 3 s. Screen Reader ON, 1 of 4" (rows Screen Reader ON, Volume 80, Verbosity Normal, Change delay 3 s; no Voice, no Rate). Back three times → home; loader info: no application; sr status: announcements 8, utterances 13, aborted 2, last 15972 subsamples ("Home screen"), clips 35, fallback 0, missing 0, muted 1.
+6. Card: /ext/apps: Bluetooth, GPIO, Infrared, Media, NFC, RFID, Sub-GHz, Tools, USB, assets, iButton (no Games, no Scripts). /ext/apps/assets: 13 faps incl. momentum_app.fap 79212 bytes, no js_app.fap. /ext/apps/Sub-GHz: 20 faps, no subghz.fap. /ext/apps_data/js_app: Storage error: file/dir not exist.
+7. Sub-GHz: input send ok short → "Apps, 1 of 11"; down → "Sub-GHz, 2 of 11"; ok → sr screen "Read RAW. Saved. Add Manually. Read, 1 of 7", announcements 10 → 11, last utterance "Read" (441 ms); loader info: Application "Sub-GHz" is running; free: Free heap size 52984, Total heap size 189568, Minimum heap size 50840, Maximum heap block 52984, Pool free 876. Back → "Sub-GHz, 2 of 11"; Back → home; loader info: No application is running.
+Final: enabled yes; volume 80, verbosity 1, change delay 3000 ms; speech idle, utterances 18, aborted 2; voice on, clips 43, fallback 0, missing 0, muted 1; free heap 116424. Settings file /int/.momentum_settings.txt after the chords saved: screen_reader true, sr_volume 80, sr_verbosity 1, sr_change_ms 3000; the old sr_rate and sr_voice lines gone.
+
+## Files changed
+Firmware modified: applications/services/screen_reader/{speech.c, speech.h, speech_pcm.c, speech_pcm.h, speech_text.c, speech_text.h, screen_reader.c, screen_reader_cli.c}, lib/momentum/settings.h, lib/momentum/settings.c, applications/main/momentum_app/scenes/momentum_app_scene_accessibility.c. Firmware deleted: applications/services/screen_reader/sam/sam.c, sam.h. Project modified: tests/host/test_speech_pcm.c, tests/host/test_speech_text.c, tools/run_host_tests.sh. Project deleted: tests/host/test_sam_port.c, tests/host/sam_cases.h, tests/host/sam_ref/ (4 files), tools/sam_calibrate.py.
+
+## Self-review
+Every step and file covered, both commits made; no SAM code path remains; the runner's output clean. The brief's last check in test_volume (`lut[v[0]] == full[v[0]] || lut[v[0]] > full[v[0]]`) is weak: it would also pass if a reset restored full volume; kept word for word; `> full[v[0]]` would pin "keeps the table". The mute path and the missing-letter rule have no host test (device and reading, per the spec).
+
+## Concerns
+1. The SAM greps as listed (comment credits and the word list); rewording the two credit comments would be comment-only and needs no reflash.
+2. The rule-10 test deleted and several stale comments fixed beyond the brief's list.
+3. The report file could not be written by the implementer (harness refusal); this file is the controller's copy of its message.
+4. The port took 6 min 15 s to return (a similar gap of about 6 min 46 s in the phase 3 log).
+5. For Task 7: the README and a comment in patches/text2sam-cli-mode.patch still name tools/sam_calibrate.py; the free-heap figures before and after the flash are not comparable for SAM alone (the older build was running before).
