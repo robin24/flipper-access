@@ -1,0 +1,797 @@
+Firmware stripdown: flash, static RAM, idle heap, RAM probe and device pass, 2026-09-25
+
+Firmware: branch screen-reader at cc7212c6c, release configuration (COMPACT=1, DEBUG=0, build directory build/f7-firmware-C).
+Device: R0skie on /dev/cu.usbmodemflip_R0skie1, the recorded voice on the card, flashed once in Task 6 with ./fbt flash_usb_full.
+Console replies are verbatim from tools/flipper_cli.py, sent through its own functions by a small driver that time-stamps each command. The RAM probe's output is verbatim.
+A spoken text is recognised by the subsamples of the "last utterance" line of sr status: "Home screen" is 15,972 subsamples.
+
+Flash
+From tools/flash_headroom.sh: firmware.bin against the 880,640 bytes the BLE stack leaves free.
+Round start, 22ae265ef: 877,036 bytes, 3,604 spare.
+Task 2, the JavaScript engine out, 8fe7f533d: 835,748 bytes, 44,892 spare. 41,288 less.
+Task 3, Sub-GHz built into the firmware, 59140fcd2: 877,776 bytes, 2,864 spare. 42,028 more.
+Task 4, SAM out, 4bda0a4ae: 862,432 bytes, 18,208 spare. 15,344 less.
+Task 5, the Animations setting, cc7212c6c: 862,588 bytes, 18,052 spare. 156 more. Its first commit, 582cad9f3, before the setting was latched at alloc, measured 862,612 bytes, 18,028 spare.
+Final build, cc7212c6c, the image that ships: 862,588 bytes, 18,052 spare. firmware.bin md5 a71e546a69dc990e4995858cd0893102, the same after the flash build.
+The round in total: 14,448 bytes less than at its start.
+The final build: build/f7-firmware-C/resources and build/f7-firmware-C/.extapps deleted, then ./fbt, exit 0, 04:37:23 to 04:37:41. The firmware objects were current from Task 5, so only the version stamp was rebuilt and the image relinked. Then ./fbt resources, exit 0 at 04:39:24.
+./fbt through the brief's filter (API version, warning, error, Excluded): the two known manifest warnings of the external apps cli_bridge (Invalid appid '.cli_gui') and mtp (Invalid appid '.f0_mtp'); the line below; "API version 87.2 is up to date". No error line.
+Excluded 45 external apps by configuration: 4inrow, air_arkanoid, air_labyrinth, arkanoid, asteroids, blackjack, bomberduck, checkers, chess, cli_js, color_guess, doom, flappy_bird, flipper_pong, game15, game_2048, gameoflife, geometry_dash, heap_defence, jetpack_joyride, js_app, laser_tag, minesweeper_redux, multi_dice, pinball0, quadrastic, reversi, roots_of_life, rubiks_cube_scrambler, scorched_tanks, simon_says, slotmachine, snake20, solitaire, t_rex_runner, tama_p1, tanks, test_js, tetris, tictactoe, umpire_indicator, videopoker, yapinvaders, yatzee, zombiez
+./fbt resources: the same two manifest warnings, and 20 compiler warnings, all inside the external apps' own sources (the asn1 code of seader, picopass and passy; flipboard; airmouse; mitsubishi_ac_remote), none in a file of this round.
+Manifest check, grep -c -E 'apps/Games/|apps/Scripts/|js_app|cli_js|test_js|apps/Sub-GHz/subghz.fap' build/f7-firmware-C/resources/Manifest: 0. The same after the flash build: 0.
+Also 0 without the slashes: no directory entry D:apps/Games or D:apps/Scripts, no apps_data/js_app. The Manifest lists 11 app folders and 20 files under apps/Sub-GHz. .extapps holds no js_ file, no cli_js, no test_js and no subghz.fap.
+
+Static RAM
+From python3 tools/map_size.py Momentum-Firmware/build/f7-firmware-C/firmware.elf.map lib over the final map (md5 1950203b9a2c998e73a3593993e672ea, the same after the flash build).
+The totals line: TOTAL flash 866398 static ram 5897
+The screen reader's line: 19798 flash, 8 static RAM, applications/services/screen_reader
+The Sub-GHz app's line, in the firmware since Task 3: 43142 flash, 25 static RAM, applications/main/subghz
+Static RAM, data plus bss, is 5,897 bytes: 941 of data and 4,956 of bss as the map lists them per object. At 22ae265ef the same count gave 9,580, of which SAM 3,704: now 3,683 bytes less.
+With the linker's alignment fill the two sections are 988 and 5,020 bytes, 6,008 in all, as fbt's "Firmware size" prints them.
+The screen reader at 22ae265ef: 35,073 bytes of flash, of which SAM 14,251. Now 19,798: 15,275 less.
+The script's flash total, 866,398, is not the image size. The map lists the mergeable string constants of .rodata at their size before the linker merges duplicates (191,331 bytes counted, 186,280 linked), and the script leaves out alignment fill. The image is firmware.bin, 862,588 bytes.
+
+Idle heap
+Home screen, no application, reader on, voice on, speech idle. Each reading is the free command 30 s after the port came back from the boot, followed by the device's uptime command. Total heap 189,560 bytes each time.
+Animations off, the first boot after the flash (the settings file had no desktop_anims key): free 116,672, minimum 114,096, largest block 116,672, at uptime 0h0m32s.
+Animations on: free 116,736, minimum 114,592, largest block 116,736, at uptime 0h0m32s.
+Animations off again: free 116,752, minimum 114,608, largest block 116,752, at uptime 0h0m32s.
+The three differ by less than 100 bytes. This pass did not measure the 10 to 26 KB a card animation takes (spec section 7), for the reason below.
+With animations on, the desktop redrew 2.0 times a second (the reader's frame counter went from 433 to 473 in 20 s) and showed no text and no bubble. With animations off the counter stayed at 2 for the whole boot.
+With animations on, free equals the largest block, as with animations off, so no animation frames were loaded from the card: the animation playing was one compiled into flash.
+Its rate and the missing bubble fit the "new mail" animation (6 frames at 2 a second, no bubble slots). The manager shows it instead of an idle animation while a dolphin level up is pending. L1_AnimationError, the only flash animation allowed at idle, runs at 1 frame a second.
+The console cannot show whether a level up is pending, so this is an inference. If one was pending, the first boot could not grant it: nothing there raised a deed or a card event. loader open records no deed; only the Apps browser does (loader_applications.c line 136). This is the minor Task 5's review deferred: a level up pending at boot is granted only at the next deed or card event.
+Two later samples with animations on, at uptime 3 min 37 s and 3 min 57 s: free 116,872 and 116,768, largest block 116,496 both times.
+For comparison, from Task 4's report and not 30 s after boot: 106,488 free at idle before its flash (the polish round's build: SAM in, animations on, the device up for some time) and 116,648 shortly after it (4bda0a4ae: SAM out, animations on). Both with whichever animation was playing.
+
+RAM probe
+.venv/bin/python tools/ram_probe.py, without the Doom row (commit f1903a5), from 04:59:06 to 05:01:20, exit 0. The probe reboots the device first; animations were off, the reader on throughout.
+No row reports a reboot. Sub-GHz Read: lowest sampled 53,064 bytes free. Frequency Analyzer: 51,136. On 2026-09-23, with Sub-GHz a fap on the card (docs/measurements/2026-09-23-ram-probe-speech-on.txt), Read went down to 2,080 and the Frequency Analyzer crashed the device.
+NFC Read is now the lowest row: 23,232 sampled, low-water mark 23,160 (23,800 and 23,712 on 2026-09-23, a build without the recorded voice).
+uPython failed to preload for lack of memory, as expected, and was not running afterwards, so no reboot was needed after the probe.
+After the probe: No application is running, the home screen; sr status: announcements 54, utterances 54, aborted 31 (speech cut by the probe's key presses), dropped 0, underruns 0.
+The full output:
+
+port /dev/cu.usbmodemflip_R0skie1
+rebooting for a clean baseline
+Desktop idle: free before 116840, lowest sampled 116840, low-water mark 116768 -> 116768, after exit 116840, samples 63, app was running: False
+Sub-GHz: Read: free before 116840, lowest sampled 53064, low-water mark 116768 -> 52992, after exit 116624, samples 62, app was running: True
+Sub-GHz: Frequency Analyzer: free before 116608, lowest sampled 51136, low-water mark 52992 -> 50616, after exit 116528, samples 88, app was running: True
+NFC: Read: free before 116552, lowest sampled 23232, low-water mark 50616 -> 23160, after exit 115648, samples 87, app was running: True
+125 kHz RFID: Read: free before 116376, lowest sampled 79256, low-water mark 23160 -> 23160, after exit 116296, samples 83, app was running: True
+Infrared: Learn New Remote: free before 116296, lowest sampled 42280, low-water mark 23160 -> 23160, after exit 116232, samples 92, app was running: True
+Infrared: Universal Remotes, first category: free before 116240, lowest sampled 31152, low-water mark 23160 -> 23160, after exit 116240, samples 87, app was running: True
+iButton: Read: free before 116240, lowest sampled 86464, low-water mark 23160 -> 23160, after exit 116216, samples 86, app was running: True
+GPIO: Manual Control: free before 116216, lowest sampled 97144, low-water mark 23160 -> 23160, after exit 116216, samples 63, app was running: True
+Bad KB (file browser): free before 116216, lowest sampled 83800, low-water mark 23160 -> 23160, after exit 116232, samples 81, app was running: True
+Momentum settings, first section: free before 116192, lowest sampled 79624, low-water mark 23160 -> 23160, after exit 116216, samples 64, app was running: True
+Text to SAM (keyboard screen): free before 116216, lowest sampled 88248, low-water mark 23160 -> 23160, after exit 116192, samples 47, app was running: True
+TOTP (large app): free before 116160, lowest sampled 63984, low-water mark 23160 -> 23160, after exit 115944, samples 60, app was running: True
+  note: loader said: Preload failed, /ext/apps/Tools/upython.fap: Not enough memory
+uPython (largest app, expected to fail to load): free before 115920, lowest sampled 115904, low-water mark 23160 -> 23160, after exit 115904, samples 64, app was running: False
+
+Total heap 189560 bytes. Global low-water mark after all apps: 23160 bytes free.
+Lowest sampled free heap: 23232 bytes during 'NFC: Read'.
+
+Device pass
+Every command and its reply, time-stamped, as the driver logged them. The lines "note:" and "(wait ...)" are the driver's own.
+
+Before the flash, the idle check of Task 4 Step 9
+The Task 4 build (4bda0a4a) on the home screen, no application. Announcements 13 and utterances 18 at 04:41:05 and again at 04:41:36, speech idle.
+
+[04:39:23] note: Pre-flash state (Task 4 build on the device)
+[04:39:24] == loader info
+No application is running
+[04:39:24] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:39:24] == info device
+(the firmware lines only; the hardware, radio and system lines are left out)
+firmware.commit.hash          : 4bda0a4a
+firmware.commit.dirty         : true
+firmware.branch.name          : screen-reader
+firmware.version              : mntm-dev
+firmware.build.date           : 25-09-2026
+firmware.api.major            : 87
+firmware.api.minor            : 2
+[04:41:05] note: Step 3, idle check before the flash
+[04:41:05] == loader info
+No application is running
+[04:41:05] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 6125, dropped: 0, announcements: 13, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 18, aborted 2, dropped 0, underruns 0, queue dropped 0
+last utterance: 1098 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2484
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 43, fallback 0, missing 0, muted 1, open max 31 ms, last 28 ms
+free heap: 116576
+[04:41:05] (wait 30 s)
+[04:41:36] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 6186, dropped: 0, announcements: 13, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 18, aborted 2, dropped 0, underruns 0, queue dropped 0
+last utterance: 1098 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2484
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 43, fallback 0, missing 0, muted 1, open max 31 ms, last 28 ms
+free heap: 116576
+[04:41:36] == loader info
+No application is running
+
+The flash
+./fbt flash_usb_full from 04:41:52 to 04:44:17, exit 0, package f7-update-mntm-screen-reader-cc7212c6. Its last three lines: the upload's progress line, ending "<100%, chunk 15 of 15 @ 117.84 kb/s"; "2026-09-25 04:44:14,664 [INFO] Closing current app, if any"; Touch("build/usbinstall.flag").
+The port was gone at 04:44:15 and back at 04:50:24: 369 s, 6 min 9 s.
+sr screen 10 s later: no records on the desktop layer, the post-update splash. Back closed it, and the home screen showed the battery only. info device: cc7212c6, dirty (the untouched applications/external), branch screen-reader, API 87.2.
+
+[04:50:34] note: Step 3, after the flash: port gone 04:44:15, back 04:50:24 (369 s)
+[04:50:34] (wait until 10 s after the port came back: 0.0 s)
+[04:50:35] == sr screen
+records: 0, content layer: desktop
+reads as:
+[04:50:35] == loader info
+No application is running
+[04:50:41] == input send back short
+[04:50:41] (wait 1.5 s)
+[04:50:42] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:50:42] == info device
+(the firmware lines only; the hardware, radio and system lines are left out)
+firmware.commit.hash          : cc7212c6
+firmware.commit.dirty         : true
+firmware.branch.name          : screen-reader
+firmware.version              : mntm-dev
+firmware.build.date           : 25-09-2026
+firmware.api.major            : 87
+firmware.api.minor            : 2
+
+1. Idle, 30 s after boot, animations off
+Enabled; announcements 1 and utterances 1 ("Home screen" at boot, 15,972 subsamples); frames 3; voice on, clips 2, muted 0; free 116,672 at uptime 32 s.
+
+[04:50:49] note: Step 4.1, 30 s after boot, animations off (no desktop_anims key in the settings file)
+[04:50:49] (wait until 30 s after the port came back: 5.7 s)
+[04:50:55] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 3, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+free heap: 116688
+[04:50:55] == sr voice status
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+[04:50:55] == free
+Free heap size: 116672
+Total heap size: 189560
+Minimum heap size: 114096
+Maximum heap block: 116672
+Pool free: 876
+Maximum pool block: 672
+[04:50:55] == uptime
+Uptime: 0h0m32s
+
+2. Home screen
+sr chord up said "Home screen" (15,972 subsamples; utterances 1 to 2).
+OK opened the main menu, read as "Settings. Sub-GHz. Apps, 1 of 11"; its announcement was one clip, 521 ms, 7,837 subsamples, the same figures as in Task 4.
+Back returned home and "Home screen" was said again (announcements 2 to 3, 15,972 subsamples): the return path with nothing to reload. No application.
+
+[04:51:06] note: Step 4.2, home screen
+[04:51:06] == sr chord up
+back + up: read the screen
+[04:51:06] (wait 2.5 s)
+[04:51:09] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 3, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 2, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1099 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 4, fallback 0, missing 0, muted 0, open max 27 ms, last 27 ms
+free heap: 116640
+[04:51:09] == input send ok short
+[04:51:09] (wait 4 s)
+[04:51:13] == sr screen
+records: 3, content layer: fullscreen
+fullscreen   x= 22 y= 14 secondary  "Settings"
+fullscreen   x= 22 y= 36 primary    FOCUS 1/11 "Apps"
+fullscreen   x= 22 y= 58 secondary  "Sub-GHz"
+reads as: Settings. Sub-GHz. Apps, 1 of 11
+[04:51:13] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 15, dropped: 0, announcements: 2, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 3, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 521 ms played, 7837 subsamples, 489 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 5, fallback 0, missing 0, muted 0, open max 27 ms, last 21 ms
+free heap: 110728
+[04:51:13] == input send back short
+[04:51:13] (wait 3 s)
+[04:51:16] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 17, dropped: 0, announcements: 3, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 4, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 7, fallback 0, missing 0, muted 0, open max 27 ms, last 26 ms
+free heap: 116480
+[04:51:16] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:51:16] == loader info
+No application is running
+
+3. Lock and unlock
+Up opened the lock menu; its focus note "Lock" was said (435 ms).
+OK on the Lock tile opened the lock popup, read as "PIN Code Lock. PIN Lock + OFF. Keypad Lock, 1 of 3", focus on Keypad Lock. A second OK, on Keypad Lock, locked without a PIN. The PIN items were not touched.
+The brief has the first OK lock at once. On this firmware that OK opens the popup, and its first item, Keypad Lock, locks.
+Locked: the screen reads "Locked, press Back 3 times quickly to unlock. 25-09-2026. 04:50". The note was said in full: 8 clips (10 to 18), 4,132 ms, 65,151 subsamples. One change was held back (suppressed 0 to 1), as phase 3 recorded for the lock screen's arrival.
+The three Backs, sent in one invocation of tools/flipper_cli.py, unlocked it. Announcements 6 to 9 and utterances 7 to 10, one cut (aborted 0 to 1), clips 18 to 22, the last "Home screen". Phase 3 recorded the same three: the unlock hint cut by the next Back, "Unlocked", "Home screen". The home screen shows; no application.
+
+[04:51:27] note: Step 4.3, lock and unlock
+[04:51:28] == input send up short
+[04:51:28] (wait 2 s)
+[04:51:30] == sr screen
+records: 1, content layer: desktop
+desktop      x=  0 y=  0 secondary  FOCUS NOTE "Lock"
+reads as: Lock
+[04:51:30] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 18, dropped: 0, announcements: 4, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 5, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 435 ms played, 6351 subsamples, 396 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 8, fallback 0, missing 0, muted 0, open max 27 ms, last 18 ms
+free heap: 116560
+[04:51:36] == input send ok short
+[04:51:36] (wait 2.5 s)
+[04:51:38] == sr screen
+records: 3, content layer: desktop
+desktop      x= 38 y= 19 secondary  FOCUS 1/3 "Keypad Lock"
+desktop      x= 35 y= 35 secondary  "PIN Code Lock"
+desktop      x= 32 y= 51 secondary  "PIN Lock + OFF"
+reads as: PIN Code Lock. PIN Lock + OFF. Keypad Lock, 1 of 3
+[04:51:38] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 19, dropped: 0, announcements: 5, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 6, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1015 ms played, 15690 subsamples, 980 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 10, fallback 0, missing 0, muted 0, open max 27 ms, last 18 ms
+free heap: 116592
+[04:51:45] == input send ok short
+[04:51:45] (wait 6 s)
+[04:51:51] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 26, dropped: 0, announcements: 6, suppressed: 1
+speech: idle, queued 0, speaker held: no, utterances 7, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 4132 ms played, 65151 subsamples, 4071 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 18, fallback 0, missing 0, muted 0, open max 27 ms, last 20 ms
+free heap: 116600
+[04:51:51] == sr screen
+records: 4, content layer: desktop
+desktop      x=  0 y=  0 secondary  NOTE "Locked, press Back 3 times quickly to unlock"
+desktop      x=  0 y= 64 bignumbers "04:50"
+desktop      x=  0 y= 48 secondary  "25-09-2026"
+status-right x=103 y=  9 battery    inverted "100"
+reads as: Locked, press Back 3 times quickly to unlock. 25-09-2026. 04:50
+[04:52:01] == .venv/bin/python tools/flipper_cli.py --quiet "input send back short" "input send back short" "input send back short"
+(no output)
+[04:52:02] (wait 5 s)
+[04:52:07] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 32, dropped: 0, announcements: 9, suppressed: 1
+speech: idle, queued 0, speaker held: no, utterances 10, aborted 1, dropped 0, underruns 0, queue dropped 0
+last utterance: 1098 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 22, fallback 0, missing 0, muted 0, open max 27 ms, last 26 ms
+free heap: 116728
+[04:52:07] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:52:07] == loader info
+No application is running
+
+4. The Animations row
+ON: loader open Momentum read "MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4". OK: "Mainmenu. Lockscreen. Statusbar. Graphics, 1 of 6". OK on Graphics: "Asset Pack Default. Anim Speed 100%. Cycle Anims Meta.txt. Animations OFF, 1 of 5": the first row is Animations OFF.
+Right: "Animations ON, 1 of 5"; the change was said (1,334 ms, 19,810 subsamples). Back: Interface. Back: the start list. Back: "Rebooting.... Applying changes...". The port was gone at 04:53:08 and back at 04:53:10.
+After that boot: the battery only on the screen. At 30 s: free 116,736. sr status: announcements 1, suppressed 0, so no bubble was drawn and nothing was said or held back. The frame counter moved: 27 at 10 s, 62 at 30 s. Two more samples near 3 min 40 s: 433 to 473 frames in 20 s, free 116,872 and 116,768.
+OFF again, the same path: the row read "Animations ON, 1 of 5", the saved value. Right on ON does nothing (the row does not wrap), so Left set it: "Animations OFF, 1 of 5", said in 1,334 ms (20,029 subsamples). Back three times, the same popup. The port was gone at 04:57:55 and back at 04:57:57.
+After that boot: the battery only. At 30 s: free 116,752. The frame counter stayed at 2 at 10 s, 30 s and 50 s.
+
+[04:52:19] note: Step 4.4, the Animations row: ON
+[04:52:19] == loader open Momentum
+[04:52:19] (wait 3 s)
+[04:52:22] == loader info
+Application "Momentum" is running
+[04:52:22] == sr screen
+records: 7, content layer: fullscreen
+fullscreen   x=  4 y= 11 primary    "MNTM-DEV CC7212C6"
+fullscreen   x=  6 y= 28 secondary  inverted FOCUS 1/4 "Interface"
+fullscreen   x= 97 y= 28 secondary  inverted FOCUS 1/4 ">"
+fullscreen   x=  6 y= 44 secondary  "Protocols"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Misc"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4
+[04:52:27] == input send ok short
+[04:52:27] (wait 2.5 s)
+[04:52:30] == sr screen
+records: 8, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/6 "Graphics"
+fullscreen   x= 97 y= 12 secondary  inverted FOCUS 1/6 ">"
+fullscreen   x=  6 y= 28 secondary  "Mainmenu"
+fullscreen   x= 97 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Lockscreen"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Statusbar"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: Mainmenu. Lockscreen. Statusbar. Graphics, 1 of 6
+[04:52:35] == input send ok short
+[04:52:35] (wait 2.5 s)
+[04:52:38] == sr screen
+records: 14, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/5 "Animations"
+fullscreen   x= 90 y= 12 secondary  inverted FOCUS 1/5 "OFF"
+fullscreen   x=115 y= 12 secondary  inverted ">"
+fullscreen   x=  6 y= 28 secondary  "Asset Pack"
+fullscreen   x= 81 y= 28 secondary  "Default"
+fullscreen   x=115 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Anim Speed"
+fullscreen   x= 73 y= 44 secondary  "<"
+fullscreen   x= 84 y= 44 secondary  "100%"
+fullscreen   x=115 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Cycle Anims"
+fullscreen   x= 73 y= 60 secondary  "<"
+fullscreen   x= 77 y= 60 secondary  "Meta.txt"
+fullscreen   x=115 y= 60 secondary  ">"
+reads as: Asset Pack Default. Anim Speed 100%. Cycle Anims Meta.txt. Animations OFF, 1 of 5
+[04:52:44] == input send right short
+[04:52:44] (wait 2.5 s)
+[04:52:47] == sr screen
+records: 14, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/5 "Animations"
+fullscreen   x= 80 y= 12 secondary  inverted "<"
+fullscreen   x= 93 y= 12 secondary  inverted FOCUS 1/5 "ON"
+fullscreen   x=  6 y= 28 secondary  "Asset Pack"
+fullscreen   x= 81 y= 28 secondary  "Default"
+fullscreen   x=115 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Anim Speed"
+fullscreen   x= 73 y= 44 secondary  "<"
+fullscreen   x= 84 y= 44 secondary  "100%"
+fullscreen   x=115 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Cycle Anims"
+fullscreen   x= 73 y= 60 secondary  "<"
+fullscreen   x= 77 y= 60 secondary  "Meta.txt"
+fullscreen   x=115 y= 60 secondary  ">"
+reads as: Asset Pack Default. Anim Speed 100%. Cycle Anims Meta.txt. Animations ON, 1 of 5
+[04:52:47] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 116, dropped: 0, announcements: 13, suppressed: 1
+speech: idle, queued 0, speaker held: no, utterances 14, aborted 1, dropped 0, underruns 0, queue dropped 0
+last utterance: 1334 ms played, 19810 subsamples, 1238 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 40, fallback 0, missing 0, muted 0, open max 28 ms, last 18 ms
+free heap: 80776
+[04:53:03] == input send back short
+[04:53:03] (wait 1.5 s)
+[04:53:05] == sr screen
+records: 8, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/6 "Graphics"
+fullscreen   x= 97 y= 12 secondary  inverted FOCUS 1/6 ">"
+fullscreen   x=  6 y= 28 secondary  "Mainmenu"
+fullscreen   x= 97 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Lockscreen"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Statusbar"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: Mainmenu. Lockscreen. Statusbar. Graphics, 1 of 6
+[04:53:05] == input send back short
+[04:53:05] (wait 1.5 s)
+[04:53:06] == sr screen
+records: 7, content layer: fullscreen
+fullscreen   x=  4 y= 11 primary    "MNTM-DEV CC7212C6"
+fullscreen   x=  6 y= 28 secondary  inverted FOCUS 1/4 "Interface"
+fullscreen   x= 97 y= 28 secondary  inverted FOCUS 1/4 ">"
+fullscreen   x=  6 y= 44 secondary  "Protocols"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Misc"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4
+[04:53:06] == input send back short
+[04:53:06] (wait 0.3 s)
+[04:53:07] == sr screen
+records: 2, content layer: fullscreen
+fullscreen   x= 35 y= 30 primary    "Rebooting..."
+fullscreen   x= 26 y= 43 secondary  "Applying changes..."
+reads as: Rebooting.... Applying changes...
+[04:53:22] note: Step 4.4, after the reboot with Animations ON: port gone 04:53:08, back 04:53:10
+[04:53:22] (wait until 10 s after the port came back: 0.0 s)
+[04:53:22] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:53:22] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 27, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+free heap: 116664
+[04:53:22] (wait until 30 s after the port came back: 17.6 s)
+[04:53:40] == free
+Free heap size: 116736
+Total heap size: 189560
+Minimum heap size: 114592
+Maximum heap block: 116736
+Pool free: 876
+Maximum pool block: 672
+[04:53:40] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 62, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+free heap: 116600
+[04:53:40] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:53:40] == uptime
+Uptime: 0h0m32s
+[04:56:45] note: Step 4.4, extra samples with animations on (redraw rate, heap stability)
+[04:56:45] == free
+Free heap size: 116872
+Total heap size: 189560
+Minimum heap size: 114488
+Maximum heap block: 116496
+Pool free: 876
+Maximum pool block: 672
+[04:56:45] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 433, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+free heap: 116712
+[04:56:45] == uptime
+Uptime: 0h3m37s
+[04:56:45] (wait 20 s)
+[04:57:05] == free
+Free heap size: 116768
+Total heap size: 189560
+Minimum heap size: 114488
+Maximum heap block: 116496
+Pool free: 876
+Maximum pool block: 672
+[04:57:05] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 473, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 26 ms, last 26 ms
+free heap: 116672
+[04:57:05] == uptime
+Uptime: 0h3m57s
+[04:57:14] note: Step 4.4, the Animations row: OFF again
+[04:57:14] == loader open Momentum
+[04:57:14] (wait 3 s)
+[04:57:17] == loader info
+Application "Momentum" is running
+[04:57:17] == sr screen
+records: 7, content layer: fullscreen
+fullscreen   x=  4 y= 11 primary    "MNTM-DEV CC7212C6"
+fullscreen   x=  6 y= 28 secondary  inverted FOCUS 1/4 "Interface"
+fullscreen   x= 97 y= 28 secondary  inverted FOCUS 1/4 ">"
+fullscreen   x=  6 y= 44 secondary  "Protocols"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Misc"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4
+[04:57:17] == input send ok short
+[04:57:17] (wait 2.5 s)
+[04:57:20] == sr screen
+records: 8, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/6 "Graphics"
+fullscreen   x= 97 y= 12 secondary  inverted FOCUS 1/6 ">"
+fullscreen   x=  6 y= 28 secondary  "Mainmenu"
+fullscreen   x= 97 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Lockscreen"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Statusbar"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: Mainmenu. Lockscreen. Statusbar. Graphics, 1 of 6
+[04:57:25] == input send ok short
+[04:57:25] (wait 2.5 s)
+[04:57:28] == sr screen
+records: 14, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/5 "Animations"
+fullscreen   x= 80 y= 12 secondary  inverted "<"
+fullscreen   x= 93 y= 12 secondary  inverted FOCUS 1/5 "ON"
+fullscreen   x=  6 y= 28 secondary  "Asset Pack"
+fullscreen   x= 81 y= 28 secondary  "Default"
+fullscreen   x=115 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Anim Speed"
+fullscreen   x= 73 y= 44 secondary  "<"
+fullscreen   x= 84 y= 44 secondary  "100%"
+fullscreen   x=115 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Cycle Anims"
+fullscreen   x= 73 y= 60 secondary  "<"
+fullscreen   x= 77 y= 60 secondary  "Meta.txt"
+fullscreen   x=115 y= 60 secondary  ">"
+reads as: Asset Pack Default. Anim Speed 100%. Cycle Anims Meta.txt. Animations ON, 1 of 5
+[04:57:34] == input send left short
+[04:57:34] (wait 2.5 s)
+[04:57:36] == sr screen
+records: 14, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/5 "Animations"
+fullscreen   x= 90 y= 12 secondary  inverted FOCUS 1/5 "OFF"
+fullscreen   x=115 y= 12 secondary  inverted ">"
+fullscreen   x=  6 y= 28 secondary  "Asset Pack"
+fullscreen   x= 81 y= 28 secondary  "Default"
+fullscreen   x=115 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Anim Speed"
+fullscreen   x= 73 y= 44 secondary  "<"
+fullscreen   x= 84 y= 44 secondary  "100%"
+fullscreen   x=115 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Cycle Anims"
+fullscreen   x= 73 y= 60 secondary  "<"
+fullscreen   x= 77 y= 60 secondary  "Meta.txt"
+fullscreen   x=115 y= 60 secondary  ">"
+reads as: Asset Pack Default. Anim Speed 100%. Cycle Anims Meta.txt. Animations OFF, 1 of 5
+[04:57:36] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 561, dropped: 0, announcements: 5, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 5, aborted 1, dropped 0, underruns 0, queue dropped 0
+last utterance: 1334 ms played, 20029 subsamples, 1251 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 14, fallback 0, missing 0, muted 0, open max 26 ms, last 19 ms
+free heap: 79920
+[04:57:51] == input send back short
+[04:57:51] (wait 1.5 s)
+[04:57:52] == sr screen
+records: 8, content layer: fullscreen
+fullscreen   x=  6 y= 12 secondary  inverted FOCUS 1/6 "Graphics"
+fullscreen   x= 97 y= 12 secondary  inverted FOCUS 1/6 ">"
+fullscreen   x=  6 y= 28 secondary  "Mainmenu"
+fullscreen   x= 97 y= 28 secondary  ">"
+fullscreen   x=  6 y= 44 secondary  "Lockscreen"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Statusbar"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: Mainmenu. Lockscreen. Statusbar. Graphics, 1 of 6
+[04:57:52] == input send back short
+[04:57:52] (wait 1.5 s)
+[04:57:54] == sr screen
+records: 7, content layer: fullscreen
+fullscreen   x=  4 y= 11 primary    "MNTM-DEV CC7212C6"
+fullscreen   x=  6 y= 28 secondary  inverted FOCUS 1/4 "Interface"
+fullscreen   x= 97 y= 28 secondary  inverted FOCUS 1/4 ">"
+fullscreen   x=  6 y= 44 secondary  "Protocols"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Misc"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4
+[04:57:54] == input send back short
+[04:57:54] (wait 0.3 s)
+[04:57:54] == sr screen
+records: 2, content layer: fullscreen
+fullscreen   x= 35 y= 30 primary    "Rebooting..."
+fullscreen   x= 26 y= 43 secondary  "Applying changes..."
+reads as: Rebooting.... Applying changes...
+[04:58:06] note: Step 4.4, after the reboot with Animations OFF again: port gone 04:57:55, back 04:57:57
+[04:58:06] (wait until 10 s after the port came back: 1.7 s)
+[04:58:08] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:58:08] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 2, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 27 ms, last 27 ms
+free heap: 116680
+[04:58:08] (wait until 30 s after the port came back: 19.5 s)
+[04:58:27] == free
+Free heap size: 116752
+Total heap size: 189560
+Minimum heap size: 114608
+Maximum heap block: 116752
+Pool free: 876
+Maximum pool block: 672
+[04:58:27] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 2, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 27 ms, last 27 ms
+free heap: 116616
+[04:58:27] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[04:58:27] == uptime
+Uptime: 0h0m32s
+[04:58:27] (wait 20 s)
+[04:58:47] == free
+Free heap size: 116728
+Total heap size: 189560
+Minimum heap size: 114504
+Maximum heap block: 116664
+Pool free: 876
+Maximum pool block: 672
+[04:58:47] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 2, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 27 ms, last 27 ms
+free heap: 116616
+[04:58:47] == uptime
+Uptime: 0h0m52s
+
+5. RAM probe
+Its output is in the RAM probe section above. After it:
+
+[05:01:36] note: Step 4.5, after the RAM probe (probe 04:59:06 to 05:01:20, exit 0)
+[05:01:36] == loader info
+No application is running
+[05:01:36] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[05:01:36] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 266, dropped: 0, announcements: 54, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 54, aborted 31, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2492
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 163, fallback 0, missing 0, muted 0, open max 40 ms, last 29 ms
+free heap: 116536
+
+6. The card
+/ext/apps: 11 folders, Bluetooth, GPIO, Infrared, Media, NFC, RFID, Sub-GHz, Tools, USB, assets, iButton. No Games, no Scripts. The brief expected twelve; the Manifest lists these same 11, and so did Task 4's listing.
+/ext/apps/Sub-GHz: 20 faps, no subghz.fap.
+
+[05:01:44] note: Step 4.6, the card
+[05:01:44] == storage list /ext/apps
+	[D] Bluetooth
+	[D] GPIO
+	[D] Infrared
+	[D] Media
+	[D] NFC
+	[D] RFID
+	[D] Sub-GHz
+	[D] Tools
+	[D] USB
+	[D] assets
+	[D] iButton
+[05:01:44] == storage list /ext/apps/Sub-GHz
+	[F] chief_cooker.fap 186856b
+	[F] esubghz_chat.fap 135332b
+	[F] flipper_share.fap 33600b
+	[F] fmf_to_sub.fap 18236b
+	[F] hc11_modem.fap 36208b
+	[F] meal_pager.fap 48780b
+	[F] pocsag_pager.fap 40396b
+	[F] proto_pirate.fap 260992b
+	[F] protoview.fap 53792b
+	[F] radio_scanner.fap 9036b
+	[F] rolling_flaws.fap 30372b
+	[F] spectrum_analyzer.fap 14128b
+	[F] sub_analyzer.fap 16028b
+	[F] subghz_bruteforcer.fap 62288b
+	[F] subghz_playlist.fap 26068b
+	[F] subghz_playlist_creator.fap 17764b
+	[F] subghz_remote.fap 49460b
+	[F] subghz_scheduler.fap 33692b
+	[F] tpms.fap 45168b
+	[F] weather_station.fap 102220b
+
+7. A long screen
+loader open Momentum. sr chord up read the whole screen as one utterance: 9,780 ms, 154,866 subsamples, 19 clips (169 to 188). Phase 3 recorded this screen at 9.6 s and 18 clips, with the commit hash spelled. The screen reads as "MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4", 54 characters; the reader cuts a text into parts of up to 159 characters, so this is one part.
+The chord cut the app's own opening announcement (aborted 31 to 32).
+Back left the app without a reboot (nothing had changed), and "Home screen" was said (announcements 55 to 56).
+
+[05:01:59] note: Step 4.7, a long screen
+[05:02:00] == loader open Momentum
+[05:02:00] (wait 3 s)
+[05:02:03] == loader info
+Application "Momentum" is running
+[05:02:03] == sr screen
+records: 7, content layer: fullscreen
+fullscreen   x=  4 y= 11 primary    "MNTM-DEV CC7212C6"
+fullscreen   x=  6 y= 28 secondary  inverted FOCUS 1/4 "Interface"
+fullscreen   x= 97 y= 28 secondary  inverted FOCUS 1/4 ">"
+fullscreen   x=  6 y= 44 secondary  "Protocols"
+fullscreen   x= 97 y= 44 secondary  ">"
+fullscreen   x=  6 y= 60 secondary  "Misc"
+fullscreen   x= 97 y= 60 secondary  ">"
+reads as: MNTM-DEV CC7212C6. Protocols. Misc. Interface, 1 of 4
+[05:02:03] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 276, dropped: 0, announcements: 55, suppressed: 0
+speech: speaking, queued 0, speaker held: yes, utterances 55, aborted 31, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2492
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 169, fallback 0, missing 0, muted 0, open max 40 ms, last 22 ms
+free heap: 80176
+[05:02:03] == sr chord up
+back + up: read the screen
+[05:02:03] (wait 14 s)
+[05:02:17] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 318, dropped: 0, announcements: 55, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 56, aborted 32, dropped 0, underruns 0, queue dropped 0
+last utterance: 9780 ms played, 154866 subsamples, 9679 ms nominal, worker stack free 2492
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 188, fallback 0, missing 0, muted 0, open max 40 ms, last 19 ms
+free heap: 80832
+[05:02:26] == input send back short
+[05:02:26] (wait 3.5 s)
+[05:02:29] == loader info
+No application is running
+[05:02:29] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+[05:02:29] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 345, dropped: 0, announcements: 56, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 57, aborted 32, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2492
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 190, fallback 0, missing 0, muted 0, open max 40 ms, last 27 ms
+free heap: 116328
+
+8. Final
+Home screen, no application. Reader enabled; volume 80, verbosity 1, change delay 3000 ms; speech idle; voice on, vocabulary yes, clips 190, fallback 0, missing 0, muted 0.
+free 116,472; largest block 57,880, because the probe's apps left the heap fragmented; minimum 23,160, the probe's NFC row.
+The settings file says desktop_anims: false. The frame counter stood at 345 at 05:02:29 and at 05:02:39: no animation.
+
+[05:02:39] note: Step 4.8, final
+[05:02:39] == sr status
+enabled: yes
+volume: 80, verbosity: 1, change delay: 3000 ms
+frames: 345, dropped: 0, announcements: 56, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 57, aborted 32, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2492
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 190, fallback 0, missing 0, muted 0, open max 40 ms, last 27 ms
+free heap: 116464
+[05:02:39] == sr voice status
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 190, fallback 0, missing 0, muted 0, open max 40 ms, last 27 ms
+[05:02:39] == free
+Free heap size: 116472
+Total heap size: 189560
+Minimum heap size: 23160
+Maximum heap block: 57880
+Pool free: 876
+Maximum pool block: 672
+[05:02:39] == uptime
+Uptime: 0h3m32s
+[05:02:39] == loader info
+No application is running
+[05:02:39] == sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+== storage read /int/.momentum_settings.txt (right after the lines above; only the animation and reader keys kept)
+Size: 959
+anim_speed: 100
+cycle_anims: 0
+unlock_anims: false
+screen_reader: true
+sr_volume: 80
+sr_verbosity: 1
+sr_change_ms: 3000
+desktop_anims: false
