@@ -201,8 +201,10 @@ return on `!momentum_settings.desktop_anims`, with one addition:
 - `animation_manager_check_blocking_process`: return, but first apply a pending level-up
   (`dolphin_stats().level_up_is_pending` then `dolphin_upgrade_level`), because with animations the
   level is granted when the user presses a key on the "new mail" animation, which now never
-  shows; the same check runs once in `animation_manager_alloc`. A blind user gets nothing from
-  the mail animation anyway, and the passport keeps showing the level.
+  shows. The manager is asked to look at the dolphin's state after every deed and every storage
+  event, so a pending level is granted at the next of those, not at boot: nothing runs against
+  the dolphin while the desktop is still being set up. A blind user gets nothing from the mail
+  animation anyway, and the passport keeps showing the level.
 - `animation_manager_new_idle_process`, `animation_manager_unload_and_stall_animation`,
   `animation_manager_load_and_continue_animation`: return.
 - `animation_manager_interact_process`: return false (the key is not consumed).
@@ -270,11 +272,12 @@ each, is recorded as well.
 
 ## 11. Testing and verification
 
-Host: `tools/run_host_tests.sh` stays green with the SAM suite removed and the PCM tests reduced
-to the raw path; `test_speech_voice.c` gains the muted case (a text item with the voice off opens
-no file and counts as muted) and the missing-letter case (skipped, counted, logged once);
-`test_speech_queue.c`, `test_speech_text.c`, `test_screen_model.c` and `test_sr_chords.c` lose
-only SAM-specific expectations.
+Host: `tools/run_host_tests.sh` stays green with the SAM suite removed, the PCM tests reduced
+to the raw path and the chunking tests gone from `test_speech_text.c`; the build's exclusion
+filter gets a plain Python test over synthetic manifests. The muted case and the missing-letter
+rule live in the engine's worker, which needs the card and the DMA, so the muted case is
+verified on the device (`sr voice off`, `sr say`, the muted count moves and nothing plays) and
+the missing-letter rule by reading, since every synced vocabulary has every letter.
 
 Build: `./fbt` prints "API version 87.2 is up to date" and only the two pre-existing external
 manifest warnings; `./fbt lint` exit 0; `.extapps` holds no `js_*`, `cli_js`, `test_js` or
