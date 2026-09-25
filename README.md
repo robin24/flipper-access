@@ -296,8 +296,8 @@ and was rebooted", the message, most often "furi_check failed", and since 2026-0
 with "at" and an address of eight hexadecimal digits, such as "at 0803ABCD". The reader says the
 address character by character, except that one to three digits after a letter are said as a
 number unless they start with 0 ("AB20" is "ay B twenty", "AB05" is "ay B zero five"), and four
-digits at the start followed by a letter are said as a number too ("2001ABCD" is "two thousand one
-ay B C D"). `sr status` shows the address exactly, with the build that recorded it: "last crash:
+digits at the start, not beginning with 0 and followed only by letters, are said as a number too
+("2001ABCD" is "two thousand one ay B C D"; "0803ABCD" is "zero eight zero three ay B C D"). `sr status` shows the address exactly, with the build that recorded it: "last crash:
 at 2001384F in build 9028a849"; "in build unknown" when a build older than 9028a849 recorded it;
 "last crash: none" when no crash has left one. Back closes the popup; the address stays, across
 reboots and firmware updates, until the next crash.
@@ -308,8 +308,8 @@ names, from the project folder; for "at 0803ABCD":
 
     Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -i -C -a 0x0803ABCB
 
-It prints the function with its file and line, and with `-i` also the functions inlined at that
-point. The build directory holds only the latest build: if it has moved on from the build
+It prints the function with its file and line, and with `-i` also the chain of functions the
+named code was inlined into. The build directory holds only the latest build: if it has moved on from the build
 `sr status` names, build that commit in a git worktree and use its elf. Builds are reproducible,
 so the addresses match.
 
