@@ -944,7 +944,8 @@ chord keys still answer "screen reader is off". The Accessibility row and `sr on
 write the same setting.
 
 The positioned note: `canvas_tap_hint_note_at(canvas, x, y, text)` records a note as
-`canvas_tap_hint_note` does (not drawn, the secondary font, never the title, never a focus) but at
+`canvas_tap_hint_note` does (not drawn, the secondary font, never a focus; one that joins a row
+begun by title-font text at the top of the screen is read inside that title) but at
 x and y plus the canvas offset, where `canvas_draw_str` would record the text. The model reads a
 note at x 0, y 0 as before, first and a row of its own, and a placed note in reading order among
 the drawn text, by baseline and x, joined to the row on its baseline as drawn text is. The model

@@ -266,10 +266,10 @@ the emulation takes over the speaker, and the reader stays silent until you leav
 Build the patched app and copy it to the card:
 
     cd Momentum-Firmware && ./fbt fap_text2sam
-    ../.venv/bin/python scripts/storage.py -p /dev/cu.usbmodemflip_R0skie1 send -f build/f7-firmware-C/.extapps/text2sam.fap /ext/apps/Media/text2sam.fap
+    ../.venv/bin/python scripts/storage.py -p /dev/cu.usbmodemflip_Delphi1 send -f build/f7-firmware-C/.extapps/text2sam.fap /ext/apps/Media/text2sam.fap
 
 (The storage helper is `Momentum-Firmware/scripts/storage.py`; run it with the venv Python and
-`-p /dev/cu.usbmodemflip_R0skie1`.)
+`-p /dev/cu.usbmodemflip_Delphi1`.)
 
 Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 for ble_light
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region and
@@ -286,7 +286,7 @@ at 6c7469a79: 875,928 bytes, 4,712 spare. Before phase 3, at d5b77c219: 872,048 
 Before the recorded voice, at 54794522b: 869,756 bytes, 10,884 spare.
 
 Drive the buttons from the terminal (Momentum only): `input keyboard` inside an interactive
-serial session such as `screen /dev/cu.usbmodemflip_R0skie1 230400`. Arrows move, Enter is OK,
+serial session such as `screen /dev/cu.usbmodemflip_Delphi1 230400`. Arrows move, Enter is OK,
 Backspace is Back, Space before a key sends it as a real button press instead of typed text,
 Ctrl-C leaves keyboard mode. Single presses without a session:
 `tools/flipper_cli.py "input send ok short"`.
@@ -472,7 +472,7 @@ Known limits:
 
 ## Rolling back to official firmware
 
-    .venv/bin/python Momentum-Firmware/scripts/selfupdate.py -p /dev/cu.usbmodemflip_R0skie1 firmware-packages/official-1.4.3/f7-update-1.4.3/update.fuf
+    .venv/bin/python Momentum-Firmware/scripts/selfupdate.py -p /dev/cu.usbmodemflip_Delphi1 firmware-packages/official-1.4.3/f7-update-1.4.3/update.fuf
 
 after unpacking `firmware-packages/flipper-z-f7-update-1.4.3.tgz` into `firmware-packages/official-1.4.3/`.
 Then restore settings with `update restore /ext/backup-stock-1.4.3.tar` on the CLI after
