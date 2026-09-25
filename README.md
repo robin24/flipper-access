@@ -209,6 +209,19 @@ the keys move the way they point.
 When NFC emulates an ISO15693 (NFC-V) card, its "Emulating" screen is read in full first. Then
 the emulation takes over the speaker, and the reader stays silent until you leave with Back.
 
+### The file browser's menus
+
+Down on the home screen opens the file browser, which Momentum calls Archive. Left and Right
+switch its tabs (Favorites, Sub-GHz, RFID, NFC, Infrared, Bad KB, Apps, Search, Browser), Up and
+Down move in the list, OK opens a folder or a file. A long press of Back opens the manage menu
+for the selected entry (Cut, Copy, New Dir, Rename, Delete; Paste once something is cut or
+copied), a long press of OK the actions menu (Run In App, Favorite, Info, Show), and Left or
+Right inside a menu flips between the two. The reader names the selected entry of these menus
+as you move, since 2026-09-25 (before that only the whole menu was read when it opened). Delete
+asks "Delete <name>?" with Cancel on Left and Delete on Right, and removes a folder with
+everything in it. Known: when a menu opens over the list, the reader still reads the menu's
+words mixed with the file names showing behind it; the selection is read correctly after that.
+
 ### Known limits
 
 - Without the SD card, or without `/ext/sr/voice`, the reader is silent: SAM is gone, and on this
