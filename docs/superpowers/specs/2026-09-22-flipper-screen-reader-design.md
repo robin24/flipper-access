@@ -807,7 +807,8 @@ stays cheap and the reader keeps reading the update's screens. The callback only
 `SR_FLAG_DOLPHIN`, because `dolphin_stats` waits on the dolphin's own event loop, the thread that
 runs the callback. On the flag the service thread reads the stats. A higher level is held for two
 seconds (`SR_LEVEL_HOLD_MS`), and while it is held every interrupting announcement (in
-`sr_announce`: a new screen, a focus, the home screen, a lock) holds it two seconds more from then,
+`sr_announce`: a new screen, a focus, the home screen, a lock, a typed character) holds it two
+seconds more from then,
 at most five seconds after the level rose (`SR_LEVEL_HOLD_MAX_MS`); a second rise meanwhile only
 updates the level to be said, and the loop's wait includes the due time as it does a held change's.
 Then, once no frame is settling, it is said as "Level up, level N" without interrupting, so it

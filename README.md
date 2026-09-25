@@ -119,7 +119,9 @@ most five seconds after the deed, so it is heard after the new screen has been r
 pressed while it waits in the speech queue or plays silences it, like all speech. With
 animations off, the level up is granted at the deed that completes the level's points, the
 moment an app such as Sub-GHz or NFC records something you did, or at boot when one was left
-pending; with animations on, when you press a key on the home screen's mail animation. A level
+pending (a level granted at boot is usually not announced, because the reader may read its
+starting level only after the grant; the status chord tells you the level at any time); with
+animations on, when you press a key on the home screen's mail animation. A level
 raised by hand in Momentum, Misc, Dolphin is said as a level up at the next deed; a level
 lowered by hand is only noted. The Passport, which Right opens on R0skie's home screen, shows
 the level, the mood and the points.
