@@ -4,6 +4,22 @@ Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focus
 
 Status on 2026-09-25: the recorded voice, phase 3 on-device control, the polish round, and the memory plan (steps 2 to 4: animations off by default, the JavaScript engine out, Sub-GHz back into flash, SAM out) are done. Next: the fork and release mechanics.
 
+Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, is written, and its plan A, `docs/superpowers/plans/2026-09-26-publishing-plan-a.md`, is in progress: the repositories, the cleanup, the continuous build and the upstream tooling. Plan B, the Piper voice, and plan C, the install path and the first release, follow. The names are decided: the repository is `flipper-access`, and the firmware is Sonar.
+
+## Done so far
+
+- Terminal access, the backup of internal storage, and the Momentum install, 2026-09-22.
+- The command line explored, and the helper tools written.
+- The source build environment set up, with a first app built and running.
+- A speech demo, in which SAM's default voice was judged intelligible.
+- Phase 1 of the screen reader, 2026-09-22: text capture, the screen model and the console mirror.
+- Phase 2, 2026-09-23: speech on the device with SAM and DMA playback.
+- The recorded voice, 2026-09-24: word clips from the card, made on the Mac.
+- Phase 3, on-device control, 2026-09-24: the Back chords, the Accessibility settings screen, and spoken names for screens that draw only icons.
+- The polish round, 2026-09-24: the change delay, and the generator reading the apps on the card.
+- The firmware stripdown, 2026-09-25, so that Sub-GHz works with the reader on. The games, the JavaScript engine and SAM left the build and the card. Sub-GHz was built back into the firmware. Animations are off by default, with an Animations row to turn them back on. Flash 862,612 bytes, 18,028 spare; idle heap 116,672 to 116,752 bytes free, animations off.
+- The dolphin in words, the crash address, the reader toggle, and the Archive's menus naming their selection, 2026-09-25.
+
 ## Why a fork
 
 - Momentum's repository does not accept AI-written contributions; almost all of this code was written by agents under Robin's direction.
@@ -57,6 +73,7 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
 ## Release mechanics
 
 - Repository with Momentum as upstream remote; branch `screen-reader` becomes the main branch of the fork; tags per release.
+- Section 8 of the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, now defines the sync procedure for following Momentum.
 - Release artefacts: the update package (.tgz for qFlipper or the update CLI), the card payload (voice vocabulary made with a freely licensed voice, screen reader files), and an install script that flashes and copies with spoken progress on the host.
 - Licensing: the firmware is GPL-3 like Momentum and the official firmware; the shipped vocabulary must come from a redistributable voice (Piper models with permissive licences), Apple voices are for personal vocabularies only.
 - Documentation for blind users first: install, first boot, the console commands, the voice generator, and the known limits:
