@@ -19,10 +19,14 @@ These are the working notes for the one device Sonar is developed on, and the de
   `/dev/cu.usbmodemflip_R0skie1` before the rename, at 230400 baud. It disappears while the device
   is in the updater and comes back after the reboot.
 - Menu style List, set in `/int/.momentum_settings.txt`. The reader marks the main menu's focus
-  only in the List style. Momentum's default style is DSi; Sonar's is List since a0dea0841. Lock
-  on boot was off there too, until the update of 2026-09-26 left that file at its defaults, the
-  reader's volume apart: see `docs/measurements/2026-09-26-plan-a.txt`. Lock on boot acts only
-  when a PIN is set, and none is.
+  only in the List style; the other styles are read by inversion where possible. Momentum's
+  default style is DSi; Sonar's is List since a0dea0841. The same file has lock on boot off, dark
+  mode on and the reader's volume at 40. The update of 2026-09-26 left it at its defaults, the
+  volume apart, because keys pressed during the update saved the settings in RAM over the
+  restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three values were restored
+  from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the firmware saves no
+  settings in an update boot, so a key pressed during an update no longer overwrites the file.
+  Lock on boot acts only when a PIN is set, and none is.
 - The Text to SAM app on the card is Momentum's stock build again since 2026-09-26; the patched
   build and tools/say.sh were retired, since the reader speaks from its own engine.
 - The games, the JavaScript runner and its modules, and the screen reader's own SAM synthesizer
@@ -74,8 +78,9 @@ These are the working notes for the one device Sonar is developed on, and the de
   named one exists. So a Momentum update cannot leave a new scene out of the build unnoticed.
 - `tests/fbt/test_card_prune.py`: a plain Python test of `tools/card_prune.py`'s rule over
   synthetic folder lists.
-- `tools/card_prune.py`: removes old update packages from `/ext/update` on the card, keeping the
-  running build's folder and the two rollback packages; `--dry` lists what would go.
+- `tools/card_prune.py`: removes the fork's old update packages from `/ext/update` on the card,
+  keeping the running build's folder and every package of another firmware, such as the two
+  rollback packages; `--dry` lists what would go.
 - `tools/flash_headroom.sh`: the image size against the flash the BLE stack leaves free; see
   Useful commands.
 - `tools/ram_probe.py`: free heap while each core app runs; the logs are in `docs/measurements/`.
@@ -98,7 +103,16 @@ These are the working notes for the one device Sonar is developed on, and the de
 
 The flash routine, run from the project folder:
 
-1. Wipe the build's resources and apps, so nothing an earlier build left there reaches the card:
+1. Wipe the build folder. Before a release build, and after a merge from Momentum, wipe all of
+   it. A build then uses nothing an earlier build left behind: a stale `libmjs.a` once let builds
+   here pass that failed from a clean checkout.
+
+   ```bash
+   rm -rf Momentum-Firmware/build
+   ```
+
+   For an everyday build, wiping the resources and apps is enough, so nothing an earlier build
+   left there reaches the card:
 
    ```bash
    rm -rf Momentum-Firmware/build/f7-firmware-C/resources Momentum-Firmware/build/f7-firmware-C/.extapps
@@ -154,6 +168,83 @@ exists. The local list holds personal words, one per line: here the device's nam
 is not in git, so the public word list names no one's device. On another device, its name reaches
 the vocabulary through the missing-words list like any other word. `--words` with a file name adds
 further lists, and can be given more than once.
+
+## Merging Momentum
+
+The fork follows Momentum by merging its release tags into `screen-reader`, never by a rebase.
+Run the steps from the project folder; mntm-013 stands for the tag to merge.
+
+1. Fetch Momentum's branches and tags:
+
+   ```bash
+   git -C Momentum-Firmware fetch --tags upstream
+   ```
+
+2. See what the merge would meet: the new commits, the files changed on both sides, and the
+   conflicts of a dry run.
+
+   ```bash
+   tools/upstream_check.sh --upstream mntm-013
+   ```
+
+3. Merge the tag into `screen-reader`, without committing yet:
+
+   ```bash
+   git -C Momentum-Firmware merge --no-commit mntm-013
+   ```
+
+4. The API table: if it conflicts, take Momentum's side. Then run the script in any case, since
+   it also removes a JavaScript line that merged without a conflict.
+
+   ```bash
+   git -C Momentum-Firmware checkout --theirs targets/f7/api_symbols.csv
+   tools/strip_js_symbols.py
+   git -C Momentum-Firmware add targets/f7/api_symbols.csv
+   ```
+
+5. The Sub-GHz manifest the same way. The script also lists a file that Momentum added without
+   touching its manifest.
+
+   ```bash
+   git -C Momentum-Firmware checkout --theirs applications/main/subghz/application.fam
+   tools/subghz_manifest.py
+   git -C Momentum-Firmware add applications/main/subghz/application.fam
+   ```
+
+6. Resolve any other conflict, and commit the merge. Then compare the script's exclude list with
+   Momentum's new manifest. On a difference, update `EXCLUDED` in the script, run it again and
+   commit the result.
+
+   ```bash
+   git -C Momentum-Firmware commit -m "Merge Momentum mntm-013"
+   tools/subghz_manifest.py --verify-upstream
+   ```
+
+7. Run the host tests:
+
+   ```bash
+   tools/run_host_tests.sh
+   ```
+
+8. Wipe the whole build folder, so nothing from before the merge is linked. Then build and check
+   the headroom:
+
+   ```bash
+   rm -rf Momentum-Firmware/build
+   (cd Momentum-Firmware && ./fbt updater_package)
+   tools/flash_headroom.sh
+   ```
+
+9. Flash the build with steps 4 to 7 of the Routine. Then run the RAM probe and the reader's
+   scripted check, and try the chords and a few screens by hand as the README describes them.
+
+   ```bash
+   .venv/bin/python tools/ram_probe.py
+   .venv/bin/python tools/sr_drive.py
+   ```
+
+10. Push `screen-reader` and bump the submodule in the project. Then tag the release on both
+    repositories, as section 7 of the release spec describes.
 
 ## The voice on this card
 
@@ -257,9 +348,6 @@ newer one or by the quiet rules once it comes due, never reaches `sr watch`; onl
 counter of `sr status` may show it. During NFC-V emulation the reader is silent, because the
 emulation borrows the speaker timer; it parks the speaker pin so nothing is heard.
 
-Phase 1 marks the focused main menu item only in the List style; other menu styles are read by
-inversion where possible and will get hints in a later phase.
-
 ## Crash diagnosis
 
 What the crash popup says, how the reader speaks the address, and what `sr status` shows are in
@@ -275,8 +363,10 @@ Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firm
 
 It prints the function with its file and line, and with `-i` also the chain of functions the named
 code was inlined into. The build directory holds only the latest build: if it has moved on from
-the build `sr status` names, build that commit in a git worktree and use its elf. Builds are
-reproducible, so the addresses match.
+the build `sr status` names, build that commit in a git worktree and use its elf. Builds of one
+commit on this Mac have given the same image, so the addresses match. The continuous build's
+image of the same commit is 12 bytes larger, though, so a release's own `firmware.elf` must be
+kept to decode its addresses.
 
 The caveats. The address is where the failed check would have returned to. Without the 2
 subtracted, addr2line names the instruction after the check's call: often a later line, and

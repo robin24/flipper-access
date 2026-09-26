@@ -1,10 +1,11 @@
 # Flipper Access
 
-Sonar is a firmware for the Flipper Zero, built on Momentum, with a screen reader that speaks
-every screen through the device's own speaker in a recorded voice, so a blind person can use the
-device without sight. This repository holds the documentation, the tools and, from the first
-release on, the downloads. The firmware's source is the fork at
-https://github.com/robin24/Momentum-Firmware, branch `screen-reader`.
+Flipper Access is the project behind Sonar, a firmware for the Flipper Zero that a blind person
+can use without sight. Sonar is built on [Momentum](https://github.com/Next-Flip/Momentum-Firmware),
+and its screen reader speaks every screen through the device's own speaker in a recorded voice.
+This repository holds the documentation, the tools and, from the first release on, the downloads.
+The firmware's source is the fork at https://github.com/robin24/Momentum-Firmware, branch
+`screen-reader`.
 
 ## How it was made
 
@@ -42,7 +43,15 @@ Removed:
 - The screen reader's own SAM synthesizer is gone. The reader speaks only from the recorded clips,
   so without them it is silent.
 - The home screen's animations are off by default, and a setting turns them back on. With them
-  off, the home screen has nothing else to read, and returning to it reads nothing from the card.
+  off, the home screen has nothing else to read, and returning to it loads nothing from the card.
+
+Changed:
+
+- The screen reader is on from the first boot.
+- The main menu starts in the List style, the only style whose focus the reader can name. In the
+  other styles the reader finds the focus by its inverted highlight where possible.
+- FreeRTOS checks the threads' stacks for overflow, which Momentum ships switched off. An
+  overflow then crashes the device at once and names the thread.
 
 The removals were made so that Sub-GHz works with the reader on. It is built into the firmware
 again, not loaded from the card, and no longer crashes the device out of memory.
@@ -68,8 +77,8 @@ Back.
 
 To turn the reader off, hold Back and then Down until the long press registers, about a third of a
 second. You hear "Screen reader off". The same chord turns the reader on again, and you hear
-"Screen reader on" followed by the screen. It works on every screen, the lock screen and the PIN
-entry included.
+"Screen reader on" followed by the screen. It works on every screen, the lock screen included, and
+by design also in the PIN entry, which has not been tried on a device.
 
 ## Using it on the device
 
@@ -96,13 +105,15 @@ third key pressed while the second is still held goes to the app as a normal key
   status bar, such as the main menu, answers with the level and the mood alone.
 - Back and Down held until the long press registers, about a third of a second, turns the reader
   off, or on again. You hear "Screen reader off", or "Screen reader on" followed by the screen. It
-  works while the reader is off, and on every screen, the lock screen and the PIN entry included.
+  works while the reader is off, and on every screen, the lock screen included, and by design also
+  in the PIN entry, which has not been tried on a device.
 - Back and a short press of OK repeats the focused item with its position, for example "Apps, 1
   of 11". With nothing focused it says "No focus".
 - Back and a long press of OK spells the focused item with the recorded letters: Apps is spelled
   A, P, P, S.
 - Back and Left lowers the speech volume by 10, and Back and Right raises it by 10, between 0 and
-  100. The reader says the new value, such as "Volume 60", and saves it.
+  100. The reader says the new value, such as "Volume 60", and saves it. During a firmware update
+  a volume change is heard but not kept, since no settings are saved while the device updates.
 
 More about the chords:
 
@@ -121,8 +132,13 @@ More about the chords:
   a reboot into a lock with the reader off, it is the way to get speech back.
 - Chords work with the device's buttons and with `input send` on the console. Keys sent from
   `sr watch` bypass the chords. That console command streams the reader's announcements and lets
-  arrows, Enter and Backspace drive the device. Keys from the remote control in qFlipper or the
-  mobile app bypass the chords too.
+  arrows, Enter and Backspace drive the device. The tethered reader in this repository runs it:
+
+  ```bash
+  .venv/bin/python tools/sr_drive.py --interactive
+  ```
+
+  Keys from the remote control in qFlipper or the mobile app bypass the chords too.
 
 To run a chord's command from the console without keys:
 
@@ -151,8 +167,12 @@ value of the row you are on.
   straight away. The selection is still on this row, and Right turns the reader back on and the
   screen is read again: you hear "Screen Reader ON". Or, on any screen, including the lock screen,
   hold Back and then Down until the long press registers, about a third of a second: you hear
-  "Screen reader on" and the screen. The console command `sr on` also turns the reader on; it
-  reads the screen, without saying "Screen reader on" first.
+  "Screen reader on" and the screen. This console command also turns the reader on. It reads the
+  screen, without saying "Screen reader on" first:
+
+  ```bash
+  .venv/bin/python tools/flipper_cli.py "sr on"
+  ```
 - Volume, from 0 to 100 in steps of 10. This is the same setting the Back and Left or Right
   chords change.
 - Verbosity, Terse, Normal or Verbose. Terse leaves out the button labels at the bottom of a
@@ -171,7 +191,7 @@ Coming back to the home screen is announced as "Home screen". That includes clos
 the home screen, such as the power-off dialog, or the lock menu.
 
 Animations are off by default, so the dolphin never plays an idle animation or draws a speech
-bubble. The home screen then has nothing else to read, and returning to it reads nothing from the
+bubble. The home screen then has nothing else to read, and returning to it loads nothing from the
 card. To turn animations on, go to Momentum, Interface, Graphics; Animations is the first row, OFF
 or ON. Changing it reboots the device: leaving the app shows "Rebooting..." and the device
 restarts. With animations on, the dolphin's speech bubbles are read only when you pressed a key in
@@ -236,7 +256,7 @@ seconds after the one before. You hear "Unlocked", then "Home screen".
 For a PIN lock, press Up to open the PIN entry. A PIN is a sequence of arrow key presses. The
 reader says how many you have entered, "1 digit entered", "2 digits entered" and so on, never
 which keys. OK confirms the PIN, and Back clears what you entered. The PIN entry has not been
-tried on a device yet: setting a PIN unattended could have locked Robin out of his own Flipper.
+tried on a device yet.
 
 ### Infrared universal remotes
 
@@ -270,7 +290,7 @@ Delete, with Paste once something is cut or copied. A long press of OK opens the
 In App, Favorite, Info and Show. Left or Right inside a menu flips between the two. The reader
 names the selected entry of these menus as you move.
 
-Delete asks for confirmation, naming the entry, with Cancel on Left and Delete on Right. It
+Delete asks `Delete <name>?`, naming the entry, with Cancel on Left and Delete on Right. It
 removes a folder with everything in it.
 
 One flaw is known: when a menu opens over the list, the reader reads the menu's words mixed with
@@ -284,7 +304,7 @@ Nothing else is built in: without the clips, the reader is silent.
 A word without a clip is spelled letter by letter with the recorded letters and digits, 60 ms
 apart, so nothing is left unspoken. The letters are recorded by their names, so "NFC" is heard as
 "en eff see", not "capital N capital F capital C". The names are in `tools/voice_names.txt`. A
-letter whose clip is missing too is skipped.
+letter whose clip is missing too is skipped and noted, like a word.
 
 Every word the device had to spell is noted on the card in `/ext/sr/missing.txt`, one per line,
 each at most once per boot. The generator's missing-word command, under Making a vocabulary,
@@ -307,8 +327,19 @@ say Samantha rate 175 highpass 500 gain 1.3 soft 16000
 
 ### Voice commands on the console
 
-`sr voice off` mutes the reader, and `sr voice on` unmutes it. With the voice off, nothing is
-played. The setting is not saved: the voice is on again after every reboot.
+This command mutes the reader, so nothing is played:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr voice off"
+```
+
+This one unmutes it:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr voice on"
+```
+
+The setting is not saved: the voice is on again after every reboot.
 
 `sr voice status` prints the first 63 characters of the settings line, and these counts since
 boot:
@@ -349,7 +380,11 @@ backends. `say`, the default, uses the Mac's voices:
 .venv/bin/python tools/voice_build.py --extract --jobs 8 --backend piper --model <voice.onnx>
 ```
 
-The Piper backend has not been used for a full vocabulary yet.
+The Piper backend has not been run yet, so its output is untested.
+
+The tools that talk to the device look for its serial port under the name it has on a Mac. On
+any other system, give the port with `--port`, or in the `FLIPPER_PORT` environment variable for
+the console tools such as `tools/flipper_cli.py`.
 
 `--extract` makes a clip for every word, about 2,900 words and 27 MB. The words come from:
 
@@ -376,8 +411,18 @@ The sync sends new or changed clips and `voice.txt` to the card:
 A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what changed,
 which takes seconds. The voice is switched off on the device during the transfer and switched back
 on afterwards. If a transfer dies hard, through power loss, a killed process or a dead port, the
-restore may not run: the device then stays muted until `sr voice on` is typed or it reboots. After
-the card was wiped or replaced, add `--sync-all` to `--sync` to resend everything.
+restore may not run. The device then stays muted until it reboots, or until this command switches
+the voice back on:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr voice on"
+```
+
+After the card was wiped or replaced, `--sync-all` resends everything:
+
+```bash
+.venv/bin/python tools/voice_build.py --sync --sync-all
+```
 
 The missing-word command gives the words the device had to spell their own clips:
 
@@ -484,16 +529,26 @@ cd flipper-access/Momentum-Firmware
 ./fbt flash_usb_full
 ```
 
-fbt, the firmware's build tool, downloads its toolchain on first use. The release options,
-`COMPACT=1` and `DEBUG=0`, are the defaults, so the plain command builds a release. The headroom
-check compares the image with the flash that the Bluetooth radio stack leaves free, 880,640
-bytes, since the device's updater refuses a larger image. The last command flashes the device over
-USB together with its resources, the apps and files that go on the SD card. The device then takes
-about six minutes to update itself and reboot.
+The clone leaves the firmware submodule on a detached HEAD, at the commit this project records.
+A build from there is named `f7-update-mntm-HEAD-<hash>` and reports its branch as HEAD. To give
+it the branch's name, check the branch out from the project folder before building:
+
+```bash
+git -C Momentum-Firmware checkout screen-reader
+```
+
+fbt, the firmware's build tool, downloads its toolchain on first use. Only the Flipper Zero
+target, f7, is built. The release options, `COMPACT=1` and `DEBUG=0`, are the defaults, so the
+plain command builds a release. The headroom check compares the image with the flash that the
+Bluetooth radio stack leaves free, 880,640 bytes, since the device's updater refuses a larger
+image. The last command flashes the device over USB together with its resources, the apps and
+files that go on the SD card. The device then takes about six minutes to update itself and
+reboot.
 
 The host tests build the screen reader's pure code with clang and run its unit tests, then the
-Python checks of the build's configuration and of the tools. Run them from the project folder;
-they take a few seconds:
+Python checks of the build's configuration and of the tools. A Mac has clang with Xcode's command
+line tools; on Linux, install it from the distribution's packages. Run the tests from the project
+folder; they take a few seconds:
 
 ```bash
 tools/run_host_tests.sh
@@ -511,7 +566,8 @@ python3 -m venv .venv
 ## Following Momentum
 
 The fork follows Momentum by merging Momentum's release tags into `screen-reader`, and it never
-rebases. Before a merge is attempted, `tools/upstream_check.sh` shows what it would meet.
+rebases. Before a merge is attempted, `tools/upstream_check.sh` shows what it would meet. The
+whole routine, from the fetch to the tag, is under Merging Momentum in `docs/device-notes.md`.
 
 ## Licence and credits
 

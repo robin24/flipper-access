@@ -75,7 +75,8 @@ is pushed as it lands. Pushing to `origin` follows the standing rule (no asking)
   The patched `text2sam.fap` on the card is replaced by the stock build at the next resources
   deploy.
 - `backups/backup-stock-1.4.3.tar` leaves git (`git rm --cached`, `backups/` ignored): it holds
-  Robin's device settings, dolphin state and region data. The file stays on disk.
+  Robin's device settings, dolphin state and region data. The file stays on disk. Its blob stays
+  in the history, since it holds only those, and no keys and no PIN.
 - `LICENSE`: GPL-3.0 at the project root, the same licence as Momentum and the official
   firmware, because the host tests compile the firmware's sources. The voice pack has its own
   terms (section 5).
@@ -108,8 +109,9 @@ is pushed as it lands. Pushing to `origin` follows the standing rule (no asking)
 - `tools/card_prune.py`: reads the running build's hash from `info device`, lists
   `/ext/update`, and removes every folder of ours (tagged releases are named
   `f7-update-sonar-X.Y.Z`; untagged builds keep fbt's `f7-update-mntm-screen-reader-<hash>`
-  naming) except the running build's; folders named with
-  `--keep` are never touched, and the two rollback packages are kept by default. `--dry` lists
+  naming, or `f7-update-mntm-HEAD-<hash>` on a detached HEAD) except the running build's, which a
+  tagged release shows by its `firmware.version`; folders named with `--keep` are never touched,
+  and neither is any other firmware's package, such as the two rollback packages. `--dry` lists
   what would go. The CLI's `storage list` gives no dates, so "the running build" is the rule,
   not "the newest". The install script (section 6) runs it at the end, and so does the flash
   routine in `docs/device-notes.md`.
