@@ -1,0 +1,4 @@
+[submodule "Momentum-Firmware"]
+	path = Momentum-Firmware
+	url = https://github.com/robin24/Momentum-Firmware.git
+	branch = screen-reader
