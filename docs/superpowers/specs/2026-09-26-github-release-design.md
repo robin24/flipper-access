@@ -39,8 +39,7 @@ release assets get a machine-readable manifest for the same reason (section 7).
 
 Two repositories, as today, both under Robin's GitHub account `robin24`:
 
-- The project repository, name to be chosen (default: `flipper-access`, the folder's name).
-  It is the landing page: README, docs, tools, tests, continuous builds, and the GitHub
+- The project repository, `flipper-access`, the folder's name. It is the landing page: README, docs, tools, tests, continuous builds, and the GitHub
   Releases. The firmware clone at `Momentum-Firmware/` becomes a git submodule pinned to the
   commit each release was built from; `.gitignore` drops the `Momentum-Firmware/` line.
   Private until the first release, then public.
@@ -108,7 +107,7 @@ is pushed as it lands. Pushing to `origin` follows the standing rule (no asking)
   the card root stays. Run the routine generator pass for the words in `missing.txt`.
 - `tools/card_prune.py`: reads the running build's hash from `info device`, lists
   `/ext/update`, and removes every folder of ours (tagged releases are named
-  `f7-update-<prefix>-X.Y.Z`; untagged builds keep fbt's `f7-update-mntm-screen-reader-<hash>`
+  `f7-update-sonar-X.Y.Z`; untagged builds keep fbt's `f7-update-mntm-screen-reader-<hash>`
   naming) except the running build's; folders named with
   `--keep` are never touched, and the two rollback packages are kept by default. `--dry` lists
   what would go. The CLI's `storage list` gives no dates, so "the running build" is the rule,
@@ -157,7 +156,7 @@ headphones may not carry through the piezo. If no candidate is acceptable by ear
 is the best candidate with heavier processing, and the release ships anyway: the reader is
 useless without a vocabulary, and a user can regenerate with any voice.
 
-The voice pack: `tools/voice_pack.py` writes `voice-<prefix>-X.Y.Z.tar` from the built
+The voice pack: `tools/voice_pack.py` writes `voice-sonar-X.Y.Z.tar` from the built
 vocabulary: `sr/voice/<hh>/<word>.raw`, `sr/voice/voice.txt` (the settings line, first 63
 characters shown by the device), and `sr/voice/LICENSE.txt` naming the model, the dataset and
 its licence, Piper's MIT licence, and the pack's own terms: CC0 for a public-domain or CC0
@@ -230,25 +229,25 @@ Ubuntu (`run_host_tests.sh` gets a bash-compatible form, and `flash_headroom.sh`
 (fbt downloads the toolchain itself); check the headroom against the 880,640-byte limit;
 upload the package as a workflow artifact. Expected time: fifteen to twenty minutes.
 
-`release.yml`, on a tag `<prefix>-X.Y.Z` in the project repository: the same build, plus the
+`release.yml`, on a tag `sonar-X.Y.Z` in the project repository: the same build, plus the
 voice pack made in the same job (Piper from pip, the chosen model downloaded from Hugging
 Face, `--extract --extract-all`, then `voice_pack.py`), and a GitHub Release with three
-assets: the update package `.tgz` from fbt, `voice-<prefix>-X.Y.Z.tar`, and
-`install-<prefix>-X.Y.Z.zip` holding `install.py`, `flipper_storage.py` and `card_prune.py`,
+assets: the update package `.tgz` from fbt, `voice-sonar-X.Y.Z.tar`, and
+`install-sonar-X.Y.Z.zip` holding `install.py`, `flipper_storage.py` and `card_prune.py`,
 plus `release.json`: the version, the Momentum base commit, the voice, and every asset's name
 and SHA-256, so a later app can find and verify what to download. The release notes name the
 Momentum commit the build is based on, the changes, the known issues, and the install steps. If Piper in CI turns out slower than thirty minutes, the pack
 is made on the Mac and uploaded by hand; the plan measures.
 
-Versions: semantic versions with a name prefix, starting at `<prefix>-0.1.0`. The tag goes on
+Versions: semantic versions with a name prefix, starting at `sonar-0.1.0`. The tag goes on
 both repositories: on the fork's commit, because fbt names the package after an exact-match
 tag (`DIST_SUFFIX`) and `scripts/version.py` shows a tag as the firmware version on the
 device's About screen; and on the project repository, which triggers the release. The release
 job fetches the fork's tags for the submodule, checks that the submodule commit carries the
 same tag, fails otherwise, and also sets `DIST_SUFFIX` from the tag in the environment, which
 fbt honours over its own naming.
-`FIRMWARE_ORIGIN` in `fbt_options.py` changes from `Momentum` to the project's name, which
-`info device` shows as `firmware.origin.fork`.
+`FIRMWARE_ORIGIN` in `fbt_options.py` changes from `Momentum` to `Sonar`, the firmware's name,
+which `info device` shows as `firmware.origin.fork`.
 
 ## 8. Upstream sync
 
@@ -327,7 +326,7 @@ release.
   duration.
 - The voice pack is verified on the card: file count, `voice.txt`, the reader's `sr status`
   clip counters after the scripted routine, no underruns.
-- The release workflow is rehearsed on a pre-release tag (`<prefix>-0.1.0-rc1`) before the
+- The release workflow is rehearsed on a pre-release tag (`sonar-0.1.0-rc1`) before the
   real one, and the rehearsal's assets are installed with the script.
 - The upstream check script is tested against a synthetic upstream branch in a throwaway
   clone (one commit that touches the CSV and the Sub-GHz directory), so its conflict report
@@ -343,10 +342,11 @@ release.
 5. Continuous builds, then the release workflow and its rehearsal.
 6. The public documentation, reviewed by Robin.
 7. The round-trip install test from the official firmware.
-8. Tag `<prefix>-0.1.0`, the project repository public, the GitHub Release.
+8. Tag `sonar-0.1.0`, the project repository public, the GitHub Release.
 
-Robin decides: the two names (project repository, and the prefix that names packages and
-tags), the voice, the docs' final wording, and the moment of the round-trip test.
+Robin decides: the voice, the docs' final wording, and the moment of the round-trip test. The
+names were decided on 2026-09-26: the repository `flipper-access`, the firmware Sonar, prefix
+`sonar`.
 
 Execution is three plans, because two steps wait for Robin: plan A covers steps 1 and 2, the
 continuous build workflow and the upstream tooling from section 8, all of it automatable;
@@ -355,8 +355,8 @@ plan B is the Piper work of step 3, which pauses for the listening test; plan C 
 
 ## 12. Open decisions
 
-- Names: the project repository (default `flipper-access`) and the prefix (default `access`,
-  giving tags like `access-0.1.0`, packages `f7-update-access-0.1.0`, and a firmware origin of
-  `Flipper Access`).
+- Names: decided 2026-09-26. The project repository is `flipper-access`; the firmware is Sonar,
+  prefix `sonar`, giving tags like `sonar-0.1.0`, packages `f7-update-sonar-0.1.0`, and the
+  firmware origin `Sonar`.
 - The voice, after the listening test.
 - The voice pack's terms, CC0 by default when the dataset allows it.
