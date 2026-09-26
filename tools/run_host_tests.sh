@@ -109,3 +109,10 @@ if ! python3 "$ROOT/tests/fbt/test_subghz_manifest.py" > "$OUT/subghz_manifest.t
   exit 1
 fi
 echo "$(tail -n 1 "$OUT/subghz_manifest.txt")"
+
+if ! python3 "$ROOT/tests/fbt/test_upstream_check.py" > "$OUT/upstream_check.txt"; then
+  cat "$OUT/upstream_check.txt"
+  echo "upstream check checks failed"
+  exit 1
+fi
+echo "$(tail -n 1 "$OUT/upstream_check.txt")"
