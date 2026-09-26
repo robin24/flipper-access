@@ -26,7 +26,9 @@ line the device shows. --sync uploads new or changed clips to /ext/sr/voices/<se
 on the card, hh being the word's FNV-1a hash modulo 64 as two hex digits, the same folder the
 firmware's speech_voice_path computes, and then the set's voice.txt; --pull-missing removes the
 pulled missing list. --migrate-sets moves the card's first layout, /ext/sr/voice and
-/ext/sr/missing.txt, into /ext/sr/voices/samantha, and refuses when the new place is taken.
+/ext/sr/missing.txt, into /ext/sr/voices/samantha, and refuses when the new place is taken;
+until then --sync and --pull-missing refuse such a card, since a set folder they started there
+would stand in the migration's way.
 
 Clip format: raw unsigned 8-bit mono PCM, 16000 Hz, 128 silence, trimmed to 15 ms of silence
 at each end, after a high-pass at 500 Hz, a gain of 1.3 and a soft limiter, chosen by ear for
@@ -43,11 +45,12 @@ the piezo. The backends, with their default voice and rate:
 
 --voice, --rate, --highpass, --gain and --soft or --no-soft change the defaults for a run. A
 set's manifest records its backend, voice and processing settings and, for kokoro, the SHA-256
-of the model and voices files; a change to any of them makes every clip of the set again, so a
-set never mixes settings. Kokoro renders a word the same way every run (another --jobs may move
-a sample by one step), and so does eSpeak-NG, except that its breathy variants such as +f3 seed
-their breath noise from the clock. A run that names another backend or voice than the set was
-made with is refused, since it would make the whole set again with them.
+of the model and voices files (their paths do not count); a change to any of them makes every
+clip of the set again, so a set never mixes settings. Kokoro renders a word the same way every
+run with the same --jobs, which sets each worker's share of the cores; another --jobs may move a
+sample of a few clips by one step. eSpeak-NG does too, except that its breathy variants such as
++f3 seed their breath noise from the clock. A run that names another backend or voice than the
+set was made with is refused, since it would make the whole set again with them.
 
 The routine, per set, with the device connected:
 
@@ -63,7 +66,8 @@ with the project virtualenv's Python (.venv/bin/python), not the system python3.
 --extract-all folds in every app under applications/external (hundreds of them); --card-apps
 folds in only the ones actually installed on the card, which is the routine choice, and needs
 the device but only to list it, never to write to it. Both need --extract to have an effect.
---check makes ten clips with the set's settings into a temporary directory and verifies them.
+--check makes ten clips into a temporary directory and verifies them, with the set's own backend
+and voice from its manifest unless the command line names them.
 --dry builds the word list and prints its counts without making clips, pulling missing.txt,
 migrating or syncing.
 """
@@ -93,6 +97,8 @@ BACKENDS = {
 }
 KOKORO_MODEL = os.path.join(ROOT, "voice-models", "kokoro-v1.0.onnx")
 KOKORO_VOICES = os.path.join(ROOT, "voice-models", "voices-v1.0.bin")
+# Settings that are recorded but not part of a clip's key: the model files' paths (their checksum is)
+UNKEYED = ("model", "voices_file")
 # The card's first layout, one vocabulary and its missing list, which --migrate-sets moves
 LEGACY_VOICE_DIR = "/ext/sr/voice"
 LEGACY_MISSING = "/ext/sr/missing.txt"
@@ -374,8 +380,11 @@ def extract_words(workdir, extra=()):
     return words, originals, added
 
 
-def settings_hash(settings, text):
-    key = json.dumps([settings[k] for k in sorted(settings)] + [text])
+def settings_hash(settings, text, unkeyed=UNKEYED):
+    """A clip's key: its settings and its spoken text, hashed. The paths of kokoro's model files
+    take no part, their checksum does, so the same files at another path remake nothing. The
+    first generator hashed every key; rekey_legacy checks its manifests with unkeyed=()."""
+    key = json.dumps([settings[k] for k in sorted(settings) if k not in unkeyed] + [text])
     return hashlib.sha1(key.encode()).hexdigest()[:16]
 
 
@@ -384,8 +393,11 @@ def rekey_legacy(manifest, synced, settings, names):
     it. The first generator's settings held a model path, empty for say, and the settings hash
     covers every key, so without this every clip of the Samantha set would look changed and be
     made and sent again, the same clips. When the recorded settings are today's plus that empty
-    path, each word whose hash verifies against them, with its spoken text, takes today's hash,
-    in the manifest and, where it holds the same hash, in synced.json. A word that does not
+    path, each word whose hash verifies against them (hashed as the first generator did, every
+    key in) takes today's hash, keyed with the text its clip was made with, in the manifest and,
+    where it holds the same hash, in synced.json. The text tried first is the spoken text; then
+    the word with an apostrophe at each inner position, since dont was made as don't, so the
+    carry-over does not depend on this run's --extract and --card-apps. A word that does not
     verify (made with older settings, or spoken differently now) keeps its hash, so it is made
     and sent again as before. Returns the number of words carried over."""
     recorded = manifest.get("settings")
@@ -393,8 +405,9 @@ def rekey_legacy(manifest, synced, settings, names):
         return 0
     count = 0
     for word, h in list(manifest["words"].items()):
-        text = spoken_text(word, names)
-        if h != settings_hash(recorded, text):
+        texts = [spoken_text(word, names)] + [word[:i] + "'" + word[i:] for i in range(1, len(word))]
+        text = next((t for t in texts if settings_hash(recorded, t, unkeyed=()) == h), None)
+        if text is None:
             continue
         manifest["words"][word] = settings_hash(settings, text)
         if synced.get(word) == h:
@@ -413,6 +426,18 @@ def set_conflict(recorded, settings):
         return None
     return (f"the set was made with {recorded.get('backend')} {recorded.get('voice')}, not {settings['backend']} "
             f"{settings['voice']}: name them with --backend and --voice, or remove the set's folder to make it anew")
+
+
+def check_engine(recorded, backend, voice):
+    """The backend and voice --check speaks with: those named on the command line, else the
+    set's own from its manifest, else say. The set's voice goes only with the set's backend;
+    another backend brings its own default voice (None here, settings_for fills it in)."""
+    if recorded and recorded.get("backend") in BACKENDS:
+        if backend is None:
+            backend = recorded["backend"]
+        if voice is None and backend == recorded["backend"]:
+            voice = recorded.get("voice")
+    return backend or "say", voice
 
 
 def synth_say(text, voice, rate, path):
@@ -509,15 +534,19 @@ def make_clip(job):
         return word, False, str(e)
 
 
-def clip_pool(settings, jobs):
-    """The worker pool that makes the clips. For kokoro each worker loads the model once, in a
-    spawned process (onnxruntime must not be forked); say and espeak need nothing loaded."""
+def clip_pool(settings, jobs, count):
+    """The worker pool that makes count clips: --jobs workers, fewer when there are fewer clips.
+    For kokoro each worker loads the model once, in a spawned process (onnxruntime must not be
+    forked), and runs on the share of the cores that --jobs gives it, whatever the pool's size,
+    so a run of three words and a run of thousands render a word alike; say and espeak need
+    nothing loaded."""
+    size = min(jobs, count)
     if settings["backend"] == "kokoro":
         model = settings.get("model", KOKORO_MODEL)
         voices = settings.get("voices_file", KOKORO_VOICES)
         threads = max(1, (os.cpu_count() or 1) // jobs)
-        return multiprocessing.get_context("spawn").Pool(jobs, initializer=kokoro_init, initargs=(model, voices, threads))
-    return multiprocessing.Pool(jobs)
+        return multiprocessing.get_context("spawn").Pool(size, initializer=kokoro_init, initargs=(model, voices, threads))
+    return multiprocessing.Pool(size)
 
 
 def open_storage(port):
@@ -592,12 +621,15 @@ def voice_on(storage):
 
 def pull_missing(port, set_name):
     """The words the device found no clip for in the set: its missing.txt on the card, which is
-    removed once read."""
+    removed once read. Refused, before anything else, on a card that still has the first layout."""
     path = set_card_dir(set_name) + "/missing.txt"
     storage, _ = open_storage(port)
     words = set()
     was_on = False
     try:
+        refusal = legacy_refusal(storage.exist)
+        if refusal:
+            sys.exit(refusal)
         was_on = voice_off(storage)
         if storage.exist_file(path):
             with tempfile.TemporaryDirectory() as d:
@@ -623,11 +655,14 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
     changed instead of asking the device to md5 every file. A word whose local clip is missing
     or whose send fails is reported and left out of synced.json, so the next sync tries it
     again, and the other words still go. Returns the number of such words for main()'s exit
-    code."""
+    code. Refused, before anything is sent, on a card that still has the first layout."""
     card = set_card_dir(set_name)
     storage, ops = open_storage(port)
     was_on = False
     try:
+        refusal = legacy_refusal(storage.exist)
+        if refusal:
+            sys.exit(refusal)
         was_on = voice_off(storage)
         t0 = time.time()
         synced_path = os.path.join(out_dir, "synced.json")
@@ -690,6 +725,15 @@ def migration_plan(exists):
     return moves, None
 
 
+def legacy_refusal(exists):
+    """A sentence when the card still has the first layout, given exists(path) on the card, else
+    None. A sync or a pull there would start /ext/sr/voices/samantha beside /ext/sr/voice, and
+    --migrate-sets never moves the old folder onto an existing one: the migration comes first."""
+    if exists(LEGACY_VOICE_DIR):
+        return f"the card still has the first layout, {LEGACY_VOICE_DIR}: run --migrate-sets first"
+    return None
+
+
 def migrate_sets(port):
     """Move the card's first layout into the samantha set, once: /ext/sr/voice, its clip folders
     and voice.txt, to /ext/sr/voices/samantha, and /ext/sr/missing.txt into it. The storage's
@@ -725,13 +769,13 @@ def migrate_sets(port):
 
 
 def check(settings, names, workdir, jobs):
-    """Make ten clips with the set's settings through the same pool as a build, and verify each:
+    """Make ten clips with the given settings through the same pool as a build, and verify each:
     between 0.05 and 3 s long, quiet at the edges, a peak near full scale."""
     words = ["settings", "sub", "gigahertz", "one", "ay", "b", "7", "okay", "home", "percent"]
     todo = [(word, spoken_text(word, names), settings, os.path.join(workdir, initial(word), word + ".raw")) for word in words]
     log(f"check: {len(todo)} clips with {settings_line(settings)}")
     t0 = time.time()
-    with clip_pool(settings, min(jobs, len(todo))) as pool:
+    with clip_pool(settings, jobs, len(todo)) as pool:
         results = pool.map(make_clip, todo)
     bad = 0
     for (word, _, _, path), (_, ok, msg) in zip(todo, results):
@@ -759,7 +803,7 @@ def save_manifest(manifest, manifest_path):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--set", default="samantha", help="the voice set to work on (default samantha, the voice/ directory)")
-    ap.add_argument("--backend", choices=sorted(BACKENDS), default="say", help="the speech engine (default say)")
+    ap.add_argument("--backend", choices=sorted(BACKENDS), help="the speech engine (default say; --check takes the set's own)")
     ap.add_argument("--voice", help="the engine's voice (defaults: say Samantha, espeak en-us+f3, kokoro af_heart)")
     ap.add_argument("--rate", type=int, help="words per minute for say and espeak, percent of the model's pace for kokoro")
     ap.add_argument("--highpass", type=float, help="high-pass cutoff in Hz (default 500)")
@@ -775,7 +819,7 @@ def main():
     ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the set's folder on the card")
     ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore the set's synced.json and resend everything (for a wiped card)")
     ap.add_argument("--migrate-sets", action="store_true", help="move the card's /ext/sr/voice and /ext/sr/missing.txt into /ext/sr/voices/samantha, once")
-    ap.add_argument("--check", action="store_true", help="make ten clips with the set's settings into a temporary directory and verify them")
+    ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them, with the set's own backend and voice unless named")
     ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, migrating or syncing")
     ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0],
                     help="serial port, default: the first /dev/cu.usbmodemflip_* (the device's name is part of it)")
@@ -784,15 +828,19 @@ def main():
     a = ap.parse_args()
     if not set_valid(a.set):
         sys.exit(f"{a.set!r} is not a set name: 1 to 31 lower case letters, digits, hyphens and underscores, and not auto")
-    if a.backend != "kokoro" and (a.model or a.voices_file):
-        sys.exit("--model and --voices-file are for --backend kokoro")
-    settings = settings_for(a.backend, dict(voice=a.voice, rate=a.rate, highpass=a.highpass, gain=a.gain, soft=a.soft,
-                                            model=a.model, voices_file=a.voices_file))
-    names = load_names()
     out_dir = set_local_dir(a.set)
     workdir = os.path.join(out_dir, ".build")
     manifest_path = os.path.join(out_dir, "manifest.json")
     manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {"words": {}}
+    if a.check:
+        backend, voice = check_engine(manifest.get("settings"), a.backend, a.voice)
+    else:
+        backend, voice = a.backend or "say", a.voice
+    if backend != "kokoro" and (a.model or a.voices_file):
+        sys.exit("--model and --voices-file are for --backend kokoro")
+    settings = settings_for(backend, dict(voice=voice, rate=a.rate, highpass=a.highpass, gain=a.gain, soft=a.soft,
+                                          model=a.model, voices_file=a.voices_file))
+    names = load_names()
     migrate_only = a.migrate_sets and not (a.extract or a.pull_missing or a.sync or a.words)
     building = not (a.check or a.dry or migrate_only)
     # Refused before anything is pulled from the card or made: an engine this machine lacks, or
@@ -876,7 +924,7 @@ def main():
     t0 = time.time()
     made = failed = 0
     if jobs:
-        with clip_pool(settings, min(a.jobs, len(jobs))) as pool:
+        with clip_pool(settings, a.jobs, len(jobs)) as pool:
             for i, (word, ok, msg) in enumerate(pool.imap_unordered(make_clip, jobs), 1):
                 if ok:
                     made += 1

@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """tools/voice_build.py's pure helpers: set names, the local and card folders of a set, the
 per-backend settings and their line for voice.txt, the resampler's length and level. Also the
-re-keying of a manifest made before the sets, the refusal of a run that names another backend or
-voice than the set was made with, the moves of --migrate-sets, and the engine check before the
-pool starts. Importable without pyserial, numpy or the engines (they are imported where they are
-used). Run from the project root: python3 tests/fbt/test_voice_build.py"""
+settings key, which leaves the model files' paths out; the re-keying of a manifest made before
+the sets, with or without the extraction's names; the refusal of a run that names another backend
+or voice than the set was made with; the backend and voice a check speaks with; the moves of
+--migrate-sets and the refusal of a sync or a pull on a card that still has the first layout; and
+the engine check before the pool starts. Importable without pyserial, numpy or the engines (they
+are imported where they are used). Run from the project root: python3 tests/fbt/test_voice_build.py"""
+import hashlib
+import importlib.util
+import json
 import math
 import os
 import sys
@@ -49,16 +54,25 @@ try:
 except (KeyError, ValueError, SystemExit):
     check(True, "an unknown backend is refused")
 check(vb.settings_hash(vb.settings_for("kokoro", {}), "x") != vb.settings_hash(vb.settings_for("kokoro", {"model_sha256": "abc"}), "x"), "the model's checksum is part of the settings hash")
+kokoro = vb.settings_for("kokoro", {"model_sha256": "x"})
+check(vb.settings_hash({**kokoro, "model": "/elsewhere/kokoro-v1.0.onnx", "voices_file": "/elsewhere/voices-v1.0.bin"}, "x")
+      == vb.settings_hash(kokoro, "x"), "the model files' paths take no part in the key, so the same files elsewhere remake nothing")
+
+
+def first_hash(settings, text):
+    """The first generator's settings hash, every key in it: what voice/manifest.json holds."""
+    return hashlib.sha1(json.dumps([settings[k] for k in sorted(settings)] + [text]).encode()).hexdigest()[:16]
+
 
 # A manifest from before the sets recorded its settings with the first generator's empty model
-# path, and the hash covers every key: the clips are the same, so each hash that verifies against
+# path, and that hash covered every key: the clips are the same, so each hash that verifies against
 # the recorded settings is re-keyed, in the manifest and in the sync record, and nothing is made
 # or sent again. A hash that does not verify is left, so that clip is made or sent again.
 new = vb.settings_for("say", {})
 old = {**new, "model": ""}
 manifest = {"settings": dict(old), "words": {
-    "home": vb.settings_hash(old, "home"),
-    "dont": vb.settings_hash(old, "don't"),
+    "home": first_hash(old, "home"),
+    "dont": first_hash(old, "don't"),
     "stale": "0123456789abcdef",
 }}
 synced = {"home": manifest["words"]["home"], "dont": "fedcba9876543210", "stale": "0123456789abcdef"}
@@ -71,19 +85,37 @@ check(synced["dont"] == "fedcba9876543210", "a sync record of another rendition 
 check(manifest["settings"] == new, "the manifest records the new settings")
 check(vb.rekey_legacy(manifest, synced, new, {"dont": "don't"}) == 0, "a second pass changes nothing")
 gain = {**old, "gain": 1.6}
-changed = {"settings": dict(gain), "words": {"home": vb.settings_hash(gain, "home")}}
-check(vb.rekey_legacy(changed, {}, new, {}) == 0 and changed["words"]["home"] == vb.settings_hash(gain, "home"),
+changed = {"settings": dict(gain), "words": {"home": first_hash(gain, "home")}}
+check(vb.rekey_legacy(changed, {}, new, {}) == 0 and changed["words"]["home"] == first_hash(gain, "home"),
       "a manifest made with other settings is not re-keyed")
 check(vb.rekey_legacy({"words": {}}, {}, new, {}) == 0, "a new set has nothing to re-key")
+# Without the names --extract and --card-apps give (dont spoken as don't), a word is tried with an
+# apostrophe at each inner position, so the carry-over does not depend on the first run's flags
+spoken = {"dont": "don't", "isnt": "isn't", "youre": "you're", "rubiks": "rubik's", "home": "home"}
+manifest = {"settings": dict(old), "words": {w: first_hash(old, t) for w, t in spoken.items()}}
+synced = dict(manifest["words"])
+check(vb.rekey_legacy(manifest, synced, new, {}) == 5, "every clip carries over without the extraction's names")
+check(all(manifest["words"][w] == vb.settings_hash(new, t) for w, t in spoken.items()),
+      "each is keyed with the text its clip was made with")
+check(synced == manifest["words"], "and the sync record follows")
 
 # A set stands for one backend and voice: a run that names others is refused
-kokoro = vb.settings_for("kokoro", {"model_sha256": "x"})
 check(vb.set_conflict(None, new) is None, "a new set has nothing to conflict with")
 check(vb.set_conflict(old, new) is None, "the same backend and voice")
 check(vb.set_conflict({**kokoro, "gain": 1.6}, kokoro) is None, "a changed processing setting is no conflict")
 check(vb.set_conflict(kokoro, new) is not None, "a kokoro set refuses a run with the say defaults")
 check(vb.set_conflict(kokoro, vb.settings_for("kokoro", {"voice": "bf_emma", "model_sha256": "x"})) is not None,
       "and a run with another voice")
+
+# --check speaks with the set's own backend and voice unless the command line names them
+heart = {"backend": "kokoro", "voice": "af_heart", "rate": 100}
+check(vb.check_engine(None, None, None) == ("say", None), "a check of a new set speaks with say")
+check(vb.check_engine(heart, None, None) == ("kokoro", "af_heart"), "a check of a set speaks with its backend and voice")
+check(vb.check_engine({**heart, "voice": "bf_emma"}, None, None) == ("kokoro", "bf_emma"), "its own voice, not the default")
+check(vb.check_engine(heart, None, "af_bella") == ("kokoro", "af_bella"), "a voice on the command line wins")
+check(vb.check_engine(heart, "espeak", None) == ("espeak", None), "a named backend brings its own default voice")
+check(vb.check_engine(heart, "kokoro", None) == ("kokoro", "af_heart"), "naming the set's backend keeps its voice")
+check(vb.check_engine({"backend": "piper", "voice": "x"}, None, None) == ("say", None), "an unknown recorded backend is not used")
 
 
 # --migrate-sets: the first layout's folder and missing list move into the samantha set; a
@@ -100,9 +132,18 @@ moves, refusal = migration("/ext/sr/voice", "/ext/sr/voices/samantha")
 check(moves == [] and refusal is not None and "/ext/sr/voices/samantha" in refusal, f"an existing set is never moved over: {refusal}")
 moves, refusal = migration("/ext/sr/voice", "/ext/sr/missing.txt", "/ext/sr/voices/samantha/missing.txt")
 check(moves == [] and refusal is not None, "nor an existing missing list, and then nothing moves")
+# A sync or a pull on the first layout would start /ext/sr/voices/samantha beside /ext/sr/voice
+# and so block the migration: it is refused until the card is migrated
+refusal = vb.legacy_refusal(lambda p: p == "/ext/sr/voice")
+check(refusal is not None and "--migrate-sets" in refusal, f"the first layout refuses a sync or a pull: {refusal}")
+check(vb.legacy_refusal(lambda p: p in ("/ext/sr/voices", "/ext/sr/voices/samantha")) is None, "a migrated card is fine")
+check(vb.legacy_refusal(lambda p: False) is None, "and so is a fresh card")
 
-check(vb.engine_problem(vb.settings_for("kokoro", {"model": "/nonexistent/kokoro.onnx", "model_sha256": "x"})) is not None,
-      "a missing model is refused before the pool starts")
+if all(importlib.util.find_spec(p) for p in ("numpy", "scipy", "kokoro_onnx")):
+    problem = vb.engine_problem(vb.settings_for("kokoro", {"model": "/nonexistent/kokoro.onnx", "model_sha256": "x"}))
+    check(problem is not None and "/nonexistent/kokoro.onnx" in problem, f"a missing model is named before the pool starts: {problem}")
+else:
+    print("skipped the missing-model check: no numpy, scipy or kokoro-onnx")
 
 try:
     import numpy as np
