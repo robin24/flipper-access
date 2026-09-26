@@ -319,7 +319,7 @@ Expected: no warning, the image below the limit (record the spare), the runner g
 
 - [ ] **Step 1: The list of sets in the app**
 
-`momentum_app.h`: `CharList_t voice_set_names;` and `uint8_t voice_set_index;` beside the asset pack fields. `momentum_app.c`, in `momentum_app_alloc` right after the asset pack scan: the same scan over `/ext/sr/voices` (directories whose name does not start with `.`, inserted in case-insensitive order), and `voice_set_index` set to the position of `momentum_settings.sr_voice_set` in the list, or 0 when the setting is empty or not found (the first name, which is what the engine's fallback uses). Free the list in `momentum_app_free` like the asset pack names.
+`momentum_app.h`: `CharList_t voice_set_names;` and `uint8_t voice_set_index;` beside the asset pack fields. `momentum_app.c`, in `momentum_app_alloc` right after the asset pack scan: the same scan over `/ext/sr/voices` (directories whose name does not start with `.` and is at most 31 characters long, the same names the engine's own listing keeps; the read buffer is 33 bytes so a longer name shows as 32 characters and is skipped), inserted in case-insensitive order, and `voice_set_index` set to the position of `momentum_settings.sr_voice_set` in the list, or 0 when the setting is empty or not found (the first name, which is what the engine's fallback uses). Free the list in `momentum_app_free` like the asset pack names.
 
 - [ ] **Step 2: The row**
 
@@ -402,7 +402,7 @@ def check(cond, what):
 
 for name in ["samantha", "heart", "espeak", "en-us_f3", "a" * 31]:
     check(vb.set_valid(name), f"valid set name: {name}")
-for name in ["", "Heart", "two words", "a/b", ".", "a" * 32, "héart"]:
+for name in ["", "Heart", "two words", "a/b", ".", "a" * 32, "héart", "auto"]:
     check(not vb.set_valid(name), f"invalid set name: {name!r}")
 check(vb.set_local_dir("samantha") == os.path.join(ROOT, "voice"), "the Samantha set lives in voice/")
 check(vb.set_local_dir("heart") == os.path.join(ROOT, "voices", "heart"), "other sets live in voices/<set>/")
@@ -464,7 +464,9 @@ KOKORO_VOICES = os.path.join(ROOT, "voice-models", "voices-v1.0.bin")
 
 
 def set_valid(name):
-    return re.fullmatch(r"[a-z0-9_-]{1,31}", name) is not None
+    """A set name the card, the settings and the console accept: 1 to 31 characters of lower
+    case letters, digits, hyphen and underscore; "auto" is reserved for the first set found."""
+    return name != "auto" and re.fullmatch(r"[a-z0-9_-]{1,31}", name) is not None
 
 
 def set_local_dir(name):
