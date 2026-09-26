@@ -9,10 +9,11 @@ These are the working notes for the one device Sonar is developed on, and the de
 - Firmware: Momentum mntm-012, built 31 December 2025, installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
   here: phase 3 and the polish round on 2026-09-24, the firmware stripdown and the features after
-  it on 2026-09-25. Since 2026-09-26 it runs commit a0dea0841, the clean Sonar build of the
-  publishing plan A, flashed complete with `./fbt flash_usb_full` from a wiped build folder. It
-  reports itself as Sonar and clean, with API version 87.3: `firmware.origin.fork : Sonar` and
-  `firmware.commit.dirty : false`. firmware.bin is 864,564 bytes, 16,076 spare below the BLE
+  it on 2026-09-25. Since 2026-09-26 it runs commit a5c2ed7d9, the clean Sonar build of the
+  publishing plan A with its fix wave, which saves no settings in an update boot. It was flashed
+  complete with `./fbt flash_usb_full` from a wiped build folder. It reports itself as Sonar and
+  clean, with API version 87.3: `firmware.origin.fork : Sonar` and
+  `firmware.commit.dirty : false`. firmware.bin is 864,652 bytes, 15,988 spare below the BLE
   stack. The apps on the card, the Passport among them, came with it. The earlier images are
   listed under Useful commands.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1`, which was
@@ -286,6 +287,9 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- a5c2ed7d9, plan A's fix wave: no settings saved in an update boot, on 2026-09-26, built from a
+  wiped build folder: 864,652 bytes, 15,988 spare. The continuous build's image of the same commit
+  is 864,648 bytes.
 - a0dea0841, the clean Sonar build of the publishing plan A, with the List menu style as the
   default, on 2026-09-26, built from a wiped build folder: 864,564 bytes, 16,076 spare, the
   same as 6451e86e8.
@@ -365,8 +369,8 @@ It prints the function with its file and line, and with `-i` also the chain of f
 code was inlined into. The build directory holds only the latest build: if it has moved on from
 the build `sr status` names, build that commit in a git worktree and use its elf. Builds of one
 commit on this Mac have given the same image, so the addresses match. The continuous build's
-image of the same commit is 12 bytes larger, though, so a release's own `firmware.elf` must be
-kept to decode its addresses.
+image of the same commit differs by a few bytes, though: 12 more for a0dea0841, 4 fewer for
+a5c2ed7d9. So a release's own `firmware.elf` must be kept to decode its addresses.
 
 The caveats. The address is where the failed check would have returned to. Without the 2
 subtracted, addr2line names the instruction after the check's call: often a later line, and
@@ -453,6 +457,7 @@ The files in `docs/measurements/`, all plain text:
   device pass.
 - `2026-09-26-plan-a.txt`: the clean Sonar build of the publishing plan A: its build, headroom and
   flash, what the device reported after it, the Debug flag and the settings that the update reset,
-  the card before and after the prune, and the chord session.
+  the card before and after the prune, and the chord session. Under After the fix wave, the same
+  for a5c2ed7d9, with the settings file compared across the flash.
 
 `docs/measurements/logs/` holds the raw session logs and the UART capture. It is not in git.
