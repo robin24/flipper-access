@@ -2,7 +2,12 @@ name: Build
 
 on:
   push:
+    # Branches only: a tag push is for the release workflow.
+    branches: ["**"]
   pull_request:
+
+permissions:
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -10,14 +15,14 @@ concurrency:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     env:
       FBT_GIT_SUBMODULE_SHALLOW: "1"
       WORKFLOW_BRANCH_OR_TAG: screen-reader
     steps:
       - name: Check out the project
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Check out the firmware submodule
         run: git submodule update --init --depth 1 Momentum-Firmware
@@ -26,7 +31,7 @@ jobs:
         run: echo "DIST_SUFFIX=sonar-ci-$(git -C Momentum-Firmware rev-parse --short=8 HEAD)" >> "$GITHUB_ENV"
 
       - name: Cache the toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: Momentum-Firmware/toolchain
           key: toolchain-${{ hashFiles('Momentum-Firmware/scripts/toolchain/fbtenv.sh') }}
@@ -41,7 +46,7 @@ jobs:
         run: tools/flash_headroom.sh
 
       - name: Upload the package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DIST_SUFFIX }}
           path: Momentum-Firmware/dist/f7-C/flipper-z-f7-update-*.tgz
