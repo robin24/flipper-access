@@ -1,0 +1,440 @@
+Publishing plan B on the device: the firmware with voice sets, Samantha moved into the set layout, and the Kokoro tuning clips on the card, 2026-09-26
+
+Task 6 of plan B starts this file; Task 7 finishes it, after Robin's listening session.
+
+Firmware: branch screen-reader at 86820a7db, the Voice row in the Accessibility settings, on top of the engine's voice sets (02924825a to 494df8b40) and the default reader volume of 80 percent (89b45099c), in the release configuration (COMPACT=1, DEBUG=0). The build folder was wiped first, rm -rf Momentum-Firmware/build.
+Device: Delphi on /dev/cu.usbmodemflip_Delphi1. Before the flash it ran a5c2ed7d9, flashed in plan A's fix wave, with the Samantha vocabulary in the card's first layout, /ext/sr/voice, and the reader at volume 60.
+Console replies are verbatim from tools/flipper_cli.py, tools/card_prune.py, tools/voice_build.py and tools/sr_drive.py; a time in brackets is the shell's, taken just before the call. Paths on the Mac are given from the project root.
+
+Section: Build and headroom
+The firmware tree was clean before the build and after it: git status --short printed nothing.
+./fbt COMPACT=1 DEBUG=0 updater_package from 20:46:09 to 20:48:45, 156 s, exit 0. Its last five lines:
+
+2026-09-26 20:48:40,529 [INFO] Use this directory to self-update your Flipper:
+	dist/f7-C/f7-update-mntm-screen-reader-86820a7d
+2026-09-26 20:48:40,781 [INFO] Bundling SDK
+2026-09-26 20:48:42,555 [INFO] SDK bundle can be found at:
+	dist/f7-C/flipper-z-f7-sdk-mntm-screen-reader-86820a7d.zip
+
+fbt printed "API version 87.3 is up to date". The warnings were the known ones: the manifest warnings of the external apps cli_bridge (Invalid appid '.cli_gui') and mtp (Invalid appid '.f0_mtp'), each printed twice, and 20 compiler warnings, all inside the external apps' own sources: the asn1 code of seader, picopass and passy, the four flipboard apps, airmouse and mitsubishi_ac_remote. There was no error line.
+The headroom check, tools/flash_headroom.sh, exit 0:
+
+firmware.bin 866300 bytes, limit 880640, spare 14340 bytes
+
+That is the figure Task 4 measured. a5c2ed7d9's image had 15,988 bytes spare, so 86820a7db's is 1,648 bytes larger. firmware.bin md5 134e853ef7461ae41bb21d16f680db2a, the same after the flash command below.
+Momentum-Firmware/dist/f7-C held flipper-z-f7-update-mntm-screen-reader-86820a7d.tgz, 12,041,139 bytes, and the update folder f7-update-mntm-screen-reader-86820a7d with resources.tar.gz, 11,265,662 bytes, beside firmware.dfu, firstboot.bin, radio.bin, splash.bin, update.fuf and updater.bin. The resources hold the settings app with the new Voice row, apps/assets/momentum_app.fap, 80,348 bytes.
+
+Section: Before the flash
+
+[20:45:45] before the flash
+== loader info
+No application is running
+== storage list /ext/update
+	[D] f7-update-1.4.3
+	[D] f7-update-mntm-012
+	[D] f7-update-mntm-screen-reader-a5c2ed7d
+== storage list /ext/sr
+	[D] voice
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 60, verbosity: 1, change delay: 3000 ms
+frames: 65, dropped: 0, announcements: 9, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 41, aborted 13, dropped 0, underruns 0, queue dropped 0
+last utterance: 12480 ms played, 199228 subsamples, 12451 ms nominal, worker stack free 2484
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 148, fallback 14, missing 8, muted 0, open max 55 ms, last 18 ms
+free heap: 116240
+== sr voice status
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 148, fallback 14, missing 8, muted 0, open max 55 ms, last 18 ms
+== sr voice list
+sr voice on|off|status
+== info device
+(the firmware lines only; the hardware, radio and system lines are left out)
+firmware.commit.hash          : a5c2ed7d
+firmware.commit.dirty         : false
+firmware.branch.name          : screen-reader
+firmware.branch.num           : 0
+firmware.version              : mntm-dev
+firmware.build.date           : 26-09-2026
+firmware.target               : 7
+firmware.api.major            : 87
+firmware.api.minor            : 3
+firmware.origin.fork          : Sonar
+firmware.origin.git           : https://github.com/robin24/Momentum-Firmware.git
+
+a5c2ed7d9 has no voice sets: its sr voice knows only on, off and status, so sr voice list printed that usage line. storage list /ext/sr/voice gave the 64 clip folders, 00 to 3f, and voice.txt of 55 bytes. There was no /ext/sr/missing.txt, although sr status counted 8 missing words since that boot, which a5c2ed7d9 appends to that file after the item that meets them; whatever removed the file, it was not this task. The migration therefore had only the folder to move.
+The settings file, storage read /int/.momentum_settings.txt, was 959 bytes with 45 keys, among them screen_reader: true, sr_volume: 60 and menu_style: 0, and no sr_voice_set, a key a5c2ed7d9 does not know.
+
+Section: The flash
+./fbt COMPACT=1 DEBUG=0 flash_usb_full from 20:49:20 to 20:51:31, 131 s, exit 0. It built the resources and the package again, then uploaded the package; firmware.bin was unchanged, the same md5. The package it sent holds resources.tar.gz of 11,265,423 bytes, and the .tgz is now 12,040,843 bytes. Its last three lines: the upload's progress line for updater.bin, ending "<100%, chunk 15 of 15 @ 139.52 kb/s"; "2026-09-26 20:51:28,769 [INFO] Closing current app, if any"; Touch("build/usbinstall.flag").
+
+The port watch, one line per change, polled once a second:
+
+20:49:13 watch started
+20:49:13 port present
+20:51:29 port gone
+20:57:37 port present
+20:58:07 port steady for 30 s: done; gone for 367 s
+
+The port was gone from 20:51:29 to 20:57:37: 368 s by those clock lines, 6 min 8 s (the watch's own count, to the fraction of a second, gave 367 s). The whole flash, from the command's start to the port's return, took 497 s, 8 min 17 s. The UART capture logged the RAM updater of 86820a7d up to stage 11 at 20:51:52, then nothing until the Debug flag was set again below.
+
+Section: After the flash
+Before any key press, 36 s after the port came back:
+
+[20:58:13] after the flash, before any key press
+== sr screen
+records: 0, content layer: desktop
+reads as:
+== info device
+(the firmware lines only; the hardware, radio and system lines are left out)
+firmware.commit.hash          : 86820a7d
+firmware.commit.dirty         : false
+firmware.branch.name          : screen-reader
+firmware.branch.num           : 0
+firmware.version              : mntm-dev
+firmware.build.date           : 26-09-2026
+firmware.target               : 7
+firmware.api.major            : 87
+firmware.api.minor            : 3
+firmware.origin.fork          : Sonar
+firmware.origin.git           : https://github.com/robin24/Momentum-Firmware.git
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 60, verbosity: 1, change delay: 3000 ms
+frames: 2, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 0, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 0 ms played, 0 subsamples, 0 ms nominal, worker stack free 2628
+voice: on, vocabulary no set none, clips 0, fallback 0, missing 0, muted 1, open max 0 ms, last 0 ms
+free heap: 115616
+== sr voice status
+voice: on, vocabulary no set none, clips 0, fallback 0, missing 0, muted 1, open max 0 ms, last 0 ms
+
+firmware.commit.hash 86820a7d is the first eight characters of the submodule's HEAD, 86820a7dbcc9e1834aef550bc9f30290befd94f7. The build is clean, calls itself Sonar, names the fork as its origin, and has API version 87.3. sr screen read no records on the desktop layer: the post-update slideshow, as after the earlier flashes, not a crash popup.
+The reader is on at volume 60, the value from before the flash, and it has spoken nothing: utterances 0, muted 1. The boot's "Home screen" found no set, since the engine reads only /ext/sr/voices and the card still had /ext/sr/voice, so the item ended in silence: vocabulary no, set none, as the brief expected. The last crash is the old one of build 9028a849, kept across the update as designed.
+The same info device reply read system.debug : 0 and system.log.level : 1, which is none: the updater cleared both, as in plan A.
+The settings file after the flash is byte for byte the copy from before it: diff of the two storage read replies printed nothing (959 bytes, the same 45 keys, sr_volume: 60). So sr_voice_set is not in the file yet, and the setting is at its default, empty, which means the first set found.
+The settings app this flash put on the card, /ext/apps/assets/momentum_app.fap, is 80,348 bytes with md5 650daf5fbcf978c71a54c93a7f6d1d9c, the same as the package's copy; plan A's listing had 79,556 bytes.
+
+Section: The Debug flag and the log level
+
+[20:58:23] the crash catcher's settings
+== sysctl debug 1
+Debug enabled.
+== sysctl log_level debug
+Set log level to debug
+system.debug                  : 1
+system.log.level              : 5
+
+The last two lines are from an info device right after, cut to those two keys. The UART capture received lines again at once, from 20:58:24. From then to the end of this task it logged no error and no warning line.
+
+Section: The card's update folder
+
+[20:58:43] storage list before the prune
+== storage list /ext/update
+	[D] f7-update-1.4.3
+	[D] f7-update-mntm-012
+	[D] f7-update-mntm-screen-reader-86820a7d
+	[D] f7-update-mntm-screen-reader-a5c2ed7d
+
+[20:58:43] card_prune.py --dry
+running build 86820a7d, version mntm-dev; 4 folders in /ext/update; keeping 3: f7-update-1.4.3, f7-update-mntm-012, f7-update-mntm-screen-reader-86820a7d
+would remove f7-update-mntm-screen-reader-a5c2ed7d
+would remove 1 folders
+exit 0
+
+[20:58:44] card_prune.py
+running build 86820a7d, version mntm-dev; 4 folders in /ext/update; keeping 3: f7-update-1.4.3, f7-update-mntm-012, f7-update-mntm-screen-reader-86820a7d
+removing f7-update-mntm-screen-reader-a5c2ed7d
+removed 1 folders
+exit 0
+[20:58:44]
+== storage list /ext/update
+	[D] f7-update-1.4.3
+	[D] f7-update-mntm-012
+	[D] f7-update-mntm-screen-reader-86820a7d
+
+Three folders are left: the two rollback packages and the running build's.
+
+Section: The migration
+The card in the first layout, and the new engine finding no set:
+
+[20:59:04] before the migration
+== storage list /ext/sr
+	[D] voice
+== sr voice list
+none found
+== sr voice status
+voice: on, vocabulary no set none, clips 0, fallback 0, missing 0, muted 1, open max 0 ms, last 0 ms
+
+Then .venv/bin/python tools/voice_build.py --set samantha --migrate-sets:
+
+[20:59:04] voice_build.py --set samantha --migrate-sets
+voice: silenced for the transfer
+migrate: made /ext/sr/voices
+migrate: moved /ext/sr/voice to /ext/sr/voices/samantha
+voice: restored
+exit 0, 1 s
+
+With no /ext/sr/missing.txt on the card, the folder was the only move. The generator's routine (--extract --card-apps --pull-missing --sync) was not run in this task, before the migration or after it.
+
+Section: The new layout
+The brief's command, .venv/bin/python tools/flipper_cli.py "storage list /ext/sr" "storage list /ext/sr/voices" "storage list /ext/sr/voices/samantha" "sr voice list" "sr say Home screen" "sr voice status":
+
+[20:59:14] the listings after the migration
+== storage list /ext/sr
+	[D] voices
+== storage list /ext/sr/voices
+	[D] samantha
+== storage list /ext/sr/voices/samantha
+(64 folder lines, one per clip folder, are left out here: every two-digit hex name from 00 to 3f once, in the card's own order, starting 2f, 1c, 15, 02 and ending 20, 06, 0e, 00; the same order as the listing of /ext/sr/voice before the flash, so the rename moved the folder whole)
+	[F] voice.txt 55b
+== sr voice list
+samantha
+== sr say Home screen
+queued 11 characters; sr status shows the timing when it is done
+== sr voice status
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 0, fallback 0, missing 0, muted 1, open max 0 ms, last 0 ms
+
+That sr voice list came before any utterance since the migration, so it has no mark. The set was resolved when the item of sr say started: the status line already names it, with the Samantha settings line from its voice.txt. After the utterance:
+
+[20:59:23] after the utterance
+== sr voice list
+samantha (in use)
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 60, verbosity: 1, change delay: 3000 ms
+frames: 2, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 1, open max 26 ms, last 26 ms
+free heap: 115544
+
+/ext/sr holds voices and no voice; /ext/sr/voices holds samantha; that folder holds the 64 clip folders and voice.txt. The utterance played 2 clips, 15,972 subsamples, with no fallback and no missing word: the same 15,972 subsamples as the Samantha "Home screen" in plan A's measurements, so Samantha's clips play from the moved folder. Nobody listened during this task; the counters are the evidence that it was Samantha.
+
+Section: Choosing the set on the console
+Each command, then the settings file's size line and its reader lines, from storage read /int/.momentum_settings.txt:
+
+[20:59:36] sr voice use
+== sr voice use samantha
+voice set: samantha
+== sr voice status
+(the reply was lost to a filter in this Mac's command line; the same pair, repeated at 21:03:41, is below)
+Size: 982
+screen_reader: true
+sr_volume: 60
+sr_verbosity: 1
+sr_change_ms: 3000
+sr_voice_set: samantha
+[20:59:37]
+== sr voice use nosuch
+no such voice set: nosuch
+== sr voice status
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 1, open max 26 ms, last 26 ms
+Size: 982
+sr_voice_set: samantha
+[20:59:38]
+== sr voice use auto
+voice set: auto, the first found
+== sr voice status
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 1, open max 26 ms, last 26 ms
+Size: 974
+sr_voice_set:
+[20:59:39]
+== sr voice use samantha
+voice set: samantha
+== sr voice status
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 1, open max 26 ms, last 26 ms
+== sr voice list
+samantha (in use)
+Size: 982
+sr_voice_set: samantha
+
+The same first pair, repeated after the workout and the upload below:
+
+[21:03:41] the first pair again
+== sr voice use samantha
+voice set: samantha
+== sr voice status
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 40, fallback 0, missing 0, muted 1, open max 33 ms, last 27 ms
+Size: 982
+sr_voice_set: samantha
+
+sr voice use samantha saved the name at once: the settings file grew from 959 to 982 bytes by the line sr_voice_set: samantha. nosuch was refused and the file kept samantha. auto saved the empty name, 974 bytes, and the status still named samantha, the only set, with no wanted word. samantha again left the setting explicit, and the device keeps it. At 21:06 the whole file, diffed against the copy from before the flash, differed only in its size line and the new last line, sr_voice_set: samantha.
+
+Section: The workout
+Before it, the post-update slideshow was still up: no records on the desktop layer. Back closed it, as after plan A's flashes:
+
+[20:59:54] the screen before the workout
+== sr voice status
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 1, open max 26 ms, last 26 ms
+== sr screen
+records: 0, content layer: desktop
+reads as:
+== loader info
+No application is running
+[21:00:01] Back closes the post-update splash
+== input send back short
+[21:00:02]
+== sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+== loader info
+No application is running
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 60, verbosity: 1, change delay: 3000 ms
+frames: 3, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 1, open max 26 ms, last 26 ms
+free heap: 116136
+
+The home screen: the battery alone. Then tools/sr_drive.py --chords from the home screen, then sr status, free, loader info and sr voice list:
+
+[21:00:09] sr_drive.py --chords
+     home  desktop, no focus
+ok   home  back + up       utterances +1, aborted +0, dropped +0, announcements +0; last 1106 ms played, 15972 subsamples
+ok   home  back + down     utterances +1, aborted +0, dropped +0, announcements +0; last 4143 ms played, 65194 subsamples
+ok   home  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 1108 ms played, 16399 subsamples
+ok   home  back + ok long  utterances +1, aborted +0, dropped +0, announcements +0; last 1108 ms played, 16399 subsamples
+     menu  fullscreen, FOCUS 1/11 "Apps", reads as: Settings. Sub-GHz. Apps, 1 of 11
+ok   menu  back + up       utterances +1, aborted +0, dropped +0, announcements +0; last 4387 ms played, 68392 subsamples
+ok   menu  back + down     utterances +1, aborted +0, dropped +0, announcements +0; last 1933 ms played, 30010 subsamples
+ok   menu  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 2026 ms played, 30272 subsamples
+ok   menu  back + ok long  utterances +1, aborted +0, dropped +0, announcements +0; last 1673 ms played, 24961 subsamples
+ok   end   home screen expected, got: desktop, no focus
+0 failures
+exit 0
+[21:00:33]
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 60, verbosity: 1, change delay: 3000 ms
+frames: 42, dropped: 0, announcements: 4, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 12, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1098 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2484
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 40, fallback 0, missing 0, muted 1, open max 33 ms, last 27 ms
+free heap: 116248
+== free
+Free heap size: 116352
+Total heap size: 189464
+Minimum heap size: 107688
+Maximum heap block: 115968
+Pool free: 876
+Maximum pool block: 672
+== loader info
+No application is running
+== sr voice list
+samantha (in use)
+
+No failures. Every chord played the same number of subsamples as in plan A's workout (15,972, 65,194, 16,399 and 16,399 on the home screen; 68,392, 30,010, 30,272 and 24,961 in the menu), now from the samantha set. The main menu opened in the List style with its focus marked, "Apps, 1 of 11". sr status: frames 42, dropped 0; utterances 12, aborted 0, dropped 0, underruns 0; clips 40, fallback 0, missing 0. Free heap 116,352 bytes, lowest since boot 107,688, largest block 115,968. The total heap is 189,464 bytes, 32 fewer than a5c2ed7d9's 189,496.
+
+Section: The tuning clips
+Twelve words, in this order: settings, sub, gigahertz, apps, one, of, eleven, battery, hundred, percent, frequency, analyzer. They were one per line in a temporary word list, given with --words.
+Four processing settings, each made into a throwaway set with the kokoro backend, the voice af_heart at rate 100 and the soft limiter:
+A: high-pass 500 Hz, gain 1.3, soft (today's defaults).
+B: high-pass 300 Hz, gain 1.3, soft.
+C: high-pass 500 Hz, gain 1.6, soft.
+D: high-pass 800 Hz, gain 1.3, soft.
+The commands, with no --extract and no --sync:
+
+.venv/bin/python tools/voice_build.py --set trial-a --backend kokoro --voice af_heart --words <list> --highpass 500 --gain 1.3 --soft
+.venv/bin/python tools/voice_build.py --set trial-b --backend kokoro --voice af_heart --words <list> --highpass 300 --gain 1.3 --soft
+.venv/bin/python tools/voice_build.py --set trial-c --backend kokoro --voice af_heart --words <list> --highpass 500 --gain 1.6 --soft
+.venv/bin/python tools/voice_build.py --set trial-d --backend kokoro --voice af_heart --words <list> --highpass 800 --gain 1.3 --soft
+
+The output of the first, at 20:51:49, while the device was updating (the generator needs no device without --sync, --pull-missing or --card-apps):
+
+set trial-a: 126 words, 126 to make with kokoro af_heart rate 100 highpass 500 gain 1.3 soft 16000
+kokoro: worker 44148 loaded the model in 0.6 s, 5 threads
+kokoro: worker 44149 loaded the model in 0.6 s, 5 threads
+kokoro: worker 44150 loaded the model in 0.6 s, 5 threads
+kokoro: worker 44151 loaded the model in 0.6 s, 5 threads
+100 of 126 clips, 14 s
+made 126 clips, 0 failed, 17 s; vocabulary 126 words in voices/trial-a
+
+The other three printed the same lines with their own settings, each 126 clips, 0 failed, 17 s, with four workers. 126 words: the twelve and the default word lists, tools/voice_words.txt and the local list, which share seven of the twelve. The sets' voice.txt lines:
+
+trial-a: kokoro af_heart rate 100 highpass 500 gain 1.3 soft 16000
+trial-b: kokoro af_heart rate 100 highpass 300 gain 1.3 soft 16000
+trial-c: kokoro af_heart rate 100 highpass 500 gain 1.6 soft 16000
+trial-d: kokoro af_heart rate 100 highpass 800 gain 1.3 soft 16000
+
+All four manifests hold the same checksum of the model and voices files, model_sha256 starting 7d5df8ecf7d4b187.
+Each set's twelve clips, voices/trial-<letter>/<initial>/<word>.raw, were joined in the order above with 150 ms of silence between words, 2,400 bytes of 128 at 16,000 Hz, and none before the first word or after the last; each clip carries its own 15 ms of silence at each end. The files, in voice-samples/trial/ on the Mac, which is not in git, raw unsigned 8-bit PCM at 16,000 Hz:
+
+kokoro-heart-a.raw: settings A, 136,027 bytes, 8.50 s, md5 e3ba553c20f81c9bee8dd6b19468caef
+kokoro-heart-b.raw: settings B, 136,001 bytes, 8.50 s, md5 13093e528cc0a9954f151b96352deb8e
+kokoro-heart-c.raw: settings C, 136,577 bytes, 8.54 s, md5 1b38f6566eb00da15c276ba955d7a16c
+kokoro-heart-d.raw: settings D, 136,041 bytes, 8.50 s, md5 af5eccd55aa9881447a887fa2911c5e3
+
+Their level, over the whole file with the gaps, as the distance of a sample from 128: A, RMS 28.9, 329 samples at full scale; B, RMS 31.5, 338; C, RMS 33.5, 857; D, RMS 27.2, 272. The peak is at full scale in all four, since every clip is normalised before the gain and the limiter. So C is the loudest and the most limited, D the thinnest, and B a little fuller than A.
+
+The upload, with the storage script, .venv/bin/python Momentum-Firmware/scripts/storage.py -p /dev/cu.usbmodemflip_Delphi1 send voice-samples/trial/kokoro-heart-<letter>.raw /ext/sr/trial/kokoro-heart-<letter>.raw, after the folder:
+
+[21:00:47] the trial folder
+== storage mkdir /ext/sr/trial
+
+The four sends ran from 21:00:48 to 21:00:54, each exit 0 in 1 to 2 s, 17 chunks, the last progress figures 151.36, 147.79, 148.57 and 146.28 kb/s. Each printed one line such as:
+
+2026-09-26 21:00:48,977 [INFO] Sending "voice-samples/trial/kokoro-heart-a.raw" to "/ext/sr/trial/kokoro-heart-a.raw"
+
+and its progress line. Then:
+
+[21:00:54]
+== storage list /ext/sr/trial
+	[F] kokoro-heart-a.raw 136027b
+	[F] kokoro-heart-b.raw 136001b
+	[F] kokoro-heart-c.raw 136577b
+	[F] kokoro-heart-d.raw 136041b
+== storage md5 /ext/sr/trial/kokoro-heart-a.raw
+e3ba553c20f81c9bee8dd6b19468caef
+== storage md5 /ext/sr/trial/kokoro-heart-b.raw
+13093e528cc0a9954f151b96352deb8e
+== storage md5 /ext/sr/trial/kokoro-heart-c.raw
+1b38f6566eb00da15c276ba955d7a16c
+== storage md5 /ext/sr/trial/kokoro-heart-d.raw
+af5eccd55aa9881447a887fa2911c5e3
+== storage list /ext/sr
+	[D] voices
+	[D] trial
+
+Each file on the card has the md5 of the Mac's copy. None was played. The throwaway sets' folders on the Mac, voices/trial-a to voices/trial-d, were removed after the upload, and with them the voices folder they had made, which did not exist before; voice/, the samantha set's own folder on the Mac, was not touched.
+
+Section: The device at the end
+
+[21:01:22] the device at the end
+== storage list /ext/sr
+	[D] voices
+	[D] trial
+== storage list /ext/sr/trial
+	[F] kokoro-heart-a.raw 136027b
+	[F] kokoro-heart-b.raw 136001b
+	[F] kokoro-heart-c.raw 136577b
+	[F] kokoro-heart-d.raw 136041b
+== sr voice list
+samantha (in use)
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 60, verbosity: 1, change delay: 3000 ms
+frames: 42, dropped: 0, announcements: 4, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 12, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1098 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2484
+voice: on, vocabulary yes set samantha say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 40, fallback 0, missing 0, muted 1, open max 33 ms, last 27 ms
+free heap: 116088
+== sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as:
+== loader info
+No application is running
+
+The trial folder beside /ext/sr/voices leaves the sets alone: sr voice list still names samantha only. The device was left on the home screen: no application, the reader on at volume 60, the voice on with the samantha set in use and saved as sr_voice_set: samantha, speech idle, the Debug flag on at log level debug.
+
+Section: The listening session
+The plan pauses here for Robin's listening session. The controller plays /ext/sr/trial/kokoro-heart-a.raw to kokoro-heart-d.raw through the piezo with sr play <path> 16000, names each, and Robin picks the processing settings for the Kokoro set. Task 7 continues this file with the heart and espeak sets.
