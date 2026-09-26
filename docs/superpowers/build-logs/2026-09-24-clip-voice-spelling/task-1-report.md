@@ -184,7 +184,7 @@ The empty "reads as" is the desktop's usual reading. The Task 2 report of the la
 format.major                  : 3
 format.minor                  : 3
 hardware.model                : Flipper Zero
-hardware.uid                  : redacted
+hardware.uid                  : redacted (identifier redacted before publication)
 hardware.otp.ver              : 2
 hardware.timestamp            : 1720072856
 hardware.ver                  : 12

@@ -261,7 +261,7 @@ status-right x=103 y=  9 battery    inverted "100"
 reads as: 
 == info device (lines about the firmware; radio, enclave and hardware detail lines left out)
 hardware.model                : Flipper Zero
-hardware.uid                  : redacted
+hardware.uid                  : redacted (identifier redacted before publication)
 hardware.name                 : R0skie
 firmware.commit.hash          : f625f9d0
 firmware.commit.dirty         : true
