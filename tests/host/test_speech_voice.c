@@ -188,6 +188,70 @@ static void test_sets(void) {
     CHECK(speech_voice_set_file("", "voice.txt", out, sizeof(out)) == 0);
 }
 
+// The engine's fallback over a card listing: the listable names, the smallest kept
+static void pick_first(const char* const* names, size_t count, char* first) {
+    first[0] = '\0';
+    for(size_t i = 0; i < count; i++) {
+        if(!speech_voice_set_listable(names[i])) continue;
+        if(speech_voice_set_before(names[i], first)) {
+            strncpy(first, names[i], SPEECH_VOICE_SET_MAX - 1);
+            first[SPEECH_VOICE_SET_MAX - 1] = '\0';
+        }
+    }
+}
+
+static void test_set_choice(void) {
+    // The folders the engine lists and takes as a set, and the saved name it accepts: looser
+    // than speech_voice_set_valid, as a folder made by hand may use other characters, but never
+    // hidden, longer than a set name, or a path
+    CHECK(speech_voice_set_listable("samantha"));
+    CHECK(speech_voice_set_listable("en-us_f3"));
+    CHECK(speech_voice_set_listable("Samantha"));
+    CHECK(speech_voice_set_listable("my voice"));
+    CHECK(speech_voice_set_listable("auto"));
+    CHECK(speech_voice_set_listable("abcdefghijklmnopqrstuvwxyz01234")); // 31 characters
+    CHECK(!speech_voice_set_listable("abcdefghijklmnopqrstuvwxyz012345")); // 32
+    CHECK(!speech_voice_set_listable(""));
+    CHECK(!speech_voice_set_listable("."));
+    CHECK(!speech_voice_set_listable(".."));
+    CHECK(!speech_voice_set_listable(".hidden"));
+    CHECK(!speech_voice_set_listable(".Trashes"));
+    CHECK(!speech_voice_set_listable("a/b"));
+    CHECK(!speech_voice_set_listable("../apps"));
+    CHECK(!speech_voice_set_listable("/ext"));
+    CHECK(!speech_voice_set_listable("heart/"));
+    CHECK(!speech_voice_set_listable("a\\b")); // the card's filesystem splits paths here too
+    CHECK(!speech_voice_set_listable("..\\apps"));
+
+    // The fallback keeps the smallest name by strcmp: any name before nothing kept yet, then
+    // only a name that sorts before the one kept; an equal one leaves it
+    CHECK(speech_voice_set_before("samantha", ""));
+    CHECK(speech_voice_set_before("espeak", "samantha"));
+    CHECK(!speech_voice_set_before("samantha", "espeak"));
+    CHECK(!speech_voice_set_before("heart", "heart"));
+    CHECK(speech_voice_set_before("heart", "heart2")); // a prefix first
+    CHECK(!speech_voice_set_before("heart2", "heart"));
+    CHECK(speech_voice_set_before("2voice", "heart")); // digits before letters
+    CHECK(speech_voice_set_before("Samantha", "espeak")); // byte order: capitals first
+
+    // Over a listing in the card's order, hidden and over-long names mixed in, in both orders
+    char first[SPEECH_VOICE_SET_MAX];
+    const char* listing[] = {
+        "samantha", ".hidden", "heart", "abcdefghijklmnopqrstuvwxyz012345", "espeak", "kokoro"};
+    pick_first(listing, 6, first);
+    CHECK(strcmp(first, "espeak") == 0);
+    const char* reversed[] = {
+        "kokoro", "espeak", "abcdefghijklmnopqrstuvwxyz012345", "heart", ".hidden", "samantha"};
+    pick_first(reversed, 6, first);
+    CHECK(strcmp(first, "espeak") == 0);
+    const char* hidden_first[] = {".a", "zeta"};
+    pick_first(hidden_first, 2, first);
+    CHECK(strcmp(first, "zeta") == 0);
+    const char* none[] = {".Spotlight-V100", ".Trashes", "abcdefghijklmnopqrstuvwxyz0123456789"};
+    pick_first(none, 3, first);
+    CHECK(first[0] == '\0');
+}
+
 static void expect_letter(char c, const char* want) {
     char out[3] = {'x', 'x', 'x'};
     bool got = speech_voice_letter_clip(c, out);
@@ -296,6 +360,7 @@ int main(void) {
     test_words();
     test_paths();
     test_sets();
+    test_set_choice();
     test_letters();
     test_missing();
     printf("%d checks, %d failures\n", checks, failures);
