@@ -14,7 +14,7 @@ jobs:
     timeout-minutes: 60
     env:
       FBT_GIT_SUBMODULE_SHALLOW: "1"
-      WORKFLOW_BRANCH_OR_TAG: ${{ github.ref_name }}
+      WORKFLOW_BRANCH_OR_TAG: screen-reader
     steps:
       - name: Check out the project
         uses: actions/checkout@v4
