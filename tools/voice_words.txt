@@ -118,4 +118,3 @@ locked
 unlocked
 digits
 quickly
-delphi

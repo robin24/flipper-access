@@ -1,7 +1,7 @@
 # Flipper Zero accessibility project
 
 Working notes for making a Flipper Zero usable without sight. The background research is in
-`flipper-zero-accessibility-investigation.md`. This file records the current state of the device
+`docs/2026-09-14-investigation.md`. This file records the current state of the device
 and the tools in this folder. Last updated 2026-09-25.
 
 ## Device state
@@ -19,9 +19,8 @@ and the tools in this folder. Last updated 2026-09-25.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1` (`/dev/cu.usbmodemflip_R0skie1`
   before the rename), 230400 baud. It disappears while the device is in the updater and comes
   back after the reboot.
-- The Text to SAM app on the card (`/ext/apps/Media/text2sam.fap`) is a patched build that also
-  speaks its launch argument. Its on-screen behaviour is unchanged. It is Momentum's own demo
-  app, separate from the screen reader's speech engine.
+- The Text to SAM app on the card is Momentum's stock build again since 2026-09-26; the patched
+  build and tools/say.sh were retired, since the reader speaks from its own engine.
 - The games, the JavaScript runner and its modules, and the screen reader's own SAM synthesizer
   are gone from the firmware and the card as of the stripdown round: the reader now speaks only
   from the recorded voice's clips. See Known limits and Recorded voice below.
@@ -242,17 +241,12 @@ words mixed with the file names showing behind it; the selection is read correct
 
 - `tools/flipper_cli.py`: send commands to the Flipper CLI and print the replies with colour
   codes stripped. Example: `.venv/bin/python tools/flipper_cli.py "info device" "loader list"`.
-- `tools/say.sh`: speak text on the device. Example: `tools/say.sh Hello there`.
-  Voice control: `tools/say.sh --voice 64,72,128,128 Hello` with pitch, speed, mouth, throat.
-  Bigger speed numbers talk slower. Keep each call under about 200 characters.
 - `.venv/`: Python virtual environment with pyserial and colorlog (used by the helper scripts).
 - `Momentum-Firmware/`: full source clone, branch `screen-reader`, with the ARM toolchain
   downloaded by fbt.
   API version 87.3 since 2026-09-25, which exported `canvas_tap_hint_note_at` for words placed
   among the drawn text; 87.2, since phase 3, exported two calls for the screen reader's spoken
   names of icons. Apps built here run on the device, and apps built for 87.1 and 87.2 still load.
-- `patches/text2sam-cli-mode.patch`: the change to Text to SAM (applies inside
-  `Momentum-Firmware/applications/external`, which is a git submodule).
 - `firmware-packages/`: Momentum mntm-012 and official 1.4.3 update packages.
 - `backups/backup-stock-1.4.3.tar`: internal storage backup taken on official 1.4.3 before the
   Momentum install (settings, dolphin state, region data).
@@ -275,14 +269,6 @@ words mixed with the file names showing behind it; the selection is read correct
 - `voice/`: the built vocabulary, not in git. Do not delete it; see Recorded voice.
 
 ## Useful commands
-
-Build the patched app and copy it to the card:
-
-    cd Momentum-Firmware && ./fbt fap_text2sam
-    ../.venv/bin/python scripts/storage.py -p /dev/cu.usbmodemflip_Delphi1 send -f build/f7-firmware-C/.extapps/text2sam.fap /ext/apps/Media/text2sam.fap
-
-(The storage helper is `Momentum-Firmware/scripts/storage.py`; run it with the venv Python and
-`-p /dev/cu.usbmodemflip_Delphi1`.)
 
 Flash limit: the firmware may only use the flash below the BLE stack (SFSA 0xD7 for ble_light
 1.20.0, 880,640 bytes); fbt's `.free_flash` line is against the nominal 1024 KB linker region and

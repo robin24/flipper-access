@@ -4,7 +4,8 @@
     tools/voice_build.py [--extract] [--extract-all] [--card-apps] [--pull-missing] [--sync]
         [--check] [--dry] [options]
 
-Words come from tools/voice_words.txt, from every string literal in the firmware's core apps
+Words come from tools/voice_words.txt and, when it exists, tools/voice_words.local.txt (personal
+words such as a device name, not in git), from every string literal in the firmware's core apps
 and services and the dolphin's speech bubble texts, run through the real pronunciation layer
 (--extract), and from the device's /ext/sr/missing.txt (--pull-missing). A clip's name is the
 word in lower case without apostrophes ("don't" is dont, spoken as "don't"); a clip listed in
@@ -15,7 +16,7 @@ only what is missing or changed. --sync uploads new or changed clips to
 /ext/sr/voice/<hh>/<word>.raw on the card, hh being the word's FNV-1a hash modulo 64
 as two hex digits, the same folder the firmware's speech_voice_path computes; --pull-missing
 removes the pulled missing list. --remove-legacy clears the first layout's
-/ext/sr/voice/<initial>/ folders. Defaults are the settings Robin chose by ear on 2026-09-24.
+/ext/sr/voice/<initial>/ folders. Defaults are the settings chosen by ear on 2026-09-24 for the Samantha voice.
 
 Clip format: raw unsigned 8-bit mono PCM, 16000 Hz, 128 silence, trimmed to 15 ms of silence
 at each end. Backends: say (macOS, personal use: Apple's voices may not be redistributed) and
@@ -581,6 +582,7 @@ def main():
             return 0
 
     words = load_list(os.path.join(HERE, "voice_words.txt"))
+    words |= load_list(os.path.join(HERE, "voice_words.local.txt"))
     for path in a.words:
         words |= load_list(path)
     if a.extract:
