@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-"""Remove old update packages from the Flipper's card.
+"""Remove the fork's old update packages from the Flipper's card.
 
     tools/card_prune.py [--dry] [--keep NAME ...] [--port PORT]
 
 Every `./fbt flash_usb` and `flash_usb_full` leaves its package in /ext/update/<name>/, with
-the updater's own backup.tar of internal storage inside, and nothing removes them. The rule: the
-folder of the running build stays (its name ends with the firmware.commit.hash that `info
-device` reports), the folders named with --keep stay (the rollback packages f7-update-1.4.3 and
-f7-update-mntm-012 are always kept), a folder whose name does not start with f7-update- is never
-touched, and every other folder goes. `storage list` gives no dates, so "the running build" is
-the rule, not "the newest". --dry prints the plan and removes nothing. Run from the project root
-with the venv Python (pyserial): .venv/bin/python tools/card_prune.py --dry
+the updater's own backup.tar of internal storage inside, and nothing removes them. The rule:
+only the fork's own builds are candidates, the folders whose names start with OWN_PREFIXES
+(f7-update-sonar- for releases and continuous builds, f7-update-mntm-screen-reader- for builds
+on the branch, f7-update-mntm-HEAD- for builds on a detached HEAD, which a fresh clone gives).
+Every other folder stays: a package of another firmware, such as f7-update-1.4.3,
+f7-update-mntm-012 or an Unleashed one, may be someone's way back, and is never touched. Of the
+candidates, the running build's folder stays: its name ends with "-" and the
+firmware.commit.hash that `info device` reports, or, when `info device` reports a
+firmware.version other than mntm-dev (a tagged release), it is f7-update-<firmware.version>.
+The folders named with --keep stay too, and every other candidate goes. `storage list` gives no
+dates, so "the running build" is the rule, not "the newest". --dry prints the plan and removes
+nothing. Run from the project root with the venv Python (pyserial):
+.venv/bin/python tools/card_prune.py --dry
 """
 import argparse
 import os
@@ -20,21 +26,25 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 try:
     from flipper_cli import find_port, open_cli, run
-except SystemExit:  # flipper_cli exits when pyserial is missing; plan() needs neither (the tests, CI)
+except (SystemExit, ImportError):  # flipper_cli exits without pyserial; plan() needs neither (the tests, CI)
     find_port = open_cli = run = None
 
 UPDATE_DIR = "/ext/update"
-DEFAULT_KEEP = ["f7-update-1.4.3", "f7-update-mntm-012"]
+OWN_PREFIXES = ("f7-update-sonar-", "f7-update-mntm-screen-reader-", "f7-update-mntm-HEAD-")
+DEV_VERSION = "mntm-dev"  # the firmware.version of every build that is not on a tag
 
 
-def plan(folders, running_hash, keep):
-    """The folder names to remove, sorted: those that start with f7-update-, are not in keep,
-    and do not end with "-" plus the running build's hash (eight hex digits, lower case)."""
+def plan(folders, running_hash, running_version, keep):
+    """The folder names to remove, sorted: the fork's own builds (names that start with one of
+    OWN_PREFIXES) except those in keep and the running build's. The running build's name ends
+    with "-" plus its hash (eight hex digits, lower case) or, for a version other than
+    DEV_VERSION, is f7-update-<version>."""
+    running = {f"f7-update-{running_version}"} if running_version and running_version != DEV_VERSION else set()
     remove = []
     for name in sorted(folders):
-        if not name.startswith("f7-update-"):
+        if not name.startswith(OWN_PREFIXES):
             continue
-        if name in keep:
+        if name in keep or name in running:
             continue
         if running_hash and name.endswith("-" + running_hash):
             continue
@@ -42,12 +52,13 @@ def plan(folders, running_hash, keep):
     return remove
 
 
-def running_hash(ser):
+def running_build(ser):
+    """firmware.commit.hash (lower case) and firmware.version from `info device`; "" if absent."""
+    found = {}
     for line in run(ser, "info device").splitlines():
         key, _, value = line.partition(":")
-        if key.strip() == "firmware.commit.hash":
-            return value.strip().lower()
-    return ""
+        found[key.strip()] = value.strip()
+    return found.get("firmware.commit.hash", "").lower(), found.get("firmware.version", "")
 
 
 def list_dir(ser, path):
@@ -85,16 +96,17 @@ def main():
     ap.add_argument("--keep", action="append", default=[], help="a folder name to keep (repeatable)")
     ap.add_argument("--port", help="serial port, default: auto-detect")
     args = ap.parse_args()
-    keep = set(DEFAULT_KEEP) | set(args.keep)
+    if run is None:
+        sys.exit("pyserial is missing. Run: .venv/bin/pip install pyserial  (or use .venv/bin/python)")
     ser = open_cli(find_port(args.port))
     try:
-        current = running_hash(ser)
+        current, version = running_build(ser)
         if not current:
             sys.exit("could not read firmware.commit.hash from info device")
         folders, _files = list_dir(ser, UPDATE_DIR)
-        remove = plan(folders, current, keep)
+        remove = plan(folders, current, version, set(args.keep))
         kept = sorted(set(folders) - set(remove))
-        print(f"running build {current}; {len(folders)} folders in {UPDATE_DIR}; keeping {len(kept)}: {', '.join(kept)}")
+        print(f"running build {current}, version {version}; {len(folders)} folders in {UPDATE_DIR}; keeping {len(kept)}: {', '.join(kept)}")
         for name in remove:
             print(("would remove " if args.dry else "removing ") + name)
             remove_tree(ser, f"{UPDATE_DIR}/{name}", args.dry)

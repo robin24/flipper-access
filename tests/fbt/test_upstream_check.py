@@ -2,8 +2,12 @@
 """tools/upstream_check.sh against a throwaway repository: a base commit, a branch "ours" that
 changes A and adds C, a branch "theirs" that changes A and B (a conflict on A), a branch
 "theirs_clean" that changes only B. The script must count the new commits, list the files
-changed on both sides, name the conflicts of the dry-run merge, and exit 2, 0 and 0. Run from
-the project root: python3 tests/fbt/test_upstream_check.py"""
+changed on both sides, name the conflicts of the dry-run merge, and exit 2, 0 and 0. With the
+fetch on, a ref without a slash, such as a release tag, is fetched from the remote "upstream"
+with its tags, and a ref with a slash from the remote named before the slash. An option given
+last without its value ends with one sentence and exit 1. The dry run needs git merge-tree
+--write-tree, git 2.38 or newer; with an older git the test says it skipped and exits 0. Run
+from the project root: python3 tests/fbt/test_upstream_check.py"""
 import os
 import subprocess
 import sys
@@ -12,18 +16,20 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCRIPT = os.path.join(ROOT, "tools", "upstream_check.sh")
 failures = 0
+checks = 0
 
 
 def check(cond, what):
-    global failures
+    global failures, checks
+    checks += 1
     if not cond:
         failures += 1
         print("FAIL", what)
 
 
 def git(repo, *args):
-    subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "-C", repo, *args],
-                   check=True, capture_output=True, text=True)
+    subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false",
+                    "-C", repo, *args], check=True, capture_output=True, text=True)
 
 
 def write(repo, name, text):
@@ -31,10 +37,13 @@ def write(repo, name, text):
         f.write(text)
 
 
-def run_check(repo, upstream, ours):
-    p = subprocess.run(["bash", SCRIPT, "--repo", repo, "--upstream", upstream, "--ours", ours, "--no-fetch"],
-                       capture_output=True, text=True)
+def run_script(*args):
+    p = subprocess.run(["bash", SCRIPT, *args], capture_output=True, text=True)
     return p.returncode, p.stdout + p.stderr
+
+
+def run_check(repo, upstream, ours, fetch=False):
+    return run_script("--repo", repo, "--upstream", upstream, "--ours", ours, *([] if fetch else ["--no-fetch"]))
 
 
 def section(out, title):
@@ -56,6 +65,10 @@ with tempfile.TemporaryDirectory() as tmp:
     write(repo, "B", "b\n")
     git(repo, "add", ".")
     git(repo, "commit", "-q", "-m", "base")
+    probe = subprocess.run(["git", "-C", repo, "merge-tree", "--write-tree", "base", "base"], capture_output=True, text=True)
+    if probe.returncode != 0:
+        print("skipped the upstream check tests: git merge-tree --write-tree needs git 2.38 or newer")
+        sys.exit(0)
     git(repo, "checkout", "-q", "-b", "ours")
     write(repo, "A", "a ours\n")
     write(repo, "C", "c\n")
@@ -89,5 +102,31 @@ with tempfile.TemporaryDirectory() as tmp:
     code, out = run_check(repo, "nonexistent", "ours")
     check(code == 1, f"a bad ref exits 1, got {code}")
 
-print(f"upstream check: {9 - failures} of 9 checks passed")
+    # Two remotes that "r" has not fetched yet: "upstream" with a release tag, "other" with a branch.
+    for name in ("upstream", "other"):
+        remote = os.path.join(tmp, name)
+        git(tmp, "clone", "-q", "-b", "theirs_clean", repo, remote)
+        write(remote, "D", f"d from {name}\n")
+        git(remote, "add", ".")
+        git(remote, "commit", "-q", "-m", f"new in {name}")
+        if name == "upstream":
+            git(remote, "tag", "mntm-013")
+        else:
+            git(remote, "branch", "newer")
+        git(repo, "remote", "add", name, remote)
+
+    code, out = run_check(repo, "mntm-013", "ours", fetch=True)
+    check(code == 0 and "upstream mntm-013: 2 new commits; ours ours: 1 commits on top" in out and "dry-run merge: clean" in out,
+          f"a tag is fetched from the remote upstream with its tags:\n{out}")
+    code, out = run_check(repo, "other/newer", "ours", fetch=True)
+    check(code == 0 and "upstream other/newer: 2 new commits" in out and "dry-run merge: clean" in out,
+          f"a ref with a slash is fetched from the remote named before the slash:\n{out}")
+
+    for option in ("--repo", "--upstream", "--ours"):
+        code, out = run_script("--no-fetch", option)
+        said = out.strip()
+        check(code == 1 and len(said.splitlines()) == 1 and option in said and "unbound" not in said,
+              f"{option} given last without a value: one sentence and exit 1, got {code}:\n{said}")
+
+print(f"upstream check: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)

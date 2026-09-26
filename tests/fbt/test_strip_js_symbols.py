@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """tools/strip_js_symbols.py: the JavaScript engine's lines leave targets/f7/api_symbols.csv,
-the fork's exported lines are present at their sorted place, the version is upstream's with the
-minor raised by FORK_MINOR_STEP (2, one per API round the fork has exported symbols in so far),
-and the script is idempotent. The golden check: the merge base's file (upstream's) becomes the
-fork's file exactly. Run from the project root:
+the fork's exported lines are present at their sorted place, a row of another kind that shares
+one of their names does not stand in for them, the version is upstream's with the minor raised by
+FORK_MINOR_STEP (2, one per API round the fork has exported symbols in so far: 90.4 becomes
+90.6), and the script is idempotent. The golden check: the merge base's file (upstream's) becomes
+the fork's file exactly; it is skipped without upstream/dev (CI). Run from the project root:
 python3 tests/fbt/test_strip_js_symbols.py"""
 import os
 import subprocess
@@ -11,7 +12,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
-from strip_js_symbols import FORK_MINOR_STEP, OUR_LINES, strip  # noqa: E402
+from strip_js_symbols import OUR_LINES, strip  # noqa: E402
 
 FIRMWARE = os.path.join(ROOT, "Momentum-Firmware")
 CSV = os.path.join(FIRMWARE, "targets", "f7", "api_symbols.csv")
@@ -28,7 +29,7 @@ def check(cond, what):
 
 
 def git(*args):
-    return subprocess.run(["git", "-C", FIRMWARE, *args], capture_output=True, text=True)
+    return subprocess.run(["git", "-C", FIRMWARE, *args], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
 
 
 SYNTHETIC = """entry,status,name,type,params
@@ -45,7 +46,7 @@ Variable,+,zz_var,int,
 out, changed = strip(SYNTHETIC)
 lines = out.split("\n")
 check(changed, "a synthetic upstream file changes")
-check(f"Version,+,90.{4 + FORK_MINOR_STEP},," in lines, "the minor version is raised by the fork's step, not by one")
+check("Version,+,90.6,," in lines, "the minor version is raised by the fork's step of two, not by one")
 check(not any("mjs" in line for line in lines), "every JavaScript line is gone")
 for ours in OUR_LINES:
     check(ours in lines, f"our line is present: {ours[:40]}")
@@ -55,6 +56,9 @@ check(functions[0] == "button_panel_item_set_name" and functions[-1] == "zz_last
 check(out.endswith("\n") and not out.endswith("\n\n"), "one trailing newline")
 again, changed_again = strip(out)
 check(again == out and not changed_again, "idempotent: a second run changes nothing")
+clash, _ = strip(SYNTHETIC.replace("Variable,+,zz_var,int,", "Variable,+,input_set_filter,int,\nVariable,+,zz_var,int,"))
+check('Function,-,input_set_filter,void,"InputFilterCallback, void*"' in clash.split("\n"),
+      "our line is added when only a row of another kind has its name")
 
 current = open(CSV, encoding="utf-8").read()
 same, changed_current = strip(current)

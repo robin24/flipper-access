@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The built-in Sub-GHz app's source list. applications/main/subghz/application.fam names its
 files one by one, because the firmware build cannot take "*.c" with "!" excludes, so a Momentum
-rebase that adds a scene could leave it out of the build without a word. Every .c file under
+merge that adds a scene could leave it out of the build without a word. Every .c file under
 applications/main/subghz, in any subfolder, must be quoted somewhere in that manifest, and every
 quoted .c must exist. A file quoted only in a commented-out App block counts as quoted: that is
 how Momentum names subghz_fap.c, the fap's entry point. Only quoted file paths count, so a glob

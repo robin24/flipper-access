@@ -6,14 +6,19 @@
 The fork builds Sub-GHz into the firmware (the stripdown spec of 2026-09-25). The firmware build
 hands each sources entry to the compiler on its own, so the fap's "*.c" with "!" excludes cannot
 be used, and the files are listed one by one in applications/main/subghz/application.fam.
-Momentum adds and renames files there, so after a merge this script rewrites the list of the App
-block with appid "subghz": every .c file under the app's folder, in any subfolder, except the
-EXCLUDED basenames, which are the fap's "!" entries in Momentum's manifest (the plugins' files,
-the startup hook, the fap entry point and the Add Manually app's own files). Order: top-level
-files first, then the subfolders, each sorted. --check exits 1 if the manifest would change.
---verify-upstream compares EXCLUDED with the "!" entries of the merge base's manifest and exits 1
-on a difference, so a change in Momentum's list is noticed at the merge.
-tests/fbt/test_subghz_manifest.py covers both.
+Momentum adds and renames files there, so after a merge this script rewrites the App block with
+appid "subghz". Its sources list becomes every .c file under the app's folder, in any subfolder,
+except the EXCLUDED basenames, which are the fap's "!" entries in Momentum's manifest (the
+plugins' files, the startup hook, the fap entry point and the Add Manually app's own files).
+Order: top-level files first, then the subfolders, each sorted. Its apptype line becomes
+apptype=FlipperAppType.APP, whatever the file named, since Momentum loads the app from the card
+(MENUEXTERNAL). So taking upstream's file whole at a merge and running this script gives the
+fork's manifest, comments aside. Only lines that start with "apptype=" or "sources=[", after
+leading spaces, are taken, so a comment that mentions either is left alone. --check exits 1 if
+the manifest would change. --verify-upstream compares EXCLUDED with the "!" entries of the merge
+base's manifest and exits 1 on a difference, so a change in Momentum's list is noticed at the
+merge; without upstream/dev in the firmware checkout it says so in one sentence and exits 1.
+tests/fbt/test_subghz_manifest.py covers all of this.
 """
 import argparse
 import os
@@ -40,7 +45,11 @@ EXCLUDED = (
     "subghz_scene_set_serial.c",
     "subghz_scene_set_type.c",
 )
-BLOCK = re.compile(r'(App\(\s*\n\s*appid="subghz",.*?sources=\[)(.*?)(\n\s*\],)', re.S)
+# The App block with appid "subghz", up to the ")" that starts a line; inside it, the sources
+# list and the apptype line, each only where it starts a line, so a comment cannot match.
+BLOCK = re.compile(r'^App\(\s*\n\s*appid="subghz",.*?^\)', re.S | re.M)
+SOURCES = re.compile(r'^([ \t]*sources=\[)(.*?)(\n[ \t]*\],)', re.S | re.M)
+APPTYPE = re.compile(r'^([ \t]*)apptype=FlipperAppType\.\w+,', re.M)
 
 
 def sources(app_dir, excluded=EXCLUDED):
@@ -53,23 +62,49 @@ def sources(app_dir, excluded=EXCLUDED):
     return sorted(found, key=lambda p: (p.count("/"), p))
 
 
+def parts(text, what):
+    """The subghz block's match in text and its sources list's match inside the block."""
+    block = BLOCK.search(text)
+    if not block:
+        sys.exit(f'{what}: no App block with appid="subghz"')
+    listed = SOURCES.search(block.group(0))
+    if not listed:
+        sys.exit(f'{what}: the App block with appid="subghz" has no sources list')
+    return block, listed
+
+
 def rewrite(text, files):
-    m = BLOCK.search(text)
-    if not m:
-        sys.exit('no App block with appid="subghz" and a sources list')
-    body = "".join(f'\n        "{path}",' for path in files)
-    return text[: m.start(2)] + body + text[m.end(2) :]
+    """The manifest with the subghz block's sources list set to files and its apptype to APP;
+    everything else, the block's other lines and comments included, is left as it is."""
+    block, listed = parts(text, "the manifest")
+    body = block.group(0)
+    body = body[: listed.start(2)] + "".join(f'\n        "{path}",' for path in files) + body[listed.end(2) :]
+    body, count = APPTYPE.subn(r"\1apptype=FlipperAppType.APP,", body)
+    if count != 1:
+        sys.exit(f'the manifest: the App block with appid="subghz" has {count} apptype lines, not one')
+    return text[: block.start()] + body + text[block.end() :]
+
+
+def git(*args):
+    """A git command's output in the firmware checkout. git's own error lines are not shown: the
+    callers say in one sentence what failed."""
+    return subprocess.check_output(["git", "-C", FIRMWARE, *args], text=True, stderr=subprocess.DEVNULL)
 
 
 def upstream_excludes(manifest_path):
-    """The "!" entries of the merge base's manifest (upstream's version of the file)."""
-    base = subprocess.check_output(["git", "-C", FIRMWARE, "merge-base", "upstream/dev", "HEAD"], text=True).strip()
+    """The "!" entries of the merge base's manifest (upstream's version of the file). Exits with
+    one sentence when the firmware checkout has no upstream/dev or the base has no such file."""
+    try:
+        base = git("merge-base", "upstream/dev", "HEAD").strip()
+    except (subprocess.CalledProcessError, OSError):
+        sys.exit("no merge base with upstream/dev in the firmware checkout: fetch the upstream remote, then run --verify-upstream again")
     rel = os.path.relpath(manifest_path, FIRMWARE).replace(os.sep, "/")
-    text = subprocess.check_output(["git", "-C", FIRMWARE, "show", f"{base}:{rel}"], text=True)
-    m = BLOCK.search(text)
-    if not m:
-        sys.exit("no subghz App block in the merge base's manifest")
-    return tuple(re.findall(r'"!([\w./-]+)"', m.group(2)))
+    try:
+        text = git("show", f"{base}:{rel}")
+    except (subprocess.CalledProcessError, OSError):
+        sys.exit(f"the merge base {base[:9]} has no {rel} to compare with")
+    _block, listed = parts(text, "the merge base's manifest")
+    return tuple(re.findall(r'"!([\w./-]+)"', listed.group(2)))
 
 
 def main():

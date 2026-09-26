@@ -8,13 +8,20 @@ API lines must leave the table too: every Header under lib/mjs/ and every Functi
 whose name starts with mjs_. The fork also exports the screen reader's calls (OUR_LINES), added
 over two separate API rounds (upstream's version 87.1 became the fork's 87.3), so its API version
 is upstream's major and minor with the minor raised by FORK_MINOR_STEP, for as long as those
-exports keep to that many rounds. So a merge takes upstream's file whole and runs this script on
-it. The script is idempotent: on a file it already produced it changes nothing, and the version is
-raised only when a JavaScript line was removed or one of our lines was missing. Rows keep fbt's
-order: the sections Version, Header, Function, Variable, each sorted by name, so our lines are
-inserted at their sorted place. --check exits 1 if the file would change. PATH defaults to the
-submodule's targets/f7/api_symbols.csv. tests/fbt/test_strip_js_symbols.py checks all of this, and
-that the merge base's file becomes the fork's file exactly.
+exports keep to that many rounds. So after a merge that conflicts on this file, take upstream's
+side and run this script, which turns upstream's file into the fork's. In the firmware checkout:
+
+    git checkout --theirs targets/f7/api_symbols.csv
+    ../tools/strip_js_symbols.py
+
+The script is idempotent: on a file it already produced it changes nothing, and the version is
+raised only when a JavaScript line was removed or one of our lines was missing. One of our lines
+counts as present when a row of the same kind has its name, so a Variable or a Header that
+happens to share a name does not stand in for our Function. Rows keep fbt's order: the sections
+Version, Header, Function, Variable, each sorted by name, so our lines are inserted at their
+sorted place. --check exits 1 if the file would change. PATH defaults to the submodule's
+targets/f7/api_symbols.csv. tests/fbt/test_strip_js_symbols.py checks all of this, and that the
+merge base's file becomes the fork's file exactly.
 """
 import argparse
 import os
@@ -59,9 +66,9 @@ def strip(text):
     header, rows = lines[0], lines[1:]
     kept = [row for row in rows if not is_js(row)]
     changed = len(kept) != len(rows)
-    present = {fields(row)[2] for row in kept}
+    present = {(fields(row)[0], fields(row)[2]) for row in kept}  # (kind, name)
     for ours in OUR_LINES:
-        if fields(ours)[2] not in present:
+        if (fields(ours)[0], fields(ours)[2]) not in present:
             kept.append(ours)
             changed = True
     kept.sort(key=sort_key)

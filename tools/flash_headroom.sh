@@ -8,4 +8,7 @@ LIMIT=880640
 if [ ! -f "$BIN" ]; then echo "no firmware image at $BIN" >&2; exit 1; fi
 SIZE=$(wc -c < "$BIN" | tr -d ' ')
 echo "firmware.bin $SIZE bytes, limit $LIMIT, spare $((LIMIT - SIZE)) bytes"
-[ "$SIZE" -le "$LIMIT" ]
+if [ "$SIZE" -gt "$LIMIT" ]; then
+  echo "too large by $((SIZE - LIMIT)) bytes"
+  exit 1
+fi

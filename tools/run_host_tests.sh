@@ -1,7 +1,10 @@
 #!/bin/bash
-# Build and run the host tests for the screen reader: the screen model, the speech helpers, the
-# chords, the throttle, the build's exclusion filter and the built-in Sub-GHz app's source list.
-# Uses clang from Xcode.
+# Build and run the host tests for the screen reader with clang: the screen model, the speech
+# helpers, the chords and the throttle. Then the Python checks: the build's exclusion filter, the
+# built-in Sub-GHz app's source list, and the tests of four tools: tests/fbt/test_card_prune.py,
+# test_strip_js_symbols.py, test_subghz_manifest.py and test_upstream_check.py. Each Python
+# check prints its skip lines, then its summary, so a run shows what it left out, such as the
+# golden checks that need upstream/dev, which the continuous build does not have.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 SRC="$ROOT/Momentum-Firmware/applications/services/screen_reader"
@@ -9,6 +12,11 @@ TESTS="$ROOT/tests/host"
 OUT="${TMPDIR:-/tmp}/screen_reader_host_tests"
 mkdir -p "$OUT"
 CFLAGS=(-std=c11 -Wall -Wextra -Werror -O1)
+
+# A Python check's skip lines, then its last line, its summary, unless that was a skip line too.
+summary() {
+  awk '/^skipped/ { print } { last = $0; skip = /^skipped/ } END { if (!skip) print last }' "$1"
+}
 
 clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
   -I "$SRC" -o "$OUT/test_screen_model" \
@@ -80,39 +88,39 @@ if ! python3 "$ROOT/tests/fbt/test_exclusions.py" > "$OUT/fbt_exclusions.txt"; t
   echo "fbt exclusion checks failed"
   exit 1
 fi
-echo "$(tail -n 1 "$OUT/fbt_exclusions.txt")"
+summary "$OUT/fbt_exclusions.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_subghz_sources.py" > "$OUT/subghz_sources.txt"; then
   cat "$OUT/subghz_sources.txt"
   echo "Sub-GHz source list checks failed"
   exit 1
 fi
-echo "$(tail -n 1 "$OUT/subghz_sources.txt")"
+summary "$OUT/subghz_sources.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_card_prune.py" > "$OUT/card_prune.txt"; then
   cat "$OUT/card_prune.txt"
   echo "card prune checks failed"
   exit 1
 fi
-echo "$(tail -n 1 "$OUT/card_prune.txt")"
+summary "$OUT/card_prune.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_strip_js_symbols.py" > "$OUT/strip_js_symbols.txt"; then
   cat "$OUT/strip_js_symbols.txt"
   echo "strip js symbols checks failed"
   exit 1
 fi
-echo "$(tail -n 1 "$OUT/strip_js_symbols.txt")"
+summary "$OUT/strip_js_symbols.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_subghz_manifest.py" > "$OUT/subghz_manifest.txt"; then
   cat "$OUT/subghz_manifest.txt"
   echo "Sub-GHz manifest checks failed"
   exit 1
 fi
-echo "$(tail -n 1 "$OUT/subghz_manifest.txt")"
+summary "$OUT/subghz_manifest.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_upstream_check.py" > "$OUT/upstream_check.txt"; then
   cat "$OUT/upstream_check.txt"
   echo "upstream check checks failed"
   exit 1
 fi
-echo "$(tail -n 1 "$OUT/upstream_check.txt")"
+summary "$OUT/upstream_check.txt"
