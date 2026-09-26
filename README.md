@@ -51,7 +51,7 @@ Changed:
 - The main menu starts in the List style, the only style whose focus the reader can name. In the
   other styles the reader finds the focus by its inverted highlight where possible.
 - FreeRTOS checks the threads' stacks for overflow, which Momentum ships switched off. An
-  overflow then crashes the device at once and names the thread.
+  overflow crashes the device at once as "StackOverflow"; only the debug log names the thread.
 
 The removals were made so that Sub-GHz works with the reader on. It is built into the firmware
 again, not loaded from the card, and no longer crashes the device out of memory.
@@ -384,7 +384,8 @@ The Piper backend has not been run yet, so its output is untested.
 
 The tools that talk to the device look for its serial port under the name it has on a Mac. On
 any other system, give the port with `--port`, or in the `FLIPPER_PORT` environment variable for
-the console tools such as `tools/flipper_cli.py`.
+the console tools such as `tools/flipper_cli.py`. `tools/sr_drive.py` has no `--port` option, so
+set `FLIPPER_PORT` for it instead.
 
 `--extract` makes a clip for every word, about 2,900 words and 27 MB. The words come from:
 
@@ -536,6 +537,10 @@ it the branch's name, check the branch out from the project folder before buildi
 ```bash
 git -C Momentum-Firmware checkout screen-reader
 ```
+
+This moves the submodule to the branch's tip, which is the recorded commit only while the
+project's pointer is current. A source build of exactly the recorded commit keeps the detached
+HEAD instead.
 
 fbt, the firmware's build tool, downloads its toolchain on first use. Only the Flipper Zero
 target, f7, is built. The release options, `COMPACT=1` and `DEBUG=0`, are the defaults, so the

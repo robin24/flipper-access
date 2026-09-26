@@ -29,7 +29,7 @@ def check(cond, what):
 
 def git(repo, *args):
     subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false",
-                    "-C", repo, *args], check=True, capture_output=True, text=True)
+                    "-c", "tag.gpgSign=false", "-C", repo, *args], check=True, capture_output=True, text=True)
 
 
 def write(repo, name, text):

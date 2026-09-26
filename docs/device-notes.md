@@ -22,12 +22,12 @@ These are the working notes for the one device Sonar is developed on, and the de
 - Menu style List, set in `/int/.momentum_settings.txt`. The reader marks the main menu's focus
   only in the List style; the other styles are read by inversion where possible. Momentum's
   default style is DSi; Sonar's is List since a0dea0841. The same file has lock on boot off, dark
-  mode on and the reader's volume at 40. The update of 2026-09-26 left it at its defaults, the
-  volume apart, because keys pressed during the update saved the settings in RAM over the
-  restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three values were restored
-  from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the firmware saves no
-  settings in an update boot, so a key pressed during an update no longer overwrites the file.
-  Lock on boot acts only when a PIN is set, and none is.
+  mode on and the reader's volume at 40. The first update of 2026-09-26, to a0dea0841, left it at
+  its defaults, the volume apart, because keys pressed during the update saved the settings in
+  RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three values
+  were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
+  firmware saves no settings in an update boot, so a key pressed during an update no longer
+  overwrites the file. Lock on boot acts only when a PIN is set, and none is.
 - The Text to SAM app on the card is Momentum's stock build again since 2026-09-26; the patched
   build and tools/say.sh were retired, since the reader speaks from its own engine.
 - The games, the JavaScript runner and its modules, and the screen reader's own SAM synthesizer
@@ -204,7 +204,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
    ```
 
 5. The Sub-GHz manifest the same way. The script also lists a file that Momentum added without
-   touching its manifest.
+   touching its manifest. Taking upstream's file whole loses the fork's comment above the source
+   list, which explains why the files are listed one by one. Restore it from
+   `git show HEAD~1:applications/main/subghz/application.fam` after running the script.
 
    ```bash
    git -C Momentum-Firmware checkout --theirs applications/main/subghz/application.fam
