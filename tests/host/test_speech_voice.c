@@ -173,6 +173,10 @@ static void test_sets(void) {
     CHECK(!speech_voice_set_valid("."));
     CHECK(!speech_voice_set_valid(".."));
     CHECK(!speech_voice_set_valid("héart"));
+    // Reserved for the first set found (sr voice use auto); only the whole name
+    CHECK(!speech_voice_set_valid("auto"));
+    CHECK(speech_voice_set_valid("autos"));
+    CHECK(speech_voice_set_valid("my-auto"));
     char out[SPEECH_VOICE_PATH_MAX];
     CHECK(speech_voice_set_file("heart", "voice.txt", out, sizeof(out)) == strlen("/ext/sr/voices/heart/voice.txt"));
     CHECK(strcmp(out, "/ext/sr/voices/heart/voice.txt") == 0);
@@ -253,6 +257,39 @@ static void test_missing(void) {
     }
     CHECK(speech_voice_missing(&s, "first") == true);
     CHECK(s.missing_words == SPEECH_VOICE_MISSING_SET + 2);
+
+    // Another set in use: the words recorded so far and the log waiting for the card are
+    // forgotten, so the new set's list gets them too; the counters since boot keep their values
+    speech_voice_state_init(&s);
+    s.clip_words = 40;
+    s.fallback_words = 7;
+    CHECK(speech_voice_missing(&s, "bahncard") == true);
+    CHECK(speech_voice_missing(&s, "zug") == true);
+    CHECK(s.missing_words == 2);
+    speech_voice_missing_reset(&s);
+    CHECK(speech_voice_log_count(&s) == 0);
+    CHECK(s.count == 0 && s.next == 0);
+    CHECK(s.clip_words == 40);
+    CHECK(s.fallback_words == 7);
+    CHECK(s.missing_words == 2);
+    CHECK(speech_voice_missing(&s, "bahncard") == true); // new again
+    CHECK(speech_voice_missing(&s, "bahncard") == false); // and once from here on
+    CHECK(speech_voice_log_count(&s) == 1);
+    CHECK(strcmp(speech_voice_log_word(&s, 0), "bahncard") == 0);
+    CHECK(s.missing_words == 3);
+
+    // Also with the ring full and its index wrapped
+    for(int i = 0; i < SPEECH_VOICE_MISSING_SET + 3; i++) {
+        snprintf(word, sizeof(word), "r%d", i);
+        speech_voice_log_clear(&s);
+        CHECK(speech_voice_missing(&s, word) == true);
+    }
+    CHECK(s.count == SPEECH_VOICE_MISSING_SET && s.next != 0);
+    CHECK(speech_voice_missing(&s, "r66") == false); // remembered
+    speech_voice_missing_reset(&s);
+    CHECK(s.count == 0 && s.next == 0);
+    CHECK(speech_voice_log_count(&s) == 0);
+    CHECK(speech_voice_missing(&s, "r66") == true);
 }
 
 int main(void) {
