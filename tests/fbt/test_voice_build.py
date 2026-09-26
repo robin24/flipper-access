@@ -139,6 +139,13 @@ check(refusal is not None and "--migrate-sets" in refusal, f"the first layout re
 check(vb.legacy_refusal(lambda p: p in ("/ext/sr/voices", "/ext/sr/voices/samantha")) is None, "a migrated card is fine")
 check(vb.legacy_refusal(lambda p: False) is None, "and so is a fresh card")
 
+# --mark-synced: a set that reached the card by some other means than --sync (a copy through a
+# card reader) still needs a synced.json, so the next --sync does not resend everything; it holds
+# exactly the manifest's own hashes, nothing verified against the card
+check(vb.mark_synced({"words": {"a": "x", "b": "y"}}) == {"a": "x", "b": "y"}, "every word's current hash, taken from the manifest")
+check(vb.mark_synced({"words": {}}) == {}, "an empty manifest gives an empty dict")
+check(vb.mark_synced({}) == {}, "a manifest with no words key gives an empty dict too")
+
 if all(importlib.util.find_spec(p) for p in ("numpy", "scipy", "kokoro_onnx")):
     problem = vb.engine_problem(vb.settings_for("kokoro", {"model": "/nonexistent/kokoro.onnx", "model_sha256": "x"}))
     check(problem is not None and "/nonexistent/kokoro.onnx" in problem, f"a missing model is named before the pool starts: {problem}")

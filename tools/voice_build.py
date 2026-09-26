@@ -3,7 +3,7 @@
 
     tools/voice_build.py [--set NAME] [--backend say|espeak|kokoro] [--voice V] [--rate N]
         [--highpass F] [--gain F] [--soft|--no-soft] [--extract] [--extract-all] [--card-apps]
-        [--pull-missing] [--sync] [--migrate-sets] [--check] [--dry] [options]
+        [--pull-missing] [--sync] [--migrate-sets] [--mark-synced] [--check] [--dry] [options]
 
 A voice set is a vocabulary made with one engine and one voice. The card holds one folder per
 set, /ext/sr/voices/<set>/, with the set's clips, its voice.txt and its own missing.txt; the
@@ -28,7 +28,11 @@ firmware's speech_voice_path computes, and then the set's voice.txt; --pull-miss
 pulled missing list. --migrate-sets moves the card's first layout, /ext/sr/voice and
 /ext/sr/missing.txt, into /ext/sr/voices/samantha, and refuses when the new place is taken;
 until then --sync and --pull-missing refuse such a card, since a set folder they started there
-would stand in the migration's way.
+would stand in the migration's way. --mark-synced writes the set's synced.json from its manifest
+instead of the card, every word's current hash, for a set that reached the card by some other
+means than --sync, such as a copy through a card reader (voice_pack.py's tar, unpacked onto the
+card with tar -xf); without it the next --sync would not know the set is already there and would
+resend everything.
 
 Clip format: raw unsigned 8-bit mono PCM, 16000 Hz, 128 silence, trimmed to 15 ms of silence
 at each end, after a high-pass at 500 Hz, a gain of 1.3 and a soft limiter, chosen by ear for
@@ -69,7 +73,7 @@ the device but only to list it, never to write to it. Both need --extract to hav
 --check makes ten clips into a temporary directory and verifies them, with the set's own backend
 and voice from its manifest unless the command line names them.
 --dry builds the word list and prints its counts without making clips, pulling missing.txt,
-migrating or syncing.
+migrating, marking synced or syncing.
 """
 import argparse, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, shutil, subprocess, sys, tempfile, time
 
@@ -792,6 +796,15 @@ def check(settings, names, workdir, jobs):
     return bad == 0
 
 
+def mark_synced(manifest):
+    """The synced.json for a set that reached the card by some other means than --sync, such as a
+    copy through a card reader (voice_pack.py's tar, unpacked with tar -xf onto the card): every
+    word's current hash, taken from the manifest, with nothing to verify it against since the
+    words were never actually sent by this tool. Without this the next --sync would see an empty
+    or stale synced.json and resend the whole set."""
+    return dict(manifest.get("words", {}))
+
+
 def save_manifest(manifest, manifest_path):
     """Write the manifest atomically, so a crash or interruption mid-write can never leave a
     truncated/corrupt manifest.json behind."""
@@ -819,6 +832,7 @@ def main():
     ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the set's folder on the card")
     ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore the set's synced.json and resend everything (for a wiped card)")
     ap.add_argument("--migrate-sets", action="store_true", help="move the card's /ext/sr/voice and /ext/sr/missing.txt into /ext/sr/voices/samantha, once")
+    ap.add_argument("--mark-synced", action="store_true", help="write the set's synced.json from its manifest (every word's current hash), for a set that reached the card by some other means than --sync, such as a card reader")
     ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them, with the set's own backend and voice unless named")
     ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, migrating or syncing")
     ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0],
@@ -842,7 +856,8 @@ def main():
                                           model=a.model, voices_file=a.voices_file))
     names = load_names()
     migrate_only = a.migrate_sets and not (a.extract or a.pull_missing or a.sync or a.words)
-    building = not (a.check or a.dry or migrate_only)
+    mark_synced_only = a.mark_synced and not (a.extract or a.pull_missing or a.sync or a.words)
+    building = not (a.check or a.dry or migrate_only or mark_synced_only)
     # Refused before anything is pulled from the card or made: an engine this machine lacks, or
     # a run naming another backend or voice than the set was made with
     if a.check or building:
@@ -863,6 +878,16 @@ def main():
         elif not migrate_sets(a.port):
             return 1
         if migrate_only:
+            return 0
+    if a.mark_synced:
+        if a.dry:
+            log("dry run: synced.json not written")
+        else:
+            synced_path = os.path.join(out_dir, "synced.json")
+            synced = mark_synced(manifest)
+            save_manifest(synced, synced_path)
+            log(f"mark-synced: {len(synced)} words written to {synced_path}")
+        if mark_synced_only:
             return 0
 
     words = load_list(os.path.join(HERE, "voice_words.txt"))
