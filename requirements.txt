@@ -1,0 +1,6 @@
+# The Python packages of the tools (pip install -r requirements.txt into the project's .venv).
+# eSpeak-NG comes from the system's package manager, and say from macOS.
+pyserial
+numpy
+scipy
+kokoro-onnx

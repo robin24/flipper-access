@@ -1,10 +1,11 @@
 #!/bin/bash
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
 # helpers, the chords and the throttle. Then the Python checks: the build's exclusion filter, the
-# built-in Sub-GHz app's source list, and the tests of four tools: tests/fbt/test_card_prune.py,
-# test_strip_js_symbols.py, test_subghz_manifest.py and test_upstream_check.py. Each Python
-# check prints its skip lines, then its summary, so a run shows what it left out, such as the
-# golden checks that need upstream/dev, which the continuous build does not have.
+# built-in Sub-GHz app's source list, and the tests of five tools: tests/fbt/test_card_prune.py,
+# test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py and
+# test_voice_build.py. Each Python check prints its skip lines, then its summary, so a run shows
+# what it left out, such as the golden checks that need upstream/dev, which the continuous build
+# does not have, or the voice generator's resampler checks, which need numpy and scipy.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 SRC="$ROOT/Momentum-Firmware/applications/services/screen_reader"
@@ -124,3 +125,10 @@ if ! python3 "$ROOT/tests/fbt/test_upstream_check.py" > "$OUT/upstream_check.txt
   exit 1
 fi
 summary "$OUT/upstream_check.txt"
+
+if ! python3 "$ROOT/tests/fbt/test_voice_build.py" > "$OUT/voice_build.txt"; then
+  cat "$OUT/voice_build.txt"
+  echo "voice build checks failed"
+  exit 1
+fi
+summary "$OUT/voice_build.txt"

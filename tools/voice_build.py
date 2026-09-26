@@ -1,47 +1,81 @@
 #!/usr/bin/env python3
-"""Build and sync the screen reader's recorded vocabulary.
+"""Build and sync the screen reader's recorded vocabularies, one voice set at a time.
 
-    tools/voice_build.py [--extract] [--extract-all] [--card-apps] [--pull-missing] [--sync]
-        [--check] [--dry] [options]
+    tools/voice_build.py [--set NAME] [--backend say|espeak|kokoro] [--voice V] [--rate N]
+        [--highpass F] [--gain F] [--soft|--no-soft] [--extract] [--extract-all] [--card-apps]
+        [--pull-missing] [--sync] [--migrate-sets] [--check] [--dry] [options]
+
+A voice set is a vocabulary made with one engine and one voice. The card holds one folder per
+set, /ext/sr/voices/<set>/, with the set's clips, its voice.txt and its own missing.txt; the
+reader uses the set chosen in the Accessibility settings or with `sr voice use`, else the first
+one it finds. On the Mac the set named samantha is the voice/ directory, where the vocabulary
+lived before there were sets, and every other set is voices/<set>/. A set name is 1 to 31 lower
+case letters, digits, hyphens and underscores, and auto is reserved. --set names the set a run
+works on, samantha by default.
 
 Words come from tools/voice_words.txt and, when it exists, tools/voice_words.local.txt (personal
 words such as a device name, not in git), from every string literal in the firmware's core apps
 and services and the dolphin's speech bubble texts, run through the real pronunciation layer
-(--extract), and from the device's /ext/sr/missing.txt (--pull-missing). A clip's name is the
+(--extract), and from the set's missing.txt on the card (--pull-missing). A clip's name is the
 word in lower case without apostrophes ("don't" is dont, spoken as "don't"); a clip listed in
 tools/voice_names.txt is spoken as written there, which names the single letters that spell a
-word the device has no clip for. Clips land in voice/<initial>/<word>.raw next to
-voice/manifest.json, which remembers the settings each clip was made with, so a rerun makes
-only what is missing or changed. --sync uploads new or changed clips to
-/ext/sr/voice/<hh>/<word>.raw on the card, hh being the word's FNV-1a hash modulo 64
-as two hex digits, the same folder the firmware's speech_voice_path computes; --pull-missing
-removes the pulled missing list. --remove-legacy clears the first layout's
-/ext/sr/voice/<initial>/ folders. Defaults are the settings chosen by ear on 2026-09-24 for the Samantha voice.
+word the device has no clip for. Clips land in the set's directory as <initial>/<word>.raw next
+to its manifest.json, which remembers the set's name, its settings and the settings each clip
+was made with, so a rerun makes only what is missing or changed, and its voice.txt, the settings
+line the device shows. --sync uploads new or changed clips to /ext/sr/voices/<set>/<hh>/<word>.raw
+on the card, hh being the word's FNV-1a hash modulo 64 as two hex digits, the same folder the
+firmware's speech_voice_path computes, and then the set's voice.txt; --pull-missing removes the
+pulled missing list. --migrate-sets moves the card's first layout, /ext/sr/voice and
+/ext/sr/missing.txt, into /ext/sr/voices/samantha, and refuses when the new place is taken.
 
 Clip format: raw unsigned 8-bit mono PCM, 16000 Hz, 128 silence, trimmed to 15 ms of silence
-at each end. Backends: say (macOS, personal use: Apple's voices may not be redistributed) and
-piper (any platform, a freely licensed model, the right choice for a release).
+at each end, after a high-pass at 500 Hz, a gain of 1.3 and a soft limiter, chosen by ear for
+the piezo. The backends, with their default voice and rate:
 
---sync and --pull-missing import the firmware's scripts/flipper/storage.py, which needs
-pyserial: run those with the project virtualenv's Python (.venv/bin/python), not the system
-python3.
+    kokoro: Kokoro (Apache 2.0), an open neural model, the voice for a release; af_heart, rate
+        100 (percent of the model's pace; a voice whose name starts with b speaks British
+        English). It runs with the kokoro-onnx package from voice-models/kokoro-v1.0.onnx and
+        voices-v1.0.bin, the kokoro-onnx project's model-files-v1.0 release.
+    espeak: eSpeak-NG (GPL-3), a small and quick formant synthesizer from the system's package
+        manager; en-us+f3, rate 160 (words per minute).
+    say: the macOS voices, for personal use only, since Apple's voices may not be redistributed;
+        Samantha, rate 175, the settings chosen by ear on 2026-09-24.
+
+--voice, --rate, --highpass, --gain and --soft or --no-soft change the defaults for a run. A
+set's manifest records its backend, voice and processing settings and, for kokoro, the SHA-256
+of the model and voices files; a change to any of them makes every clip of the set again, so a
+set never mixes settings. Kokoro renders a word the same way every run (another --jobs may move
+a sample by one step), and so does eSpeak-NG, except that its breathy variants such as +f3 seed
+their breath noise from the clock. A run that names another backend or voice than the set was
+made with is refused, since it would make the whole set again with them.
+
+The routine, per set, with the device connected:
+
+    .venv/bin/python tools/voice_build.py --set samantha --extract --card-apps --pull-missing --sync
+    .venv/bin/python tools/voice_build.py --set heart --backend kokoro --extract --card-apps --pull-missing --sync
+    .venv/bin/python tools/voice_build.py --set espeak --backend espeak --extract --card-apps --pull-missing --sync
+
+The Python packages are in requirements.txt: pyserial for the firmware's
+scripts/flipper/storage.py, which --sync, --pull-missing, --card-apps and --migrate-sets import,
+numpy and scipy for the espeak and kokoro backends, kokoro-onnx for kokoro. Run the generator
+with the project virtualenv's Python (.venv/bin/python), not the system python3.
 
 --extract-all folds in every app under applications/external (hundreds of them); --card-apps
 folds in only the ones actually installed on the card, which is the routine choice, and needs
 the device but only to list it, never to write to it. Both need --extract to have an effect.
---dry builds the word list and prints its counts without making clips, pulling missing.txt, or
-syncing.
+--check makes ten clips with the set's settings into a temporary directory and verifies them.
+--dry builds the word list and prints its counts without making clips, pulling missing.txt,
+migrating or syncing.
 """
-import argparse, glob, hashlib, json, math, multiprocessing, os, re, subprocess, sys, tempfile, time
+import argparse, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
-from clip_make import finish, highpass, pad, read_wav, synth, to_u8, trim  # noqa: E402
+from clip_make import finish, highpass, pad, read_wav, to_u8, trim  # noqa: E402
 
 FW = os.path.join(ROOT, "Momentum-Firmware")
 SRC = os.path.join(FW, "applications", "services", "screen_reader")
-DEFAULTS = dict(backend="say", voice="Samantha", rate=175, highpass=500.0, gain=1.3, soft=True, hz=16000, model="")
 WORD_RE = re.compile(r"^(?:[a-z]{1,16}|[0-9])$")
 STRING_RE = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
 PRINTF_RE = re.compile(r"%[-+ 0#]*\d*(?:\.\d+)?(?:hh|h|ll|l|L|q|j|z|t)?[diouxXeEfgGcsp%]")
@@ -50,9 +84,76 @@ FAM_APPID_RE = re.compile(r'appid\s*=\s*"([^"]+)"')
 FAM_FILENAME_RE = re.compile(r'fap_file_name\s*=\s*"([^"]+)"')
 APP_MANIFEST_DIRS = ("external", "main", "system", "settings", "debug")
 
+HZ = 16000
+SETS_DIR = "/ext/sr/voices"
+BACKENDS = {
+    "say": dict(voice="Samantha", rate=175, highpass=500.0, gain=1.3, soft=True),
+    "espeak": dict(voice="en-us+f3", rate=160, highpass=500.0, gain=1.3, soft=True),
+    "kokoro": dict(voice="af_heart", rate=100, highpass=500.0, gain=1.3, soft=True),
+}
+KOKORO_MODEL = os.path.join(ROOT, "voice-models", "kokoro-v1.0.onnx")
+KOKORO_VOICES = os.path.join(ROOT, "voice-models", "voices-v1.0.bin")
+# The card's first layout, one vocabulary and its missing list, which --migrate-sets moves
+LEGACY_VOICE_DIR = "/ext/sr/voice"
+LEGACY_MISSING = "/ext/sr/missing.txt"
+
 
 def log(msg):
     print(msg, flush=True)
+
+
+def set_valid(name):
+    """A set name the card, the settings and the console accept: 1 to 31 characters of lower
+    case letters, digits, hyphen and underscore; "auto" is reserved for the first set found."""
+    return name != "auto" and re.fullmatch(r"[a-z0-9_-]{1,31}", name) is not None
+
+
+def set_local_dir(name):
+    """The Samantha set is the original voice/ directory; every other set lives in voices/."""
+    return os.path.join(ROOT, "voice") if name == "samantha" else os.path.join(ROOT, "voices", name)
+
+
+def set_card_dir(name):
+    return f"{SETS_DIR}/{name}"
+
+
+def settings_for(backend, overrides):
+    """The processing settings of a set: the backend's defaults, the overrides given on the
+    command line, the fixed clip rate, and for kokoro the checksum of the model and the voices
+    file, so a new model regenerates every clip."""
+    if backend not in BACKENDS:
+        raise ValueError(f"unknown backend {backend!r}; one of {', '.join(sorted(BACKENDS))}")
+    settings = dict(backend=backend, **BACKENDS[backend], hz=HZ)
+    settings.update({k: v for k, v in overrides.items() if v is not None})
+    if backend == "kokoro" and "model_sha256" not in settings:
+        settings["model_sha256"] = file_sha256(settings.get("model", KOKORO_MODEL)) + file_sha256(settings.get("voices_file", KOKORO_VOICES))
+    return settings
+
+
+def file_sha256(path):
+    h = hashlib.sha256()
+    if not os.path.exists(path):
+        return "missing"
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def settings_line(s):
+    """The first line of a set's voice.txt: what `sr voice status` shows (63 characters)."""
+    return f"{s['backend']} {s['voice']} rate {s['rate']} highpass {s['highpass']:g} gain {s['gain']:g} {'soft' if s['soft'] else 'hard'} {s['hz']}"
+
+
+def resample(x, src_hz, hz):
+    """Float samples at src_hz to hz, with scipy's polyphase filter: the same length in
+    seconds, the same level."""
+    if src_hz == hz:
+        return x
+    import numpy as np
+    from scipy.signal import resample_poly
+    g = math.gcd(int(src_hz), int(hz))
+    return resample_poly(np.asarray(x, dtype="float32"), hz // g, src_hz // g).astype("float32")
 
 
 def clip_name(word):
@@ -115,9 +216,9 @@ def load_names():
 
 
 def spoken_text(word, names):
-    """What say speaks for a clip: its line in tools/voice_names.txt (the letters by their
-    names, so that a spelled word is heard as "en eff see"), a digit's number word, or the word
-    itself."""
+    """What the engine speaks for a clip: its line in tools/voice_names.txt (the letters by
+    their names, so that a spelled word is heard as "en eff see"), a digit's number word, or the
+    word itself."""
     if word in names:
         return names[word]
     if len(word) == 1 and word.isdigit():
@@ -278,31 +379,128 @@ def settings_hash(settings, text):
     return hashlib.sha1(key.encode()).hexdigest()[:16]
 
 
-def synth_piper(text, model, hz, path):
-    wav = path + ".piper.wav"
-    subprocess.run(["piper", "--model", model, "--output_file", wav], input=text, text=True, check=True, capture_output=True)
-    x, src_hz = read_wav(wav)
-    os.remove(wav)
-    if src_hz != hz:
-        n = int(len(x) * hz / src_hz)
-        x = [x[min(len(x) - 1, int(i * src_hz / hz))] for i in range(n)]
-    return x
+def rekey_legacy(manifest, synced, settings, names):
+    """Carry a manifest from before the sets over to today's settings, and the sync record with
+    it. The first generator's settings held a model path, empty for say, and the settings hash
+    covers every key, so without this every clip of the Samantha set would look changed and be
+    made and sent again, the same clips. When the recorded settings are today's plus that empty
+    path, each word whose hash verifies against them, with its spoken text, takes today's hash,
+    in the manifest and, where it holds the same hash, in synced.json. A word that does not
+    verify (made with older settings, or spoken differently now) keeps its hash, so it is made
+    and sent again as before. Returns the number of words carried over."""
+    recorded = manifest.get("settings")
+    if recorded != {**settings, "model": ""}:
+        return 0
+    count = 0
+    for word, h in list(manifest["words"].items()):
+        text = spoken_text(word, names)
+        if h != settings_hash(recorded, text):
+            continue
+        manifest["words"][word] = settings_hash(settings, text)
+        if synced.get(word) == h:
+            synced[word] = manifest["words"][word]
+        count += 1
+    manifest["settings"] = settings
+    return count
+
+
+def set_conflict(recorded, settings):
+    """Why a run may not work on a set, as a sentence, or None. A set stands for one backend and
+    voice: a run that names others, most likely a forgotten --backend or --voice, would make
+    every clip again with them, and --sync would send those over the set on the card. The
+    processing settings may change; that makes the set again in the same voice."""
+    if not recorded or (recorded.get("backend"), recorded.get("voice")) == (settings["backend"], settings["voice"]):
+        return None
+    return (f"the set was made with {recorded.get('backend')} {recorded.get('voice')}, not {settings['backend']} "
+            f"{settings['voice']}: name them with --backend and --voice, or remove the set's folder to make it anew")
+
+
+def synth_say(text, voice, rate, path):
+    subprocess.run(["say", "-v", voice, "-r", str(rate), "-o", path, "--file-format=WAVE",
+                    "--data-format=LEI16@%d" % HZ, text], check=True)
+
+
+def synth_espeak(text, voice, rate, path):
+    subprocess.run(["espeak-ng", "-v", voice, "-s", str(rate), "-w", path, text], check=True, capture_output=True)
+
+
+_kokoro = None
+
+
+def kokoro_init(model, voices, threads):
+    """Pool initializer: one model per worker process (the model is 325 MB; four workers fit),
+    each on its share of the cores. onnxruntime's default, a thread per core in every worker,
+    makes four workers barely faster than two: 0.29 s a word between them on a 20-core Mac,
+    0.15 s with the share, the same clips."""
+    global _kokoro
+    t0 = time.time()
+    try:
+        import onnxruntime
+        from kokoro_onnx import Kokoro
+        options = onnxruntime.SessionOptions()
+        options.intra_op_num_threads = threads
+        _kokoro = Kokoro.from_session(onnxruntime.InferenceSession(model, options, providers=["CPUExecutionProvider"]), voices)
+    except Exception as e:  # raised from here, the pool would start new workers forever
+        _kokoro = e
+        log(f"kokoro: worker {os.getpid()} could not load the model: {type(e).__name__}: {e}")
+        return
+    log(f"kokoro: worker {os.getpid()} loaded the model in {time.time() - t0:.1f} s, {threads} threads")
+
+
+def synth_kokoro(text, voice, rate):
+    """Float samples at the model's rate; the voice's first letter picks the accent (a: US, b: British)."""
+    if isinstance(_kokoro, Exception):
+        raise _kokoro  # the worker could not load the model: every word says why
+    lang = "en-gb" if voice.startswith("b") else "en-us"
+    samples, hz = _kokoro.create(text, voice=voice, speed=rate / 100.0, lang=lang)
+    return samples, hz
+
+
+def engine_problem(settings):
+    """What the backend lacks on this machine, as a sentence, or None. Checked before any clip
+    is made or anything is pulled from the card, so such a run stops at once with the reason
+    instead of failing word after word."""
+    backend = settings["backend"]
+    if backend == "say" and not shutil.which("say"):
+        return "say is the macOS speech command: on another system use --backend espeak or kokoro"
+    if backend == "espeak" and not shutil.which("espeak-ng"):
+        return "espeak-ng is not installed: it comes from the system's package manager"
+    packages = {"say": [], "espeak": ["numpy", "scipy"], "kokoro": ["numpy", "scipy", "kokoro_onnx"]}[backend]
+    missing = [p for p in packages if importlib.util.find_spec(p) is None]
+    if missing:
+        return (f"the {backend} backend needs the Python packages {', '.join(missing)}: install requirements.txt "
+                "into the project's .venv and run the generator with .venv/bin/python")
+    if backend == "kokoro":
+        for path in (settings.get("model", KOKORO_MODEL), settings.get("voices_file", KOKORO_VOICES)):
+            if not os.path.exists(path):
+                return (f"{path} is not there: the Kokoro model files kokoro-v1.0.onnx and voices-v1.0.bin come from "
+                        "https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0")
+    return None
 
 
 def make_clip(job):
+    """One clip: the backend's speech at the clip rate, then the processing chosen by ear (the
+    high-pass, the gain and the limiter, the trim to 15 ms of silence at each end), written as
+    raw unsigned 8-bit samples. Runs in a pool worker; returns (word, ok, message)."""
     word, text, settings, out_path = job
     try:
-        with tempfile.TemporaryDirectory() as d:
-            if settings["backend"] == "piper":
-                x = synth_piper(text, settings["model"], settings["hz"], os.path.join(d, "clip"))
-            else:
+        backend = settings["backend"]
+        hz = settings["hz"]
+        if backend == "kokoro":
+            x, src_hz = synth_kokoro(text, settings["voice"], settings["rate"])
+        else:
+            synth = synth_say if backend == "say" else synth_espeak
+            with tempfile.TemporaryDirectory() as d:
                 wav = os.path.join(d, "clip.wav")
-                synth(text, settings["voice"], settings["rate"], settings["hz"], wav)
-                x, _ = read_wav(wav)
-        x = highpass(x, settings["hz"], settings["highpass"])
+                synth(text, settings["voice"], settings["rate"], wav)
+                x, src_hz = read_wav(wav)
+        x = resample(x, src_hz, hz)  # say already speaks at the clip rate: unchanged
+        if not isinstance(x, list):
+            x = x.tolist()  # numpy's samples: the processing below works on lists of floats
+        x = highpass(x, hz, settings["highpass"])
         x = finish(x, settings["gain"], settings["soft"])
-        x = trim(x, settings["hz"])
-        x = pad(x, settings["hz"])
+        x = trim(x, hz)
+        x = pad(x, hz)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "wb") as f:
             f.write(to_u8(x))
@@ -311,12 +509,15 @@ def make_clip(job):
         return word, False, str(e)
 
 
-def settings_line(settings):
-    # The device's status line shows only the first 63 characters of voice.txt, so for piper
-    # this prints the model's basename without extension rather than its (possibly long) path.
-    s = settings
-    voice = os.path.splitext(os.path.basename(s["model"]))[0] if s["backend"] == "piper" else s["voice"]
-    return f"{s['backend']} {voice} rate {s['rate']} highpass {s['highpass']:g} gain {s['gain']:g} {'soft' if s['soft'] else 'hard'} {s['hz']}"
+def clip_pool(settings, jobs):
+    """The worker pool that makes the clips. For kokoro each worker loads the model once, in a
+    spawned process (onnxruntime must not be forked); say and espeak need nothing loaded."""
+    if settings["backend"] == "kokoro":
+        model = settings.get("model", KOKORO_MODEL)
+        voices = settings.get("voices_file", KOKORO_VOICES)
+        threads = max(1, (os.cpu_count() or 1) // jobs)
+        return multiprocessing.get_context("spawn").Pool(jobs, initializer=kokoro_init, initargs=(model, voices, threads))
+    return multiprocessing.Pool(jobs)
 
 
 def open_storage(port):
@@ -389,19 +590,22 @@ def voice_on(storage):
     log("voice: restored")
 
 
-def pull_missing(port):
+def pull_missing(port, set_name):
+    """The words the device found no clip for in the set: its missing.txt on the card, which is
+    removed once read."""
+    path = set_card_dir(set_name) + "/missing.txt"
     storage, _ = open_storage(port)
     words = set()
     was_on = False
     try:
         was_on = voice_off(storage)
-        if storage.exist_file("/ext/sr/missing.txt"):
+        if storage.exist_file(path):
             with tempfile.TemporaryDirectory() as d:
                 local = os.path.join(d, "missing.txt")
-                storage.receive_file("/ext/sr/missing.txt", local)
+                storage.receive_file(path, local)
                 words = load_list(local)
-            storage.remove("/ext/sr/missing.txt")
-        log(f"pulled {len(words)} missing words from the device")
+            storage.remove(path)
+        log(f"pulled {len(words)} missing words from {path}")
     finally:
         if was_on:
             try:
@@ -412,13 +616,15 @@ def pull_missing(port):
     return words
 
 
-def sync(port, out_dir, manifest, force_all=False):
-    """Send voice.txt and the clip files the device actually uses (not .build, not
-    manifest.json). voice/synced.json remembers the settings hash uploaded for each word, so a
-    rerun only sends what's missing or changed instead of asking the device to md5 every file.
-    A word whose local clip is missing or whose send fails is reported and left out of
-    synced.json, so the next sync tries it again, and the other words still go. Returns the
-    number of such words for main()'s exit code."""
+def sync(port, out_dir, manifest, set_name, force_all=False):
+    """Send the set's voice.txt and the clip files the device actually uses (not .build, not
+    manifest.json) to the set's folder on the card, /ext/sr/voices/<set>. The set's synced.json
+    remembers the settings hash uploaded for each word, so a rerun only sends what's missing or
+    changed instead of asking the device to md5 every file. A word whose local clip is missing
+    or whose send fails is reported and left out of synced.json, so the next sync tries it
+    again, and the other words still go. Returns the number of such words for main()'s exit
+    code."""
+    card = set_card_dir(set_name)
     storage, ops = open_storage(port)
     was_on = False
     try:
@@ -445,9 +651,9 @@ def sync(port, out_dir, manifest, force_all=False):
             folder = bucket(word)
             try:
                 if folder not in made_dirs:
-                    ops.mkpath(f"/ext/sr/voice/{folder}")
+                    ops.mkpath(f"{card}/{folder}")
                     made_dirs.add(folder)
-                storage.send_file(local_path, f"/ext/sr/voice/{folder}/{word}.raw")
+                storage.send_file(local_path, f"{card}/{folder}/{word}.raw")
             except Exception as e:  # one bad word must not stop the sync
                 log(f"sync: failed: {word}: {type(e).__name__}: {e}")
                 failed += 1
@@ -459,7 +665,7 @@ def sync(port, out_dir, manifest, force_all=False):
                 save_manifest(synced, synced_path)
         # Saved before voice.txt goes, so a failure there cannot lose the record of what was sent
         save_manifest(synced, synced_path)
-        storage.send_file(os.path.join(out_dir, "voice.txt"), "/ext/sr/voice/voice.txt")
+        storage.send_file(os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
         log(f"sync: {sent} sent, {skipped} skipped, {missing} missing, {failed} failed, {time.time() - t0:.0f} s")
         return missing + failed
     finally:
@@ -471,42 +677,44 @@ def sync(port, out_dir, manifest, force_all=False):
         storage.stop()
 
 
-def remove_legacy(port, out_dir):
-    """Remove the first layout from the card: /ext/sr/voice/<initial>/<word>.raw for every word
-    voice/synced.json records, then each single character folder that is left empty (a folder
-    that still holds anything refuses the remove, which is ignored). synced.json is cleared
-    afterwards, so the next --sync sends everything into the hashed folders."""
-    synced_path = os.path.join(out_dir, "synced.json")
-    synced = json.load(open(synced_path)) if os.path.exists(synced_path) else {}
+def migration_plan(exists):
+    """The moves of --migrate-sets, given exists(path) on the card: the first layout's clip
+    folder and missing list, each that is there, into the samantha set, the set of the local
+    voice/ directory whose clips they are. When a destination is there already the migration is
+    refused with a sentence, and nothing moves. Returns (moves, refusal)."""
+    dest = set_card_dir("samantha")
+    moves = [(old, new) for old, new in ((LEGACY_VOICE_DIR, dest), (LEGACY_MISSING, dest + "/missing.txt")) if exists(old)]
+    for old, new in moves:
+        if exists(new):
+            return [], f"{new} is on the card already, so {old} stays where it is and nothing was moved"
+    return moves, None
+
+
+def migrate_sets(port):
+    """Move the card's first layout into the samantha set, once: /ext/sr/voice, its clip folders
+    and voice.txt, to /ext/sr/voices/samantha, and /ext/sr/missing.txt into it. The storage's
+    rename moves in place; nothing is copied or removed. Returns whether it succeeded."""
     storage, _ = open_storage(port)
-    from flipper.storage import FlipperStorageException  # noqa: E402  (open_storage set the path)
     was_on = False
     try:
         was_on = voice_off(storage)
-        t0 = time.time()
-        removed = absent = emptied = 0
-        folders = set()
-        for i, word in enumerate(sorted(synced), 1):
-            init = initial(word)
-            folders.add(init)
-            try:
-                storage.remove(f"/ext/sr/voice/{init}/{word}.raw")
-                removed += 1
-            except FlipperStorageException:
-                absent += 1
-            if i % 500 == 0:
-                log(f"remove-legacy: {i} of {len(synced)}, {time.time() - t0:.0f} s")
-        for init in sorted(folders):
-            if len(init) != 1:
-                continue
-            try:
-                storage.remove(f"/ext/sr/voice/{init}")
-                emptied += 1
-            except FlipperStorageException:
-                pass
-        save_manifest({}, synced_path)
-        log(f"remove-legacy: {removed} clips removed, {absent} not found, {emptied} of {len(folders)} folders removed, "
-            f"synced.json cleared, {time.time() - t0:.0f} s")
+        moves, refusal = migration_plan(storage.exist)
+        if refusal:
+            log(f"migrate: {refusal}")
+            return False
+        if not storage.exist_dir(SETS_DIR):
+            storage.mkdir(SETS_DIR)
+            log(f"migrate: made {SETS_DIR}")
+        for old, new in moves:
+            reply = storage.send_and_wait_prompt(f'storage rename "{old}" "{new}"\r')
+            if storage.has_error(reply):
+                error = next((line.strip() for line in reply.decode("ascii", "replace").splitlines() if "Storage error:" in line), "")
+                log(f"migrate: {old} was not moved: {error}")
+                return False
+            log(f"migrate: moved {old} to {new}")
+        if not moves:
+            log(f"migrate: nothing to move, the card has no {LEGACY_VOICE_DIR} or {LEGACY_MISSING}")
+        return True
     finally:
         if was_on:
             try:
@@ -516,12 +724,17 @@ def remove_legacy(port, out_dir):
         storage.stop()
 
 
-def check(settings, names, workdir):
+def check(settings, names, workdir, jobs):
+    """Make ten clips with the set's settings through the same pool as a build, and verify each:
+    between 0.05 and 3 s long, quiet at the edges, a peak near full scale."""
     words = ["settings", "sub", "gigahertz", "one", "ay", "b", "7", "okay", "home", "percent"]
+    todo = [(word, spoken_text(word, names), settings, os.path.join(workdir, initial(word), word + ".raw")) for word in words]
+    log(f"check: {len(todo)} clips with {settings_line(settings)}")
+    t0 = time.time()
+    with clip_pool(settings, min(jobs, len(todo))) as pool:
+        results = pool.map(make_clip, todo)
     bad = 0
-    for word in words:
-        path = os.path.join(workdir, initial(word), word + ".raw")
-        w, ok, msg = make_clip((word, spoken_text(word, names), settings, path))
+    for (word, _, _, path), (_, ok, msg) in zip(todo, results):
         data = open(path, "rb").read() if ok else b""
         seconds = len(data) / settings["hz"]
         edge = int(settings["hz"] * 0.015)
@@ -531,6 +744,7 @@ def check(settings, names, workdir):
         good = ok and 0.05 <= seconds <= 3.0 and quiet and loud
         bad += 0 if good else 1
         log(f"check {word}: {'ok' if good else 'BAD'} {seconds:.2f} s, quiet edges {quiet}, peak ok {loud} {msg}")
+    log(f"check: {len(todo) - bad} of {len(todo)} good, {time.time() - t0:.1f} s")
     return bad == 0
 
 
@@ -544,41 +758,63 @@ def save_manifest(manifest, manifest_path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--out", default=os.path.join(ROOT, "voice"), help="local vocabulary directory")
+    ap.add_argument("--set", default="samantha", help="the voice set to work on (default samantha, the voice/ directory)")
+    ap.add_argument("--backend", choices=sorted(BACKENDS), default="say", help="the speech engine (default say)")
+    ap.add_argument("--voice", help="the engine's voice (defaults: say Samantha, espeak en-us+f3, kokoro af_heart)")
+    ap.add_argument("--rate", type=int, help="words per minute for say and espeak, percent of the model's pace for kokoro")
+    ap.add_argument("--highpass", type=float, help="high-pass cutoff in Hz (default 500)")
+    ap.add_argument("--gain", type=float, help="gain after peak normalising to 0.95 (default 1.3)")
+    ap.add_argument("--soft", action=argparse.BooleanOptionalAction, help="the tanh limiter (default on)")
+    ap.add_argument("--model", help="kokoro: the model file (default voice-models/kokoro-v1.0.onnx)")
+    ap.add_argument("--voices-file", help="kokoro: the voices file (default voice-models/voices-v1.0.bin)")
     ap.add_argument("--words", action="append", default=[], help="extra word list file (repeatable)")
     ap.add_argument("--extract", action="store_true", help="add the firmware's strings through the pronunciation layer")
     ap.add_argument("--extract-all", action="store_true", help="with --extract: also add every app under applications/external, not just the ones on the card")
     ap.add_argument("--card-apps", action="store_true", help="with --extract: also add the apps actually installed on the card (needs the device, read-only)")
-    ap.add_argument("--pull-missing", action="store_true", help="add and clear the device's /ext/sr/missing.txt")
-    ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the card")
-    ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore voice/synced.json and resend everything (for a wiped card)")
-    ap.add_argument("--remove-legacy", action="store_true", help="remove the first layout's /ext/sr/voice/<initial>/ clips from the card and clear voice/synced.json")
-    ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them")
-    ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, or syncing")
+    ap.add_argument("--pull-missing", action="store_true", help="add and clear the set's missing.txt on the card")
+    ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the set's folder on the card")
+    ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore the set's synced.json and resend everything (for a wiped card)")
+    ap.add_argument("--migrate-sets", action="store_true", help="move the card's /ext/sr/voice and /ext/sr/missing.txt into /ext/sr/voices/samantha, once")
+    ap.add_argument("--check", action="store_true", help="make ten clips with the set's settings into a temporary directory and verify them")
+    ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, migrating or syncing")
     ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0],
                     help="serial port, default: the first /dev/cu.usbmodemflip_* (the device's name is part of it)")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new clips (for trials)")
-    for key, value in DEFAULTS.items():
-        if key == "soft":
-            ap.add_argument("--soft", dest="soft", action="store_true", default=True)
-            ap.add_argument("--no-soft", dest="soft", action="store_false")
-        else:
-            ap.add_argument("--" + key, type=type(value), default=value)
     a = ap.parse_args()
-    settings = {k: getattr(a, k) for k in DEFAULTS}
-    if settings["backend"] == "piper" and not settings["model"]:
-        sys.exit("--backend piper needs --model <voice.onnx>")
+    if not set_valid(a.set):
+        sys.exit(f"{a.set!r} is not a set name: 1 to 31 lower case letters, digits, hyphens and underscores, and not auto")
+    if a.backend != "kokoro" and (a.model or a.voices_file):
+        sys.exit("--model and --voices-file are for --backend kokoro")
+    settings = settings_for(a.backend, dict(voice=a.voice, rate=a.rate, highpass=a.highpass, gain=a.gain, soft=a.soft,
+                                            model=a.model, voices_file=a.voices_file))
     names = load_names()
-    workdir = os.path.join(a.out, ".build")
-    os.makedirs(workdir, exist_ok=True)
+    out_dir = set_local_dir(a.set)
+    workdir = os.path.join(out_dir, ".build")
+    manifest_path = os.path.join(out_dir, "manifest.json")
+    manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {"words": {}}
+    migrate_only = a.migrate_sets and not (a.extract or a.pull_missing or a.sync or a.words)
+    building = not (a.check or a.dry or migrate_only)
+    # Refused before anything is pulled from the card or made: an engine this machine lacks, or
+    # a run naming another backend or voice than the set was made with
+    if a.check or building:
+        problem = engine_problem(settings)
+        if problem:
+            sys.exit(problem)
+    if building:
+        conflict = set_conflict(manifest.get("settings"), settings)
+        if conflict:
+            sys.exit(f"{a.set}: {conflict}")
 
     if a.check:
         with tempfile.TemporaryDirectory() as d:
-            sys.exit(0 if check(settings, names, d) else 1)
-    if a.remove_legacy:
-        remove_legacy(a.port, a.out)
-        if not (a.extract or a.pull_missing or a.sync or a.words):
+            sys.exit(0 if check(settings, names, d, a.jobs) else 1)
+    if a.migrate_sets:
+        if a.dry:
+            log("dry run: the card's layout not migrated")
+        elif not migrate_sets(a.port):
+            return 1
+        if migrate_only:
             return 0
 
     words = load_list(os.path.join(HERE, "voice_words.txt"))
@@ -586,6 +822,7 @@ def main():
     for path in a.words:
         words |= load_list(path)
     if a.extract:
+        os.makedirs(workdir, exist_ok=True)
         extra = []
         if a.extract_all:
             ext_dirs = external_app_dirs()
@@ -609,45 +846,55 @@ def main():
         if a.dry:
             log("dry run: missing.txt not pulled")
         else:
-            words |= pull_missing(a.port)
+            words |= pull_missing(a.port, a.set)
 
     if a.dry:
         log(f"dry run: {len(words)} words total, no clips made")
         return 0
 
-    manifest_path = os.path.join(a.out, "manifest.json")
-    manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {"words": {}}
+    os.makedirs(out_dir, exist_ok=True)
+    synced_path = os.path.join(out_dir, "synced.json")
+    synced = json.load(open(synced_path)) if os.path.exists(synced_path) else {}
+    carried = rekey_legacy(manifest, synced, settings, names)
+    if carried:
+        # The sync record first: interrupted before the manifest, a rerun carries it over again
+        if os.path.exists(synced_path):
+            save_manifest(synced, synced_path)
+        save_manifest(manifest, manifest_path)
+        log(f"manifest: {carried} clips carried over from the settings before the sets, not made or sent again")
     jobs = []
     for word in sorted(words):
         text = spoken_text(word, names)
         h = settings_hash(settings, text)
-        path = os.path.join(a.out, initial(word), word + ".raw")
+        path = os.path.join(out_dir, initial(word), word + ".raw")
         if manifest["words"].get(word) == h and os.path.exists(path):
             continue
         jobs.append((word, text, settings, path))
     if a.limit:
         jobs = jobs[: a.limit]
-    log(f"{len(words)} words, {len(jobs)} to make with {settings_line(settings)}")
+    log(f"set {a.set}: {len(words)} words, {len(jobs)} to make with {settings_line(settings)}")
     t0 = time.time()
     made = failed = 0
-    with multiprocessing.Pool(a.jobs) as pool:
-        for i, (word, ok, msg) in enumerate(pool.imap_unordered(make_clip, jobs), 1):
-            if ok:
-                made += 1
-                manifest["words"][word] = settings_hash(settings, spoken_text(word, names))
-            else:
-                failed += 1
-                log(f"failed: {word}: {msg}")
-            if i % 100 == 0:
-                log(f"{i} of {len(jobs)} clips, {time.time() - t0:.0f} s")
-                save_manifest(manifest, manifest_path)
+    if jobs:
+        with clip_pool(settings, min(a.jobs, len(jobs))) as pool:
+            for i, (word, ok, msg) in enumerate(pool.imap_unordered(make_clip, jobs), 1):
+                if ok:
+                    made += 1
+                    manifest["words"][word] = settings_hash(settings, spoken_text(word, names))
+                else:
+                    failed += 1
+                    log(f"failed: {word}: {msg}")
+                if i % 100 == 0:
+                    log(f"{i} of {len(jobs)} clips, {time.time() - t0:.0f} s")
+                    save_manifest(manifest, manifest_path)
+    manifest["set"] = a.set
     manifest["settings"] = settings
     save_manifest(manifest, manifest_path)
-    with open(os.path.join(a.out, "voice.txt"), "w") as f:
+    with open(os.path.join(out_dir, "voice.txt"), "w") as f:
         f.write(settings_line(settings) + "\n")
-    log(f"made {made} clips, {failed} failed, {time.time() - t0:.0f} s; vocabulary {len(manifest['words'])} words in {a.out}")
+    log(f"made {made} clips, {failed} failed, {time.time() - t0:.0f} s; vocabulary {len(manifest['words'])} words in {out_dir}")
     if a.sync:
-        failed += sync(a.port, a.out, manifest, a.sync_all)
+        failed += sync(a.port, out_dir, manifest, a.set, a.sync_all)
     if failed:
         log(f"{failed} clip(s) failed to build or sync")
     return 1 if failed else 0

@@ -5,6 +5,7 @@ __pycache__/
 firmware-packages/
 logs/
 voice/
+voices/
 backups/
 voice-models/
 tools/voice_words.local.txt
