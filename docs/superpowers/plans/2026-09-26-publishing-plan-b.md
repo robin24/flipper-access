@@ -617,35 +617,42 @@ Start `docs/measurements/2026-09-26-plan-b.txt` with the headroom line, the `inf
 
 ### Task 7: The heart and espeak sets on Robin's card
 
+Amended after the listening session: Robin chose the settings A (today's Kokoro defaults), and
+asked for the sets to go onto the card through the Mac's card reader instead of the console,
+which takes a minute instead of an hour. The controller generates both sets on the Mac (the
+two `--extract --card-apps` runs without `--sync`), Task 8's pack tool writes each set in the
+card's layout, and the copy happens when Robin puts the card in the reader. What remains for an
+implementer is the verification on the device and the record.
+
 **Files:**
-- Modify: `tools/voice_build.py` (the kokoro defaults, if the session changed them), `docs/measurements/2026-09-26-plan-b.txt`
+- Modify: `docs/measurements/2026-09-26-plan-b.txt`
 
 **Interfaces:**
-- Consumes: the settings Robin chose (the controller's dispatch names them); Task 5's generator.
-- Produces: the sets `heart` and `espeak` on the card beside `samantha`; the trial folder removed.
+- Consumes: the sets `heart` and `espeak` on the card (copied from the packs of Task 8), the generator's `--mark-synced` (Task 8), the console commands of Task 3.
+- Produces: both sets verified on the device; the trial folder removed; the record.
 
-- [ ] **Step 1: The defaults**
-
-If the chosen settings differ from `BACKENDS["kokoro"]`, change the defaults there (and the test's expectations for the kokoro line), run the test, commit with a message naming the settings and why ("chosen by ear through the piezo on <date>").
-
-- [ ] **Step 2: The Kokoro set**
+- [ ] **Step 1: After the copy, mark both sets as synced**
 
 ```bash
-.venv/bin/python tools/voice_build.py --set heart --backend kokoro --voice af_heart --extract --card-apps --jobs 4
-.venv/bin/python tools/voice_build.py --set heart --backend kokoro --voice af_heart --extract --card-apps --sync
+.venv/bin/python tools/voice_build.py --set heart --mark-synced
+.venv/bin/python tools/voice_build.py --set espeak --mark-synced
 ```
 
-The first run makes the clips (about 17 minutes with four workers for some 10,800 words; record the count and the time); the second uploads them (about 30 minutes at 6.4 files per second; the sync guard mutes the voice meanwhile and restores it). Then `sr voice use heart`, `sr say Home screen. Apps, one of eleven. Battery one hundred percent.` and `sr voice status` (set heart, the kokoro settings line, no underruns in `sr status`), and the chord routine `tools/sr_drive.py --chords` with the heart set in use.
+so a later routine run sends only what changes.
 
-- [ ] **Step 3: The eSpeak set**
+- [ ] **Step 2: Each set on the device**
 
-The same two runs with `--set espeak --backend espeak --voice en-us+f3` (the clips take a few minutes, the upload about 30), then `sr voice use espeak`, the same utterance, the status, the chord routine. Then `sr voice use samantha`, so Robin's device stays on Samantha until Robin switches.
+With the card back in the device and the device on its home screen: `sr voice list` shows
+`espeak`, `heart`, `samantha (in use)`; then for each of `heart` and `espeak`: `sr voice use
+<set>`, `sr say Home screen. Apps, one of eleven. Battery one hundred percent.`, `sr voice
+status` (the set, its settings line, `open max`), `sr status` (no underruns), and the chord
+routine `tools/sr_drive.py --chords` with the set in use. Then `sr voice use samantha`.
 
-- [ ] **Step 4: The trial folder, the measurements, the commit**
+- [ ] **Step 3: The trial folder, the measurements, the commit**
 
-Remove `/ext/sr/trial` and its four files from the card. Finish the measurements file: the counts, times, the status lines of each set, `sr voice list` showing the three sets, the free heap, the chord results. Commit the file (and the defaults change if any) and push.
-
----
+Remove `/ext/sr/trial` and its four files from the card. Append to the measurements file: the
+counts and times of each generation (from the controller's log), the pack sizes, the status
+lines of each set, `sr voice list`, the free heap, the chord results. Commit the file and push.
 
 ### Task 8: `tools/voice_pack.py` and its test
 
@@ -655,7 +662,7 @@ Remove `/ext/sr/trial` and its four files from the card. Finish the measurements
 
 **Interfaces:**
 - Consumes: a set's local directory with `manifest.json` and `voice.txt` from Task 5.
-- Produces: `tools/voice_pack.py --set NAME --version X.Y.Z [--out DIR]` writing `voice-<set>-sonar-X.Y.Z.tar`; `voice_pack.licence_text(settings)`; `voice_pack.pack(set_dir, set_name, version, out_path)`.
+- Produces: `tools/voice_pack.py --set NAME --version X.Y.Z [--out DIR]` writing `voice-<set>-sonar-X.Y.Z.tar`; `voice_pack.licence_text(settings)`; `voice_pack.pack(set_dir, set_name, version, out_path)`; and in `tools/voice_build.py` the flag `--mark-synced`, which writes the set's `synced.json` from its manifest (every word's current hash), for a set that reached the card by other means than `--sync` (the card reader), with a test in `tests/fbt/test_voice_build.py` through a pure helper.
 
 - [ ] **Step 1: The test first**
 
