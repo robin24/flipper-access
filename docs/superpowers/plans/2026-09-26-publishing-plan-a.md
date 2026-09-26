@@ -256,7 +256,7 @@ Expected: the runner green, the status clean except the submodule (unchanged poi
 
 **Interfaces:**
 - Consumes: `tools/flipper_cli.py`: `find_port(explicit=None)`, `open_cli(port)` returning a pyserial handle, `run(ser, cmd, timeout=15.0)` returning the reply text without echo, prompt or colour codes.
-- Produces: `card_prune.plan(folders, running_hash, keep)`, a pure function returning the sorted list of folder names to remove; the command `tools/card_prune.py [--dry] [--keep NAME ...] [--port PORT]`, which Task 10 runs after the flash.
+- Produces: `card_prune.plan(folders, running_hash, keep)`, a pure function returning the sorted list of folder names to remove; the command `tools/card_prune.py [--dry] [--keep NAME ...] [--port PORT]`, which Task 10 runs after the flash. The module must import without pyserial (the test runs on the continuous build too), which is why the `flipper_cli` import is guarded.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -351,7 +351,10 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
-from flipper_cli import find_port, open_cli, run  # noqa: E402
+try:
+    from flipper_cli import find_port, open_cli, run
+except SystemExit:  # flipper_cli exits when pyserial is missing; plan() needs neither (the tests, CI)
+    find_port = open_cli = run = None
 
 UPDATE_DIR = "/ext/update"
 DEFAULT_KEEP = ["f7-update-1.4.3", "f7-update-mntm-012"]
@@ -1088,7 +1091,7 @@ python3 tests/fbt/test_subghz_manifest.py
 python3 tests/fbt/test_subghz_sources.py
 ```
 
-Expected: the exclude list matches, the manifest is rewritten (a reorder of the same 36 files, no file added or removed: check the diff shows only moved lines), `subghz manifest: 8 of 8 checks passed`, and the existing source-list check still passes.
+Expected: the exclude list matches, the manifest is rewritten (a reorder of the same 36 files, no file added or removed: check the diff shows only moved lines), `subghz manifest: 8 of 8 checks passed` (7 of 7 where `upstream/dev` is absent), and the existing source-list check still passes.
 
 - [ ] **Step 5: Runner, commits, pushes**
 
