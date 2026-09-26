@@ -102,3 +102,10 @@ if ! python3 "$ROOT/tests/fbt/test_strip_js_symbols.py" > "$OUT/strip_js_symbols
   exit 1
 fi
 echo "$(tail -n 1 "$OUT/strip_js_symbols.txt")"
+
+if ! python3 "$ROOT/tests/fbt/test_subghz_manifest.py" > "$OUT/subghz_manifest.txt"; then
+  cat "$OUT/subghz_manifest.txt"
+  echo "Sub-GHz manifest checks failed"
+  exit 1
+fi
+echo "$(tail -n 1 "$OUT/subghz_manifest.txt")"

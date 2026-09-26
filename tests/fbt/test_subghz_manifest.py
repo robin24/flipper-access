@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+"""tools/subghz_manifest.py: the built-in Sub-GHz app's source list is every .c file under the
+app's folder except the excluded basenames, top-level files first and then the subfolders, each
+sorted; only the App block with appid "subghz" changes; the script is idempotent; the fork's
+manifest is what the script writes; and the excluded names are the "!" entries of the merge
+base's manifest. Run from the project root: python3 tests/fbt/test_subghz_manifest.py"""
+import os
+import subprocess
+import sys
+import tempfile
+
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(ROOT, "tools"))
+from subghz_manifest import EXCLUDED, rewrite, sources, upstream_excludes  # noqa: E402
+
+FIRMWARE = os.path.join(ROOT, "Momentum-Firmware")
+MANIFEST = os.path.join(FIRMWARE, "applications", "main", "subghz", "application.fam")
+failures = 0
+checks = 0
+
+
+def check(cond, what):
+    global failures, checks
+    checks += 1
+    if not cond:
+        failures += 1
+        print("FAIL", what)
+
+
+SAMPLE = '''App(
+    appid="subghz",
+    name="Sub-GHz",
+    # a comment that mentions sources
+    sources=[
+        "old.c",
+    ],
+    requires=["region"],
+)
+
+App(
+    appid="cli_subghz",
+    apptype=FlipperAppType.PLUGIN,
+    sources=["subghz_cli.c", "helpers/subghz_chat.c"],
+)
+'''
+
+with tempfile.TemporaryDirectory() as tmp:
+    for rel in ["subghz.c", "subghz_i.c", "subghz_cli.c", "helpers/subghz_txrx.c", "helpers/minmea.c",
+                "scenes/subghz_scene_set_key.c", "views/receiver.c", "helpers/notes.txt"]:
+        path = os.path.join(tmp, rel)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        open(path, "w").close()
+    files = sources(tmp)
+    check(files == ["subghz.c", "subghz_i.c", "helpers/subghz_txrx.c", "views/receiver.c"],
+          f"the list: top-level first, then subfolders, excluded names out: {files}")
+    out = rewrite(SAMPLE, files)
+    check('        "subghz.c",\n        "subghz_i.c",\n        "helpers/subghz_txrx.c",\n        "views/receiver.c",\n    ],' in out,
+          "the list is written with eight spaces and trailing commas")
+    check('"old.c"' not in out, "the old list is gone")
+    check('sources=["subghz_cli.c", "helpers/subghz_chat.c"]' in out, "the other App block is untouched")
+    check("# a comment that mentions sources" in out and 'requires=["region"]' in out, "the rest of the block is untouched")
+    check(rewrite(out, files) == out, "idempotent")
+
+current = open(MANIFEST, encoding="utf-8").read()
+app_dir = os.path.dirname(MANIFEST)
+check(rewrite(current, sources(app_dir)) == current, "the fork's manifest is what the script writes (run the script once if not)")
+
+try:
+    theirs = upstream_excludes(MANIFEST)
+except subprocess.CalledProcessError:
+    print("skipped the upstream check: no upstream/dev in this checkout")
+else:
+    check(set(theirs) == set(EXCLUDED), f"EXCLUDED equals the merge base's \"!\" entries; theirs: {sorted(set(theirs) ^ set(EXCLUDED))}")
+
+print(f"subghz manifest: {checks - failures} of {checks} checks passed")
+sys.exit(1 if failures else 0)
