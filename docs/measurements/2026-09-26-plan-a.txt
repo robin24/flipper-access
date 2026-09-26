@@ -1,0 +1,251 @@
+Publishing plan A on the device: the clean Sonar build, flashed, checked and the card pruned, 2026-09-26
+
+Firmware: branch screen-reader at a0dea0841, which makes the List menu style the default on top of c0ba0af07, in the release configuration (COMPACT=1, DEBUG=0). The build folder was wiped first, rm -rf Momentum-Firmware/build, so this Mac built what the continuous build builds.
+Device: Delphi on /dev/cu.usbmodemflip_Delphi1, the recorded voice on the card. Before the flash it ran 6451e86e8 of 2026-09-25, flashed then with ./fbt flash_usb.
+Console replies are verbatim from tools/flipper_cli.py, tools/card_prune.py and tools/sr_drive.py; a time in brackets is the shell's, taken just before the call.
+
+Section: Build and headroom
+The firmware tree was clean before the build: git status --short printed nothing.
+./fbt COMPACT=1 DEBUG=0 updater_package from 06:34:08 to 06:36:43, 155 s, exit 0. Its last five lines:
+
+2026-09-26 06:36:38,837 [INFO] Use this directory to self-update your Flipper:
+	dist/f7-C/f7-update-mntm-screen-reader-a0dea084
+2026-09-26 06:36:39,101 [INFO] Bundling SDK
+2026-09-26 06:36:40,975 [INFO] SDK bundle can be found at:
+	dist/f7-C/flipper-z-f7-sdk-mntm-screen-reader-a0dea084.zip
+
+fbt printed "API version 87.3 is up to date" and no warning about the API table. The other warnings were the two known manifest warnings of the external apps cli_bridge (Invalid appid '.cli_gui') and mtp (Invalid appid '.f0_mtp'), each printed twice, and 20 compiler warnings, all inside the external apps' own sources: the asn1 code of seader, picopass and passy, flipboard, airmouse and mitsubishi_ac_remote. There was no error line.
+The firmware tree was still clean after the build.
+The headroom check, tools/flash_headroom.sh, exit 0:
+
+firmware.bin 864564 bytes, limit 880640, spare 16076 bytes
+
+That is the size of 6451e86e8's image. firmware.bin md5 b47ad493eb0f5b6cf3c10b7d93848a08, the same after the flash command below.
+Momentum-Firmware/dist/f7-C held flipper-z-f7-update-mntm-screen-reader-a0dea084.tgz, 12,039,391 bytes, and the update folder f7-update-mntm-screen-reader-a0dea084 with resources.tar.gz, 11,264,856 bytes, beside firmware.dfu, firstboot.bin, radio.bin, splash.bin, update.fuf and updater.bin.
+The continuous build of the same commit, run 36218194579, passed in 9 min 23 s. Its headroom line read firmware.bin 864576 bytes, spare 16064 bytes: 12 bytes more than this Mac's image. The continuous build of c0ba0af07 measured the same 864,576. Its artifact sonar-ci-a0dea084 is 12,044,002 bytes.
+
+Section: The flash
+Before it, with no application running:
+
+[06:37:29] before the flash
+== loader info
+No application is running
+== storage list /ext/update
+	[D] f7-update-1.4.3
+	[D] f7-update-mntm-012
+	[D] f7-update-mntm-screen-reader-6451e86e
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 40, verbosity: 1, change delay: 3000 ms
+frames: 24129, dropped: 0, announcements: 284, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 351, aborted 87, dropped 0, underruns 1, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2484
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 1404, fallback 17, missing 7, muted 0, open max 66 ms, last 26 ms
+free heap: 109840
+== free
+Free heap size: 109920
+Total heap size: 189496
+Minimum heap size: 20032
+Maximum heap block: 109080
+Pool free: 876
+Maximum pool block: 672
+== info device
+(the firmware lines on commit, branch, version, API and origin only)
+firmware.commit.hash          : 6451e86e
+firmware.commit.dirty         : true
+firmware.branch.name          : screen-reader
+firmware.branch.num           : 0
+firmware.version              : mntm-dev
+firmware.api.major            : 87
+firmware.api.minor            : 3
+firmware.origin.fork          : Momentum
+firmware.origin.git           : https://github.com/Next-Flip/Momentum-Firmware.git
+
+firmware.commit.dirty was true for 6451e86e8 because of the Text to SAM patch, since retired.
+./fbt COMPACT=1 DEBUG=0 flash_usb_full from 06:37:44 to 06:39:57, exit 0. It built the resources and the package again, then uploaded the package; firmware.bin was unchanged, the same md5. The package it sent holds resources.tar.gz of 11,265,310 bytes, and the .tgz is now 12,038,653 bytes. Its last three lines: the upload's progress line for updater.bin, ending "<100%, chunk 15 of 15 @ 141.87 kb/s"; "2026-09-26 06:39:54,497 [INFO] Closing current app, if any"; Touch("build/usbinstall.flag").
+
+The port watch, one line per change, polled once a second:
+
+06:37:39 watch started
+06:37:39 port present
+06:39:55 port gone
+06:46:39 port present
+06:47:09 port steady for 30 s: done
+
+The port was gone from 06:39:55 to 06:46:39: 404 s, 6 min 44 s. The whole flash, from the command's start to the port's return, took 535 s, 8 min 55 s.
+
+Section: After the flash
+Before any key press, 38 s after the port came back:
+
+[06:47:17] after the flash, before any key press
+== sr screen
+records: 0, content layer: desktop
+reads as: 
+== info device
+(the firmware lines only; the hardware, radio and system lines are left out)
+firmware.commit.hash          : a0dea084
+firmware.commit.dirty         : false
+firmware.branch.name          : screen-reader
+firmware.branch.num           : 0
+firmware.version              : mntm-dev
+firmware.build.date           : 26-09-2026
+firmware.target               : 7
+firmware.api.major            : 87
+firmware.api.minor            : 3
+firmware.origin.fork          : Sonar
+firmware.origin.git           : https://github.com/robin24/Momentum-Firmware.git
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 30, verbosity: 1, change delay: 3000 ms
+frames: 2, dropped: 0, announcements: 1, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 1, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1089 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2516
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 2, fallback 0, missing 0, muted 0, open max 27 ms, last 27 ms
+free heap: 115864
+
+firmware.commit.hash a0dea084 is the first eight characters of the submodule's HEAD, a0dea08418ac3d0494e4e3ef92dcf48663f1137f. The build is clean, calls itself Sonar, names the fork as its origin, and has API version 87.3.
+sr screen read no records on the desktop layer: the post-update slideshow, as after the flashes of 2026-09-25, not a crash popup. sr status: the reader on, one utterance, the boot's "Home screen" (15,972 subsamples), the voice on with the Samantha line. The last crash is the old one of build 9028a849, kept across the update as designed.
+Then Back closed the slideshow:
+
+[06:57:22] Back closes the post-update splash
+== input send back short
+[06:57:24]
+== sr screen
+records: 1, content layer: desktop
+status-right x=103 y=  9 battery    inverted "100"
+reads as: 
+== loader info
+No application is running
+
+The home screen: the battery alone, as on 2026-09-25.
+
+Section: The Debug flag and the log level
+The same info device reply read system.debug : 0 and system.log.level : 1, which is none. The updater of a release build sets both so: applications/system/updater/util/update_task_worker_flasher.c sets the log level to none at line 352 and clears the Debug flag at line 353, in the branch for builds without FURI_DEBUG.
+The UART capture, docs/measurements/logs/2026-09-25-uart.txt, bears this out. Its last device lines before today are the RAM updater's own boot during the flash of 2026-09-25 at 20:15, up to 20:16:02. After that it logged nothing: not the boots after that flash, and not this flash's. So the capture had been blind since that flash.
+Both were set again with the command from docs/device-notes.md:
+
+[06:57:33] the crash catcher's settings, as device-notes give them
+== sysctl debug 1
+Debug enabled.
+== sysctl log_level debug
+Set log level to debug
+system.debug                  : 1
+system.log.level              : 5
+
+The capture received lines again at once, from 06:57:34.
+
+Section: The settings after the update
+sr status read volume 30 after the flash, 40 before it. /int/.momentum_settings.txt now differs from the copy inside the update's own backup, /ext/update/f7-update-mntm-screen-reader-a0dea084/backup.tar, taken at the update's start, in four keys:
+lock_on_boot: true now, false in the backup.
+dark_mode: false now, true in the backup.
+rpc_color_bg: 4286709760 now, 16777215 in the backup.
+sr_volume: 30 now, 40 in the backup.
+The other 41 keys match, among them menu_style: 0, the List style, and screen_reader: true.
+Every key of the file now holds its compiled default, except sr_volume: 30, where the default is 100. rpc_color_bg shows that the file was written from settings that were never loaded from a file. The load clamps that key to 0xFFFFFF, 16777215, so the default 0xFF820000, 4286709760, cannot come back from a file once it has been through one. So the file was saved during the post-update boot. The updater's flash stage marks /int to be wiped before the restore (line 345 of the same file). So in the post-update boot, a special boot, the settings load at card mount finds no file, and the settings stay at their defaults. The updater then restores /int from the backup and unpacks the resources for minutes, and a save in that time replaces the restored file.
+Nothing saves the settings by itself. The saves are the Momentum app's on exit, the desktop lock menu's, and the reader's: its volume chord, Back and Left or Right, a step of 10 each time; its toggle chord; and sr on, sr off, sr volume and sr delay on the console. Seven Back and Left chords would turn the default 100 into exactly 30. The console was gone during the update and no key was sent from this Mac, so keys pressed on the device are the likeliest explanation. With the reader on by default since c00eed5c9, it runs during that boot and speaks the updater's screens at volume 100. The flashes of 2026-09-25 kept the settings; the reader was off by default then.
+
+Section: The card
+The apps this flash put on the card: text2sam.fap is 29,100 bytes, Momentum's stock build, not the patched build's 30,200; passport.fap is 4,364 bytes. Both are this build's own.
+
+[06:57:45] the card after the flash
+== storage list /ext/apps/Media
+	[F] bpm_tapper.fap 6576b
+	[F] etch.fap 5280b
+	[F] flizzer_tracker.fap 66908b
+	[F] fmatrix.fap 5540b
+	[F] fzspground.fap 30540b
+	[F] image_viewer.fap 4532b
+	[F] metronome.fap 11548b
+	[F] morse_code.fap 8440b
+	[F] music_player.fap 12724b
+	[F] paint.fap 3020b
+	[F] text2sam.fap 29100b
+	[F] tuning_fork.fap 24712b
+	[F] usb_midi.fap 10992b
+	[F] video_player.fap 11264b
+	[F] wav_player.fap 14452b
+== storage list /ext/apps/assets
+	[F] about.fap 10792b
+	[F] bt_settings.fap 9732b
+	[F] clock_settings.fap 8688b
+	[F] desktop_settings.fap 38976b
+	[F] expansion_settings.fap 3764b
+	[F] input_settings.fap 5040b
+	[F] momentum_app.fap 79556b
+	[F] notification_settings.fap 8564b
+	[F] passport.fap 4364b
+	[F] power_settings.fap 27332b
+	[F] storage_settings.fap 26968b
+	[F] subghz_add_manually.fap 40704b
+	[F] system_settings.fap 10792b
+
+/ext/update before the prune. Task 3 of this plan found 37 folders there, removed 34 and kept 3: f7-update-1.4.3, f7-update-mntm-012 and f7-update-mntm-screen-reader-6451e86e. Before this flash there were the same three, listed above. After it there were four:
+
+== storage list /ext/update
+	[D] f7-update-1.4.3
+	[D] f7-update-mntm-012
+	[D] f7-update-mntm-screen-reader-a0dea084
+	[D] f7-update-mntm-screen-reader-6451e86e
+
+The prune, a dry run first:
+
+[06:58:13] card_prune.py --dry
+running build a0dea084; 4 folders in /ext/update; keeping 3: f7-update-1.4.3, f7-update-mntm-012, f7-update-mntm-screen-reader-a0dea084
+would remove f7-update-mntm-screen-reader-6451e86e
+would remove 1 folders
+
+[06:58:20] card_prune.py
+running build a0dea084; 4 folders in /ext/update; keeping 3: f7-update-1.4.3, f7-update-mntm-012, f7-update-mntm-screen-reader-a0dea084
+removing f7-update-mntm-screen-reader-6451e86e
+removed 1 folders
+real 0.67
+user 0.04
+sys 0.01
+[06:58:21]
+== storage list /ext/update
+	[D] f7-update-1.4.3
+	[D] f7-update-mntm-012
+	[D] f7-update-mntm-screen-reader-a0dea084
+
+Three folders are left: the two rollback packages and the running build's. The new build's folder keeps the update's backup.tar, with the settings from before the flash.
+
+Section: The workout
+tools/sr_drive.py --chords from the home screen, then sr status and free:
+
+[06:58:29] sr_drive.py --chords
+     home  desktop, no focus
+ok   home  back + up       utterances +1, aborted +0, dropped +0, announcements +0; last 1106 ms played, 15972 subsamples
+ok   home  back + down     utterances +1, aborted +0, dropped +0, announcements +0; last 4136 ms played, 65194 subsamples
+ok   home  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 1109 ms played, 16399 subsamples
+ok   home  back + ok long  utterances +1, aborted +0, dropped +0, announcements +0; last 1107 ms played, 16399 subsamples
+     menu  fullscreen, FOCUS 1/11 "Apps", reads as: Settings. Sub-GHz. Apps, 1 of 11
+ok   menu  back + up       utterances +1, aborted +0, dropped +0, announcements +0; last 4387 ms played, 68392 subsamples
+ok   menu  back + down     utterances +1, aborted +0, dropped +0, announcements +0; last 1930 ms played, 30010 subsamples
+ok   menu  back + ok       utterances +1, aborted +0, dropped +0, announcements +0; last 2005 ms played, 30272 subsamples
+ok   menu  back + ok long  utterances +1, aborted +0, dropped +0, announcements +0; last 1680 ms played, 24961 subsamples
+ok   end   home screen expected, got: desktop, no focus
+0 failures
+exit 0
+[06:58:53]
+== sr status
+enabled: yes
+last crash: at 2001384F in build 9028a849
+volume: 30, verbosity: 1, change delay: 3000 ms
+frames: 42, dropped: 0, announcements: 4, suppressed: 0
+speech: idle, queued 0, speaker held: no, utterances 12, aborted 0, dropped 0, underruns 0, queue dropped 0
+last utterance: 1097 ms played, 15972 subsamples, 998 ms nominal, worker stack free 2484
+voice: on, vocabulary yes say Samantha rate 175 highpass 500 gain 1.3 soft 16000, clips 40, fallback 0, missing 0, muted 0, open max 31 ms, last 26 ms
+free heap: 116512
+== free
+Free heap size: 116584
+Total heap size: 189496
+Minimum heap size: 103408
+Maximum heap block: 116256
+Pool free: 876
+Maximum pool block: 672
+
+No failures. The main menu opened in the List style with its focus marked, "Apps, 1 of 11". sr status: frames 42, dropped 0; utterances 12, aborted 0, dropped 0, underruns 0. Free heap 116,584 bytes, lowest since boot 103,408, largest block 116,256. Before the flash it was 109,920, lowest since that boot 20,032.
+
+The device was left on the home screen: no application, the reader on, the voice on at volume 30, speech idle, the Debug flag on at log level debug.

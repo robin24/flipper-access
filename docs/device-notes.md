@@ -8,21 +8,21 @@ These are the working notes for the one device Sonar is developed on, and the de
   microSD card, exFAT.
 - Firmware: Momentum mntm-012, built 31 December 2025, installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
-  here. On 2026-09-24 that was phase 3 and the polish round. On 2026-09-25 the firmware stripdown
-  round finished, and its final fixes, commit 08e80106f, were flashed complete with
-  `./fbt flash_usb_full`. The dolphin in words, the crash address, the reader toggle with the
-  Passport's next level, and the Archive's menus followed the same day with `./fbt flash_usb`, up
-  to commit a9e4e7b94: API version 87.3, firmware.bin 864,428 bytes with 16,212 spare below the
-  BLE stack. The Passport on the card, `/ext/apps/assets/passport.fap`, was rebuilt for it. The
-  last flash, that evening, was commit 6451e86e8, which turns FreeRTOS's stack overflow check on:
-  firmware.bin 864,564 bytes, 16,076 spare. It reported itself dirty, because of the Text to SAM
-  patch that has since been retired. Task 10 of the publishing plan A updates this line when it
-  flashes the clean Sonar build.
+  here: phase 3 and the polish round on 2026-09-24, the firmware stripdown and the features after
+  it on 2026-09-25. Since 2026-09-26 it runs commit a0dea0841, the clean Sonar build of the
+  publishing plan A, flashed complete with `./fbt flash_usb_full` from a wiped build folder. It
+  reports itself as Sonar and clean, with API version 87.3: `firmware.origin.fork : Sonar` and
+  `firmware.commit.dirty : false`. firmware.bin is 864,564 bytes, 16,076 spare below the BLE
+  stack. The apps on the card, the Passport among them, came with it. The earlier images are
+  listed under Useful commands.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1`, which was
   `/dev/cu.usbmodemflip_R0skie1` before the rename, at 230400 baud. It disappears while the device
   is in the updater and comes back after the reboot.
-- Menu style List and lock on boot off, both set in `/int/.momentum_settings.txt`. The reader
-  marks the main menu's focus only in the List style; Momentum's default style is DSi.
+- Menu style List, set in `/int/.momentum_settings.txt`. The reader marks the main menu's focus
+  only in the List style. Momentum's default style is DSi; Sonar's is List since a0dea0841. Lock
+  on boot was off there too, until the update of 2026-09-26 left that file at its defaults, the
+  reader's volume apart: see `docs/measurements/2026-09-26-plan-a.txt`. Lock on boot acts only
+  when a PIN is set, and none is.
 - The Text to SAM app on the card is Momentum's stock build again since 2026-09-26; the patched
   build and tools/say.sh were retired, since the reader speaks from its own engine.
 - The games, the JavaScript runner and its modules, and the screen reader's own SAM synthesizer
@@ -34,7 +34,8 @@ These are the working notes for the one device Sonar is developed on, and the de
   infrared, iButton, GPIO, Bad USB and U2F. NFC read is now the heaviest, 23,232 bytes free.
 - The Wi-Fi dev board sits on the GPIO header, with its own USB-C cable in the Mac, as the crash
   catcher. The Debug flag is on and the log level is debug, both kept across reboots, and
-  `tools/uart_log.py` captures the debug console in the background. See Crash diagnosis.
+  `tools/uart_log.py` captures the debug console in the background. An update to a release build
+  turns both off, so step 6 of the Routine sets them again. See Crash diagnosis.
 
 ## The folders and tools
 
@@ -129,13 +130,20 @@ The flash routine, run from the project folder:
    .venv/bin/python tools/flipper_cli.py "sr screen"
    ```
 
-6. Remove the old update packages from the card. Add `--dry` to see first what would go:
+6. Turn the crash catcher back on. The updater of a release build turns the Debug flag off and
+   the log level to none, and the UART capture then records nothing:
+
+   ```bash
+   .venv/bin/python tools/flipper_cli.py "sysctl debug 1" "sysctl log_level debug"
+   ```
+
+7. Remove the old update packages from the card. Add `--dry` to see first what would go:
 
    ```bash
    .venv/bin/python tools/card_prune.py
    ```
 
-7. Give the words the device had to spell their own clips, with the generator's routine command:
+8. Give the words the device had to spell their own clips, with the generator's routine command:
 
    ```bash
    .venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync
@@ -187,6 +195,9 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- a0dea0841, the clean Sonar build of the publishing plan A, with the List menu style as the
+  default, on 2026-09-26, built from a wiped build folder: 864,564 bytes, 16,076 spare, the
+  same as 6451e86e8.
 - 6451e86e8, FreeRTOS's stack overflow check on, on the evening of 2026-09-25: 864,564 bytes,
   16,076 spare.
 - a9e4e7b94, the Archive's menus naming their selection: 864,428 bytes, 16,212 spare.
@@ -281,7 +292,8 @@ would need the address the app was loaded at, which is not kept. For any message
 The Wi-Fi dev board brings the crash handler's full dump to the Mac. It sits on the GPIO header
 with its own USB-C cable in the Mac, and its factory firmware is the Black Magic Probe. The board
 bridges the Flipper's pins 13 and 14, where the firmware writes its debug console once the Debug
-flag is on, at the log level set. Both settings are kept across reboots:
+flag is on, at the log level set. Both settings are kept across reboots, but not across an
+update to a release build, whose updater turns both off; step 6 of the Routine sets them again:
 
 ```bash
 .venv/bin/python tools/flipper_cli.py "sysctl debug 1" "sysctl log_level debug"
@@ -349,5 +361,8 @@ The files in `docs/measurements/`, all plain text:
   letter to the 64 hashed folders and the 8192-byte ring, with the clip open times and underruns.
 - `2026-09-25-stripdown.txt`: the firmware stripdown's flash, static RAM, idle heap, RAM probe and
   device pass.
+- `2026-09-26-plan-a.txt`: the clean Sonar build of the publishing plan A: its build, headroom and
+  flash, what the device reported after it, the Debug flag and the settings that the update reset,
+  the card before and after the prune, and the chord session.
 
 `docs/measurements/logs/` holds the raw session logs and the UART capture. It is not in git.

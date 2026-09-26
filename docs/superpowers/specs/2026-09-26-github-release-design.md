@@ -268,15 +268,16 @@ modified ones. The rules for when upstream moves:
   the record.
 - The two mechanical conflicts become scripts, so the resolution is "take upstream's file,
   rerun the script": `tools/strip_js_symbols.py` removes the `lib/mjs` headers and the
-  JavaScript engine's functions from `targets/f7/api_symbols.csv`, sets the version to
-  upstream's major and minor plus one, and adds our exported lines (`canvas_tap_hint_note`,
+  JavaScript engine's functions from `targets/f7/api_symbols.csv`, sets the version by the
+  API version rule below, and adds our exported lines (`canvas_tap_hint_note`,
   `canvas_tap_hint_note_at`, `button_panel_item_set_name`, `input_publish_event`, and the
   disabled `input_set_filter`); `tools/subghz_manifest.py` regenerates the built-in Sub-GHz
   app's source list from its directory. Both have tests in `tests/fbt`; the existing
   `test_subghz_sources.py` stays as the check.
-- The API version rule: ours is upstream's major and minor, with the minor raised by one,
-  for as long as we export symbols upstream lacks. Apps from Momentum's catalog built for the
-  same major still load.
+- The API version rule: ours is upstream's major and minor, with the minor raised by the
+  number of the fork's export rounds, two so far (87.1 to 87.3), kept as the constant
+  `FORK_MINOR_STEP` in `tools/strip_js_symbols.py`, for as long as we export symbols
+  upstream lacks. Apps from Momentum's catalog built for the same major still load.
 - After a merge: host tests, `tests/fbt`, a release build, the headroom check, the RAM probe,
   the reader's scripted routine, the manual chord and screen check from the README, then the
   tag.

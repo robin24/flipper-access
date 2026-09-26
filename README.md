@@ -441,9 +441,6 @@ everything.
   one hundred", and counts such as "Keys found: 5/32" read the same way. So does a date drawn with
   slashes, which only a few NFC card parsers show; that has not been tried on a device. Any other
   slash is "slash": "/ext/apps" is "slash ext slash apps".
-- In the main menu, only the List menu style marks the focused item for the reader. The other
-  styles are read by inversion where possible, taking the item drawn in white on black as the
-  focus, and will get hints later.
 - The device has rebooted a few times while idle, with a "furi_check failed" popup, and the cause
   is unknown. The popup now carries an address, and `sr status` the build, so a report with both
   helps: see When it crashes.

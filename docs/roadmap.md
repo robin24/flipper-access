@@ -4,7 +4,7 @@ Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focus
 
 Status on 2026-09-25: the recorded voice, phase 3 on-device control, the polish round, and the memory plan (steps 2 to 4: animations off by default, the JavaScript engine out, Sub-GHz back into flash, SAM out) are done. Next: the fork and release mechanics.
 
-Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, is written, and its plan A, `docs/superpowers/plans/2026-09-26-publishing-plan-a.md`, is in progress: the repositories, the cleanup, the continuous build and the upstream tooling. Plan B, the Piper voice, and plan C, the install path and the first release, follow. The names are decided: the repository is `flipper-access`, and the firmware is Sonar.
+Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, is written, and its plan A, `docs/superpowers/plans/2026-09-26-publishing-plan-a.md`, is done: the repositories, the cleanup, the continuous build and the upstream tooling. Its tools: `tools/card_prune.py` removes old update packages from the card; `tools/strip_js_symbols.py` and `tools/subghz_manifest.py` redo the fork's two mechanical changes after a Momentum merge, in the API table and in the built-in Sub-GHz app's source list; `tools/upstream_check.sh` shows from a dry run what a merge would meet; and the Build workflow, `.github/workflows/build.yml`, runs the host tests, the release build and the headroom check on every push. The device runs the clean Sonar build, commit a0dea0841, flashed complete on 2026-09-26. Plan B, the Piper voice, and plan C, the install path and the first release, follow. The names are decided: the repository is `flipper-access`, and the firmware is Sonar.
 
 ## Done so far
 
@@ -30,8 +30,8 @@ Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-gi
 ## Keeping the delta small
 
 - Intrusive hooks stay tiny and isolated: the canvas text tap in gui, the speaker mutex in the signal reader. Everything else is a service under `applications/services/screen_reader`.
-- Removals happen through build configuration and app manifests, not by deleting code, so rebases onto Momentum stay mechanical.
-- A CI build (GitHub Actions, Linux fbt) with the host tests runs on every rebase; the flash boundary check (`tools/flash_headroom.sh`) is part of it.
+- Removals happen through build configuration and app manifests, not by deleting code, so merges from Momentum stay mechanical.
+- A CI build (GitHub Actions, Linux fbt) with the host tests runs on every push, so also on the submodule bump that follows each merge from Momentum; the flash boundary check (`tools/flash_headroom.sh`) is part of it.
 - If Momentum ever wants the canvas hook behind a flag, that small change can be Robin's own contribution and shrinks the delta.
 
 ## Memory plan, in order
