@@ -206,7 +206,8 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 5. The Sub-GHz manifest the same way. The script also lists a file that Momentum added without
    touching its manifest. Taking upstream's file whole loses the fork's comment above the source
    list, which explains why the files are listed one by one. Restore it from
-   `git show HEAD~1:applications/main/subghz/application.fam` after running the script.
+   `git -C Momentum-Firmware show HEAD:applications/main/subghz/application.fam` after running
+   the script.
 
    ```bash
    git -C Momentum-Firmware checkout --theirs applications/main/subghz/application.fam
