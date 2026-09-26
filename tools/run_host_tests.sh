@@ -88,3 +88,10 @@ if ! python3 "$ROOT/tests/fbt/test_subghz_sources.py" > "$OUT/subghz_sources.txt
   exit 1
 fi
 echo "$(tail -n 1 "$OUT/subghz_sources.txt")"
+
+if ! python3 "$ROOT/tests/fbt/test_card_prune.py" > "$OUT/card_prune.txt"; then
+  cat "$OUT/card_prune.txt"
+  echo "card prune checks failed"
+  exit 1
+fi
+echo "$(tail -n 1 "$OUT/card_prune.txt")"
