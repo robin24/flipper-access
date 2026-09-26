@@ -96,16 +96,16 @@ static uint32_t ref_hash(const char* word) {
     return h;
 }
 
-static void expect_path(const char* word) {
+static void expect_path(const char* set, const char* word) {
     char out[SPEECH_VOICE_PATH_MAX];
-    char want[SPEECH_VOICE_PATH_MAX + 16];
-    snprintf(want, sizeof(want), "/ext/sr/voice/%02x/%s.raw",
+    char want[SPEECH_VOICE_PATH_MAX + 32];
+    snprintf(want, sizeof(want), "/ext/sr/voices/%s/%02x/%s.raw", set,
              (unsigned)(ref_hash(word) % SPEECH_VOICE_BUCKETS), word);
-    size_t n = speech_voice_path(word, out, sizeof(out));
+    size_t n = speech_voice_path(set, word, out, sizeof(out));
     checks++;
     if(n != strlen(want) || strcmp(out, want) != 0) {
         failures++;
-        printf("FAIL path(\"%s\") got %zu \"%s\", want \"%s\"\n", word, n, n ? out : "", want);
+        printf("FAIL path(\"%s\", \"%s\") got %zu \"%s\", want \"%s\"\n", set, word, n, n ? out : "", want);
     }
 }
 
@@ -113,35 +113,35 @@ static void test_paths(void) {
     char out[SPEECH_VOICE_PATH_MAX];
     // Pinned: the generator on the computer must put these words in the same folders
     CHECK(speech_voice_hash("settings") == 0x68067b08u);
-    CHECK(speech_voice_path("settings", out, sizeof(out)) == strlen("/ext/sr/voice/08/settings.raw"));
-    CHECK(strcmp(out, "/ext/sr/voice/08/settings.raw") == 0);
-    CHECK(speech_voice_path("7", out, sizeof(out)) > 0);
-    CHECK(strcmp(out, "/ext/sr/voice/36/7.raw") == 0);
-    CHECK(speech_voice_path("ay", out, sizeof(out)) > 0);
-    CHECK(strcmp(out, "/ext/sr/voice/0f/ay.raw") == 0);
+    CHECK(speech_voice_path("samantha", "settings", out, sizeof(out)) == strlen("/ext/sr/voices/samantha/08/settings.raw"));
+    CHECK(strcmp(out, "/ext/sr/voices/samantha/08/settings.raw") == 0);
+    CHECK(speech_voice_path("heart", "7", out, sizeof(out)) > 0);
+    CHECK(strcmp(out, "/ext/sr/voices/heart/36/7.raw") == 0);
+    CHECK(speech_voice_path("heart", "ay", out, sizeof(out)) > 0);
+    CHECK(strcmp(out, "/ext/sr/voices/heart/0f/ay.raw") == 0);
     SpeechVoiceWord w;
     size_t pos = 0;
     CHECK(speech_voice_next_word("don't", &pos, &w) == true);
     CHECK(strcmp(w.word, "dont") == 0);
-    CHECK(speech_voice_path(w.word, out, sizeof(out)) > 0);
-    CHECK(strcmp(out, "/ext/sr/voice/0e/dont.raw") == 0);
+    CHECK(speech_voice_path("samantha", w.word, out, sizeof(out)) > 0);
+    CHECK(strcmp(out, "/ext/sr/voices/samantha/0e/dont.raw") == 0);
     CHECK(speech_voice_hash("") == 2166136261u);
-    CHECK(speech_voice_path("", out, sizeof(out)) == 0);
-    CHECK(speech_voice_path("settings", out, 20) == 0);
+    CHECK(speech_voice_path("samantha", "", out, sizeof(out)) == 0);
+    CHECK(speech_voice_path("samantha", "settings", out, 30) == 0);
 
     // Against the reference: the module's hash and the two hex digit folder for many words
     const char* words[] = {"settings", "sub", "gigahertz", "home", "screen", "'odd", "b", "0",
                            "zebrafish", "moonbeam", "systems", "types", "cycles", "its"};
     for(size_t i = 0; i < sizeof(words) / sizeof(words[0]); i++) {
         CHECK(speech_voice_hash(words[i]) == ref_hash(words[i]));
-        expect_path(words[i]);
+        expect_path("samantha", words[i]);
     }
     char word[16];
     bool used[SPEECH_VOICE_BUCKETS] = {false};
     for(int i = 0; i < 2000; i++) {
         snprintf(word, sizeof(word), "w%d", i);
         CHECK(speech_voice_hash(word) == ref_hash(word));
-        expect_path(word);
+        expect_path("heart", word);
         used[ref_hash(word) % SPEECH_VOICE_BUCKETS] = true;
     }
     int buckets = 0;
@@ -152,9 +152,36 @@ static void test_paths(void) {
     // The longest word fits the buffer
     const char* longest = "abcdefghijklmnopqrstuvwxyzabcde";
     CHECK(strlen(longest) == SPEECH_VOICE_WORD_MAX - 1);
-    CHECK(speech_voice_path(longest, out, sizeof(out)) == strlen(out));
+    const char* longest_set = "abcdefghijklmnopqrstuvwxyz01234";
+    CHECK(strlen(longest_set) == SPEECH_VOICE_SET_MAX - 1);
+    CHECK(speech_voice_path(longest_set, longest, out, sizeof(out)) == strlen(out));
     CHECK(strlen(out) < SPEECH_VOICE_PATH_MAX);
-    expect_path(longest);
+    expect_path(longest_set, longest);
+}
+
+static void test_sets(void) {
+    CHECK(speech_voice_set_valid("samantha"));
+    CHECK(speech_voice_set_valid("heart"));
+    CHECK(speech_voice_set_valid("en-us_f3"));
+    CHECK(speech_voice_set_valid("a"));
+    CHECK(speech_voice_set_valid("abcdefghijklmnopqrstuvwxyz01234"));
+    CHECK(!speech_voice_set_valid(""));
+    CHECK(!speech_voice_set_valid("abcdefghijklmnopqrstuvwxyz012345"));
+    CHECK(!speech_voice_set_valid("Heart"));
+    CHECK(!speech_voice_set_valid("two words"));
+    CHECK(!speech_voice_set_valid("a/b"));
+    CHECK(!speech_voice_set_valid("."));
+    CHECK(!speech_voice_set_valid(".."));
+    CHECK(!speech_voice_set_valid("héart"));
+    char out[SPEECH_VOICE_PATH_MAX];
+    CHECK(speech_voice_set_file("heart", "voice.txt", out, sizeof(out)) == strlen("/ext/sr/voices/heart/voice.txt"));
+    CHECK(strcmp(out, "/ext/sr/voices/heart/voice.txt") == 0);
+    CHECK(speech_voice_set_file("heart", "missing.txt", out, sizeof(out)) > 0);
+    CHECK(strcmp(out, "/ext/sr/voices/heart/missing.txt") == 0);
+    CHECK(speech_voice_set_file("heart", "", out, sizeof(out)) == strlen("/ext/sr/voices/heart"));
+    CHECK(strcmp(out, "/ext/sr/voices/heart") == 0);
+    CHECK(speech_voice_set_file("heart", "voice.txt", out, 10) == 0);
+    CHECK(speech_voice_set_file("", "voice.txt", out, sizeof(out)) == 0);
 }
 
 static void expect_letter(char c, const char* want) {
@@ -231,6 +258,7 @@ static void test_missing(void) {
 int main(void) {
     test_words();
     test_paths();
+    test_sets();
     test_letters();
     test_missing();
     printf("%d checks, %d failures\n", checks, failures);
