@@ -95,3 +95,10 @@ if ! python3 "$ROOT/tests/fbt/test_card_prune.py" > "$OUT/card_prune.txt"; then
   exit 1
 fi
 echo "$(tail -n 1 "$OUT/card_prune.txt")"
+
+if ! python3 "$ROOT/tests/fbt/test_strip_js_symbols.py" > "$OUT/strip_js_symbols.txt"; then
+  cat "$OUT/strip_js_symbols.txt"
+  echo "strip js symbols checks failed"
+  exit 1
+fi
+echo "$(tail -n 1 "$OUT/strip_js_symbols.txt")"
