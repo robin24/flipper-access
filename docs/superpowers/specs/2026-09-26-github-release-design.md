@@ -1,8 +1,8 @@
-# Publishing the accessible firmware: repositories, first release, upstream sync, Piper voice
+# Publishing the accessible firmware: repositories, first release, upstream sync, the voice
 
 Date: 2026-09-26. Decisions taken with Robin: two repositories (option one below); the firmware
 fork public from the start, the project repository private until the first release; GPL-3 for
-the project repository; Piper for the shipped vocabulary; merges, never rebases, for upstream;
+the project repository; Kokoro and eSpeak-NG for the shipped vocabularies (section 5); merges, never rebases, for upstream;
 one tag per release; an honest statement that the code was written by AI agents under Robin's
 direction. Earlier context: `docs/roadmap.md` (why a fork, the memory plan) and the main design
 spec `2026-09-22-flipper-screen-reader-design.md`.
@@ -16,8 +16,8 @@ sighted person. It consists of:
 
 - the firmware update package, built from the `screen-reader` branch with the release options
   (`COMPACT=1 DEBUG=0`), with its resources;
-- the voice pack: the recorded vocabulary made with a freely licensed Piper voice, with its
-  licence file;
+- the voice packs: the recorded vocabulary made with Kokoro's `af_heart` voice and a second,
+  light one made with eSpeak-NG, each with its licence file;
 - an install script that puts both on the device from a Mac, Linux or Windows computer, over
   the USB serial console, with plain-text progress;
 - documentation for blind users first: install, first boot, the chords and settings, the voice,
@@ -116,58 +116,60 @@ is pushed as it lands. Pushing to `origin` follows the standing rule (no asking)
   not "the newest". The install script (section 6) runs it at the end, and so does the flash
   routine in `docs/device-notes.md`.
 
-## 5. The Piper voice
+## 5. The voice: the engine, the choice, and voice sets
 
 The vocabulary shipped in a release must come from a voice whose licence allows
-redistribution. Apple's voices do not. Piper runs on any platform and its voices carry their
-licences in a model card, so the generator's `piper` backend (written in the clip-voice round,
-never run: Piper was not installed) is the release path.
+redistribution. Apple's voices do not, so Robin's Samantha vocabulary stays a personal set.
 
-Install: `piper-tts` 1.8.0 into the project venv (it brings `onnxruntime` and `numpy`; a
-prebuilt wheel exists for this Mac and for Linux). Models are downloaded from the Hugging Face
-repository `rhasspy/piper-voices` into `voice-models/` (ignored), each with its `MODEL_CARD`.
+The research of 2026-09-26, four rounds of samples on the Mac (`voice-samples/`, ignored by git)
+and nine trial files through the piezo, settled the engine:
 
-Candidate voices, chosen by licence from the model cards read on 2026-09-26. Public domain or
-CC0: `en_US-kristin-medium`, `en_US-norman-medium`, `en_US-john-medium`, `en_US-bryce-medium`,
-`en_US-ljspeech-high`, `en_US-joe-medium`, `en_US-mike-medium`, `en_GB-cori-high`. Under the
-Apache licence: `en_US-sam-medium`. CC-BY 4.0: `en_GB-alba-medium`. Excluded: `ryan` and both
-`hfc` voices (non-commercial share-alike), `lessac` (the Blizzard research licence), and every
-voice whose card only says "see URL" (`amy`, `alan`, `kusal`, `danny`, `jenny_dioco`).
+- Piper is out. Isolated words came out clipped or garbled with every voice; zero generator
+  noise made them repeatable but robotic; cutting each word out of a carrier sentence by the
+  model's phoneme timings still left many words wrong. The generator's Piper backend goes.
+- Pocket TTS (Kyutai) is out: weird timbre and audio artifacts through the piezo, one preset
+  broken outright.
+- Kokoro (Apache 2.0, deterministic by design, the words one by one) was the easiest to
+  understand through the piezo with its voice `af_heart`. It makes a word in 0.37 s on this
+  Mac's CPU, so a vocabulary of 10,800 words takes about 17 minutes with four processes, and
+  new words later take seconds. The release vocabulary is made with it.
+- eSpeak-NG (GPL-3, repeatable by nature, a vocabulary in minutes) came second with its
+  `en-us+f3` female variant; the male default was harsh through the piezo. It is the light
+  second set: small, fast to make, and independent of any model download.
 
-The spike, in order:
+Determinism: Kokoro and eSpeak render a word identically every time, and the generator only
+makes missing clips or, when a setting changes, all of them, so a set never mixes renditions.
+Each set's manifest records the backend, the model file's SHA-256 and the processing settings.
 
-1. Make the ten-clip check set (`--check`) with each candidate, plus a listening set of about
-   forty words that covers the hard cases: short function words ("of", "to", "on", "in"),
-   digits, the spelled letters, long words, acronyms the pronunciation layer spells, and a few
-   menu names. Send them to the card as `sr play` files, next to the same words from Samantha.
-2. Robin listens on the device and picks the voice. Then the highpass, gain and limiter are
-   tuned for that voice by ear, with the same set; today's values (highpass 500, gain 1.3,
-   soft) were tuned for Samantha and are only the starting point.
-3. Measure: clips per second on this Mac with `--jobs`, and whether `synth_piper` resamples
-   correctly. The medium and high models speak at 22,050 Hz, the clips are 16,000 Hz unsigned
-   8-bit; the resampling in the generator gets its first real test here and is fixed if wrong.
-4. Generate the full vocabulary with `--extract --extract-all`: every string of the firmware
-   and of every app that ships in the package, not just the apps on Robin's card. The count
-   will be higher than today's 10,789 clips; the spike reports it and the card's `open max`
-   time, since the folder hashing keeps lookups flat.
-5. Sync to the device, run the reader's scripted routine and a day of use.
+Voice sets, decided with Robin on 2026-09-26: the card holds one folder per set under
+`/ext/sr/voices/<set>/`, each with the 64 hashed clip folders, its `voice.txt` settings line,
+its own `missing.txt` and, for a shipped set, `LICENSE.txt`. A string setting `sr_voice_set`
+(up to 31 characters) names the chosen set; the Accessibility screen gets a "Voice" row that
+cycles through the sets found on the card when the screen opens; the console gets
+`sr voice list` and `sr voice use <set>`, and `sr voice status` names the set. When the saved
+set is missing, the reader uses the first set found, in name order, and says nothing about it
+beyond the status line. The engine's clip path takes the set name; nothing else about playback
+changes. Robin's existing `/ext/sr/voice` moves once to `/ext/sr/voices/samantha` by a
+generator command; the firmware reads only the new layout, and the install script never sees
+the old one.
 
-Known risks the spike answers: single words from a neural voice can sound clipped or oddly
-stressed (sentence-final fall on a one-word utterance), and a voice that sounds good through
-headphones may not carry through the piezo. If no candidate is acceptable by ear, the fallback
-is the best candidate with heavier processing, and the release ships anyway: the reader is
-useless without a vocabulary, and a user can regenerate with any voice.
+The generator: `--set <name>` selects the set; locally the Samantha set stays in `voice/`
+(never deleted or moved) and every other set lives in `voices/<name>/`; `--backend kokoro`
+with `--voice af_heart` runs the model in-process in `--jobs` worker processes; `--backend
+espeak` with `--voice en-us+f3` runs the command; `say` stays for personal sets. The routine
+command gains the set, and `--sync` uploads to the set's folder. The piezo tuning of the Kokoro
+set (gain and high-pass, by ear, with `sr play` of a few clips) is the first device step of
+plan B; the trial files used the Samantha settings (high-pass 500, gain 1.3, soft limiter).
 
-The voice pack: `tools/voice_pack.py` writes `voice-sonar-X.Y.Z.tar` from the built
-vocabulary: `sr/voice/<hh>/<word>.raw`, `sr/voice/voice.txt` (the settings line, first 63
-characters shown by the device), and `sr/voice/LICENSE.txt` naming the model, the dataset and
-its licence, Piper's MIT licence, and the pack's own terms: CC0 for a public-domain or CC0
-dataset, otherwise the dataset's licence (CC-BY 4.0 with attribution for `alba`). Plain tar,
-uncompressed: the device's tar library unpacks it (section 6), and 8-bit PCM compresses
-poorly anyway. `voice/` on the Mac stays the local build directory.
+The voice pack: `tools/voice_pack.py --set <name>` writes `voice-<name>-sonar-X.Y.Z.tar` with
+`sr/voices/<name>/...`, its `voice.txt` and a `LICENSE.txt` naming the engine, the model and
+its licence (Kokoro: Apache 2.0, with attribution; eSpeak-NG: GPL-3), and the pack's own terms,
+CC0 for what the fork adds. Plain tar, uncompressed (8-bit PCM compresses poorly, and the
+device's tar library can unpack it, section 6). A release ships the Kokoro set and the eSpeak
+set; the install script puts on the card the sets the user chooses, the Kokoro one by default.
 
-The generator remains a user tool: anyone can make a vocabulary in another Piper voice, or
-with `say` for personal use, and the README says how.
+The generator remains a user tool: anyone can make a set in another Kokoro voice, with eSpeak,
+or with `say` for personal use, and the README says how.
 
 ## 6. The install path
 
@@ -231,15 +233,15 @@ Ubuntu (`run_host_tests.sh` gets a bash-compatible form, and `flash_headroom.sh`
 (fbt downloads the toolchain itself); check the headroom against the 880,640-byte limit;
 upload the package as a workflow artifact. Expected time: fifteen to twenty minutes.
 
-`release.yml`, on a tag `sonar-X.Y.Z` in the project repository: the same build, plus the
-voice pack made in the same job (Piper from pip, the chosen model downloaded from Hugging
-Face, `--extract --extract-all`, then `voice_pack.py`), and a GitHub Release with three
-assets: the update package `.tgz` from fbt, `voice-sonar-X.Y.Z.tar`, and
+`release.yml`, on a tag `sonar-X.Y.Z` in the project repository: the same build, and a GitHub
+Release with these assets: the update package `.tgz` from fbt, the voice packs
+`voice-heart-sonar-X.Y.Z.tar` and `voice-espeak-sonar-X.Y.Z.tar` made on the Mac beforehand
+and uploaded by the release step (Kokoro needs the model and about 17 minutes; the continuous
+build does not make packs), and
 `install-sonar-X.Y.Z.zip` holding `install.py`, `flipper_storage.py` and `card_prune.py`,
 plus `release.json`: the version, the Momentum base commit, the voice, and every asset's name
 and SHA-256, so a later app can find and verify what to download. The release notes name the
-Momentum commit the build is based on, the changes, the known issues, and the install steps. If Piper in CI turns out slower than thirty minutes, the pack
-is made on the Mac and uploaded by hand; the plan measures.
+Momentum commit the build is based on, the changes, the known issues, and the install steps. The packs are made on the Mac; the release step uploads them.
 
 Versions: semantic versions with a name prefix, starting at `sonar-0.1.0`. The tag goes on
 both repositories: on the fork's commit, because fbt names the package after an exact-match
@@ -303,13 +305,13 @@ its own code block.
 - Using it: the chords, the Accessibility settings, the home screen and lock menu, locking,
   the infrared remotes, the file browser's menus, all taken from today's README.
 - The voice: what the pack is, its licence, the missing-words mechanism, generating a
-  vocabulary in another Piper voice or with `say` for personal use.
+  vocabulary in another Kokoro voice, with eSpeak-NG, or with `say` for personal use.
 - Known limits: today's list, plus the unexplained idle reboot with the request to report it.
 - When it crashes: the popup's address and build, `sr status`, what to put in an issue.
 - Building from source: the fork, fbt, the release options, the host tests, the headroom
   check.
 - Following Momentum: the merge policy in two sentences.
-- Licence and credits: GPL-3; Momentum and its contributors, Flipper Devices, Piper and the
+- Licence and credits: GPL-3; Momentum and its contributors, Flipper Devices, Kokoro and eSpeak-NG and the
   voice's dataset with its attribution, the Black Magic Probe project for the board firmware.
 
 Also: `docs/device-notes.md` (section 3), `docs/roadmap.md` updated, `docs/README.md`,
@@ -339,7 +341,8 @@ release.
 
 1. Repositories created and everything pushed, the submodule registered.
 2. Repository cleanup and the README split; card cleanup and `card_prune.py`.
-3. The Piper spike; Robin picks the voice by ear and tunes it; the full vocabulary; the pack
+3. The voice sets in the firmware and the generator; the Kokoro and eSpeak backends; the
+   Kokoro set tuned by ear on the piezo; both sets on Robin's card beside Samantha; the pack
    tool.
 4. The install script, the transfer measurements, the unpack command if needed.
 5. Continuous builds, then the release workflow and its rehearsal.
@@ -353,7 +356,7 @@ names were decided on 2026-09-26: the repository `flipper-access`, the firmware 
 
 Execution is three plans, because two steps wait for Robin: plan A covers steps 1 and 2, the
 continuous build workflow and the upstream tooling from section 8, all of it automatable;
-plan B is the Piper work of step 3, which pauses for the listening test; plan C is steps 4 to
+plan B is the voice work of step 3 (the voice sets, the Kokoro and eSpeak backends, the sets on Robin's card, the pack), which pauses for the piezo tuning; plan C is steps 4 to
 8, which pause for the docs review and the round-trip test.
 
 ## 12. Open decisions
