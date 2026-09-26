@@ -1,5 +1,11 @@
-#!/bin/zsh
+#!/bin/bash
 # Firmware image size against the flash the BLE stack leaves free: the updater refuses any page
 # at or above SFSA (0xD7 for ble_light 1.20.0, 880,640 bytes); fbt's .free_flash ignores this.
-BIN="${0:A:h:h}/Momentum-Firmware/build/f7-firmware-C/firmware.bin"; LIMIT=880640; SIZE=$(stat -f %z "$BIN")
-echo "firmware.bin $SIZE bytes, limit $LIMIT, spare $((LIMIT - SIZE)) bytes"; [ "$SIZE" -le "$LIMIT" ]
+#   tools/flash_headroom.sh [BIN]   (default: the submodule's build/f7-firmware-C/firmware.bin)
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+BIN="${1:-$ROOT/Momentum-Firmware/build/f7-firmware-C/firmware.bin}"
+LIMIT=880640
+if [ ! -f "$BIN" ]; then echo "no firmware image at $BIN" >&2; exit 1; fi
+SIZE=$(wc -c < "$BIN" | tr -d ' ')
+echo "firmware.bin $SIZE bytes, limit $LIMIT, spare $((LIMIT - SIZE)) bytes"
+[ "$SIZE" -le "$LIMIT" ]

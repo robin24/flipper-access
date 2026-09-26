@@ -1,0 +1,48 @@
+name: Build
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FBT_GIT_SUBMODULE_SHALLOW: "1"
+      WORKFLOW_BRANCH_OR_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Check out the project
+        uses: actions/checkout@v4
+
+      - name: Check out the firmware submodule
+        run: git submodule update --init --depth 1 Momentum-Firmware
+
+      - name: Name the build after the firmware commit
+        run: echo "DIST_SUFFIX=sonar-ci-$(git -C Momentum-Firmware rev-parse --short=8 HEAD)" >> "$GITHUB_ENV"
+
+      - name: Cache the toolchain
+        uses: actions/cache@v4
+        with:
+          path: Momentum-Firmware/toolchain
+          key: toolchain-${{ hashFiles('Momentum-Firmware/scripts/toolchain/fbtenv.sh') }}
+
+      - name: Host tests
+        run: tools/run_host_tests.sh
+
+      - name: Build the firmware and its update package
+        run: cd Momentum-Firmware && ./fbt COMPACT=1 DEBUG=0 updater_package
+
+      - name: Flash headroom
+        run: tools/flash_headroom.sh
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DIST_SUFFIX }}
+          path: Momentum-Firmware/dist/f7-C/flipper-z-f7-update-*.tgz
+          if-no-files-found: error

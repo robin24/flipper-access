@@ -1,9 +1,9 @@
-#!/bin/zsh
+#!/bin/bash
 # Build and run the host tests for the screen reader: the screen model, the speech helpers, the
 # chords, the throttle, the build's exclusion filter and the built-in Sub-GHz app's source list.
 # Uses clang from Xcode.
 set -e
-ROOT="${0:A:h:h}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 SRC="$ROOT/Momentum-Firmware/applications/services/screen_reader"
 TESTS="$ROOT/tests/host"
 OUT="${TMPDIR:-/tmp}/screen_reader_host_tests"
