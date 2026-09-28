@@ -44,8 +44,20 @@ jobs:
       - name: Host tests
         run: tools/run_host_tests.sh
 
+      # What Momentum's own lint workflow checks: the C formatting, the build scripts' Python and
+      # the images
+      - name: Lint the firmware
+        run: cd Momentum-Firmware && ./fbt lint_all
+
       - name: Build the firmware and its update package
         run: cd Momentum-Firmware && ./fbt COMPACT=1 DEBUG=0 updater_package
+
+      # fbt rewrites targets/f7/api_symbols.csv when the firmware's API has drifted from it, and
+      # the build still passes, so a drift shows here
+      - name: Check that the build changed no tracked file
+        run: |
+          git -C Momentum-Firmware diff --exit-code
+          git diff --exit-code
 
       - name: Flash headroom
         run: tools/flash_headroom.sh
