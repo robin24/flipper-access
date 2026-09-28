@@ -5,12 +5,22 @@ on:
     # Branches only: a tag push is for the release workflow.
     branches: ["**"]
   pull_request:
+  # Pushes to the fork build nothing, as its workflows stay disabled, so its branch tip is built
+  # here: every Monday, and by hand with any branch, tag or commit of the fork
+  schedule:
+    - cron: "23 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      firmware_ref:
+        description: "A branch, tag or commit of the fork to build; empty builds the recorded commit"
+        required: false
+        default: screen-reader
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,6 +36,17 @@ jobs:
 
       - name: Check out the firmware submodule
         run: git submodule update --init --depth 1 Momentum-Firmware
+
+      # A scheduled run builds the fork's screen-reader tip, a run by hand the ref it was given,
+      # in place of the commit this project records
+      - name: Check out the fork's branch tip
+        if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.firmware_ref != '')
+        env:
+          REF: ${{ github.event_name == 'schedule' && 'screen-reader' || inputs.firmware_ref }}
+        run: |
+          git -C Momentum-Firmware fetch --depth 1 --no-tags origin "$REF"
+          git -C Momentum-Firmware checkout -q --detach FETCH_HEAD
+          echo "::notice::The fork's $REF, commit $(git -C Momentum-Firmware rev-parse --short=9 HEAD)"
 
       # The host tests unpack the voice pack with the firmware's tar reader; fbt checks out the
       # firmware's other submodules itself, after the tests
@@ -75,7 +96,7 @@ jobs:
       - name: Check that the build changed no tracked file
         run: |
           git -C Momentum-Firmware diff --exit-code
-          git diff --exit-code
+          git diff --exit-code --ignore-submodules
 
       - name: Flash headroom
         run: tools/flash_headroom.sh
