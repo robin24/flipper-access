@@ -4,3 +4,5 @@ pyserial
 numpy
 scipy
 kokoro-onnx
+# The firmware's own scripts, such as scripts/selfupdate.py, log through colorlog
+colorlog

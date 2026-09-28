@@ -600,13 +600,20 @@ tools/run_host_tests.sh
 ```
 
 The tools that talk to the device, such as `tools/flipper_cli.py` and the voice generator, need
-Python 3 with pyserial, and some of the firmware's own scripts also use colorlog. The commands in
-this README run them from a virtual environment in the project folder, made once:
+Python 3.10 or newer; the voice generator says so when it starts on an older one. The `python3`
+that comes with the Mac's command line tools is 3.9, while Homebrew's and the installer from
+python.org are newer. The commands in this README run the tools from a virtual environment in the
+project folder, made once, with the packages listed in `requirements.txt`: pyserial for the
+device, numpy and scipy for the eSpeak and Kokoro voices, kokoro-onnx for Kokoro, and colorlog for
+some of the firmware's own scripts:
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install pyserial colorlog
+.venv/bin/pip install -r requirements.txt
 ```
+
+`python3 --version` shows which Python the first command uses; `python3.12 -m venv .venv`, for
+example, names one.
 
 ## Following Momentum
 

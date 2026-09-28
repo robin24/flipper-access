@@ -5,8 +5,9 @@ settings key, which leaves the model files' paths out; the re-keying of a manife
 the sets, with or without the extraction's names; the refusal of a run that names another backend
 or voice than the set was made with; the backend and voice a check speaks with; the moves of
 --migrate-sets and the refusal of a sync or a pull on a card that still has the first layout; and
-the engine check before the pool starts. Importable without pyserial, numpy or the engines (they
-are imported where they are used). Run from the project root: python3 tests/fbt/test_voice_build.py"""
+the engine check before the pool starts; and the refusal of a Python older than 3.10, first thing.
+Importable without pyserial, numpy or the engines (they are imported where they are used). Run
+from the project root: python3 tests/fbt/test_voice_build.py"""
 import hashlib
 import importlib.util
 import json
@@ -29,6 +30,21 @@ def check(cond, what):
         failures += 1
         print("FAIL", what)
 
+
+too_old = vb.python_too_old((3, 9, 6))
+check(too_old is not None and "3.10 or newer" in too_old and "Python 3.9" in too_old and "\n" not in too_old,
+      f"Python 3.9 is refused in one sentence: {too_old}")
+check(vb.python_too_old((3, 10, 0)) is None and vb.python_too_old((3, 13, 1)) is None, "3.10 and newer are taken")
+saved_min, saved_argv = vb.PYTHON_MIN, sys.argv
+vb.PYTHON_MIN, sys.argv = (99, 0), ["voice_build.py", "--dry"]
+try:
+    vb.main()
+    refused = None
+except SystemExit as e:
+    refused = str(e.code)
+finally:
+    vb.PYTHON_MIN, sys.argv = saved_min, saved_argv
+check(refused is not None and "99.0 or newer" in refused, f"main() checks the version before anything else: {refused}")
 
 for name in ["samantha", "heart", "espeak", "en-us_f3", "a" * 31]:
     check(vb.set_valid(name), f"valid set name: {name}")

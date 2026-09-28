@@ -65,7 +65,8 @@ The routine, per set, with the device connected:
 The Python packages are in requirements.txt: pyserial for the firmware's
 scripts/flipper/storage.py, which --sync, --pull-missing, --card-apps and --migrate-sets import,
 numpy and scipy for the espeak and kokoro backends, kokoro-onnx for kokoro. Run the generator
-with the project virtualenv's Python (.venv/bin/python), not the system python3.
+with the project virtualenv's Python (.venv/bin/python), not the system python3. It needs Python
+3.10 or newer, since storage.py does, and says so when it starts on an older one.
 
 --extract-all folds in every app under applications/external (hundreds of them); --card-apps
 folds in only the ones actually installed on the card, which is the routine choice, and needs
@@ -119,6 +120,22 @@ LEGACY_MISSING = "/ext/sr/missing.txt"
 
 def log(msg):
     print(msg, flush=True)
+
+
+# The firmware's scripts/flipper/storage.py, which the steps on the device import, needs Python
+# 3.10 (an annotation str | bytes, evaluated when the module loads); the continuous build runs
+# the tools' tests on 3.10
+PYTHON_MIN = (3, 10)
+
+
+def python_too_old(version=None):
+    """One sentence for a Python older than PYTHON_MIN, None for one new enough."""
+    version = tuple((version or sys.version_info)[:2])
+    if version >= PYTHON_MIN:
+        return None
+    return (f"the voice generator needs Python {PYTHON_MIN[0]}.{PYTHON_MIN[1]} or newer, and this is "
+            f"Python {version[0]}.{version[1]}: make the project's .venv with a newer python3, as the "
+            "README's Building from source describes")
 
 
 def set_valid(name):
@@ -895,6 +912,9 @@ def save_manifest(manifest, manifest_path):
 
 
 def main():
+    too_old = python_too_old()
+    if too_old:
+        sys.exit(too_old)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--set", default="samantha", help="the voice set to work on (default samantha, the voice/ directory)")
     ap.add_argument("--backend", choices=sorted(BACKENDS), help="the speech engine (default say; --check takes the set's own)")
