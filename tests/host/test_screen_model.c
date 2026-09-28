@@ -644,6 +644,35 @@ static void test_cuts_end_at_a_word(void) {
     CHECK_STR(s.rows[0].text + len - 6, "indias");
 }
 
+// G7 of the review of 2026-09-28: a dialog with four lines of text lost its buttons, as the
+// announcement is cut at 159 characters and the buttons came last ("... buttons: l"). The text
+// is cut after a whole word instead and the buttons stay
+static void test_long_dialog_keeps_its_buttons(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 64, 10, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Delete the file?");
+    const char* lines[4] = {
+        "Every signal saved in it goes with it, and",
+        "the favourites that name it are lost too, as",
+        "are the notes kept beside it on the card and",
+        "any copy that the archive made of it before"};
+    for(int i = 0; i < 4; i++) {
+        add(&f, 2, 22 + 10 * i, SrLayerWindow, SrFontSecondary, false, false, 0, 0, lines[i]);
+    }
+    add_button(&f, 2, 63, 1, "Cancel");
+    add_button(&f, 90, 63, 3, "Delete");
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    size_t len = strlen(out[0].text);
+    const char* buttons = "buttons: left Cancel, right Delete";
+    CHECK(len < SR_ANN_TEXT_MAX && len > strlen(buttons));
+    CHECK_STR(out[0].text + len - strlen(buttons), buttons);
+    CHECK(strncmp(out[0].text, "Delete the file?. Every signal", 30) == 0);
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -1106,6 +1135,7 @@ int main(void) {
     test_key_rows_are_never_typed();
     test_text_input_edges();
     test_cuts_end_at_a_word();
+    test_long_dialog_keeps_its_buttons();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();
