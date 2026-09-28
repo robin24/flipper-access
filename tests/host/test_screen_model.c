@@ -456,6 +456,48 @@ static void test_keyboard_opens_with_prompt_and_value(void) {
     CHECK(s.has_keyboard && !s.on_keyboard && s.title_row < 0);
 }
 
+/** A byte input as byte_input.c draws it with the fork's hints, while a key is selected: the
+ * prompt, the value as a plain note, the bytes drawn one digit at a time in the keyboard font
+ * with the digit being edited inverted, and the two rows of keys with the selected one hinted. */
+static SrFrame byte_input_frame(
+    const char* value_note,
+    const char* digits_before,
+    const char* edited,
+    char key) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 2, 9, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Enter the key");
+    add_note(&f, SrLayerFullscreen, false, value_note);
+    add(&f, 10, 25, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, digits_before);
+    add(&f, 24, 25, SrLayerFullscreen, SrFontKeyboard, true, false, 0, 0, edited);
+    add(&f, 30, 25, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "5678");
+    add(&f, 7, 43, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "01234567");
+    add(&f, 7, 57, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "89");
+    char k[2] = {key, '\0'};
+    add(&f, 29, 57, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, k);
+    add(&f, 40, 57, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "BCDEF");
+    return f;
+}
+
+// G1 of the review of 2026-09-28: the byte input opened as "3, 3", the digit being edited and the
+// key, both inverted; with the key hinted and the value in a note it says the prompt, the value
+// and the key, and a key press says the new value only, not the digits drawn one by one
+static void test_byte_input_reads_its_value(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f = byte_input_frame("12 34 56 78, byte 2 of 4", "124", "3", 'A');
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Enter the key. 12 34 56 78, byte 2 of 4. A");
+
+    // OK on A: the first digit of byte 2 is A, the second is next
+    f = byte_input_frame("12 A4 56 78, byte 2 of 4, digit 2", "12A", "4", 'A');
+    n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnChange);
+    CHECK_STR(out[0].text, "12 A4 56 78, byte 2 of 4, digit 2");
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -914,6 +956,7 @@ int main(void) {
     test_keyboard_focus_is_the_single_key();
     test_typing_announces_the_character();
     test_keyboard_opens_with_prompt_and_value();
+    test_byte_input_reads_its_value();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();
