@@ -22,7 +22,7 @@ import time
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 from voice_build import bucket, initial  # noqa: E402
-from voice_pack import licence_text, pack  # noqa: E402
+from voice_pack import licence_text, pack, pack_name  # noqa: E402
 
 failures = 0
 checks = 0
@@ -34,6 +34,13 @@ def check(cond, what):
     if not cond:
         failures += 1
         print("FAIL", what)
+
+
+check(pack_name("heart", "0.1.0") == "voice-heart-sonar-0.1.0.tar", "a release pack's name")
+check(pack_name("samantha", "0.1.0", personal=True) == "voice-samantha-personal-0.1.0.tar",
+      "a personal pack is never named as a release asset (R10)")
+ignored = open(os.path.join(ROOT, ".gitignore")).read().split("\n")
+check("voice-*.tar" in ignored, "and packs in the project root stay out of git")
 
 
 def make_set(tmp, name, backend="kokoro", voice="af_heart", words=None):

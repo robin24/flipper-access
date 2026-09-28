@@ -16,7 +16,8 @@ byte for byte the same.
 It is built into a temporary file beside out_path and only moved into place once it holds every
 clip, so a pack that a missing clip stops partway through never leaves a broken tar at out_path.
 A set made with the macOS voices is refused, since Apple licenses them for use on the Mac;
---personal writes it anyway, for a backup of one's own device. The licence text names the
+--personal writes it anyway, for a backup of one's own device, and names it
+voice-<set>-personal-<version>.tar, so it is never taken for a release asset. The licence text names the
 engine, the voice and the terms: Kokoro (Apache 2.0, with attribution to the model), eSpeak-NG
 (GPL-3), and CC0 for what the fork adds.
 """
@@ -80,6 +81,12 @@ def folder(name, mtime):
     return fixed(info, mtime)
 
 
+def pack_name(set_name, version, personal=False):
+    """The tar's file name: the release's voice-<set>-sonar-<version>.tar, or for a personal pack
+    voice-<set>-personal-<version>.tar."""
+    return f"voice-{set_name}-{'personal' if personal else 'sonar'}-{version}.tar"
+
+
 def pack(set_dir, set_name, version, out_path, personal=False):
     manifest_path = os.path.join(set_dir, "manifest.json")
     voice_txt = os.path.join(set_dir, "voice.txt")
@@ -141,7 +148,7 @@ def main():
     a = ap.parse_args()
     if not set_valid(a.set):
         sys.exit(f"not a set name: {a.set!r}")
-    out_path = os.path.join(a.out, f"voice-{a.set}-sonar-{a.version}.tar")
+    out_path = os.path.join(a.out, pack_name(a.set, a.version, a.personal))
     count = pack(set_local_dir(a.set), a.set, a.version, out_path, a.personal)
     print(f"{out_path}: {count} clips, {os.path.getsize(out_path)} bytes")
 
