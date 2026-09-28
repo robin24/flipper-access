@@ -32,6 +32,12 @@ jobs:
       - name: Check out the firmware's tar reader
         run: git -C Momentum-Firmware submodule update --init --depth 1 lib/microtar
 
+      # The golden checks compare the fork's API table and Sub-GHz manifest with Momentum's at the
+      # commit the fork builds on, pinned in tools/momentum-base.txt, which the shallow checkout
+      # lacks
+      - name: Fetch the Momentum commit the fork builds on
+        run: git -C Momentum-Firmware fetch --depth 1 --no-tags origin "$(cat tools/momentum-base.txt)"
+
       - name: Name the build after the firmware commit
         run: echo "DIST_SUFFIX=sonar-ci-$(git -C Momentum-Firmware rev-parse --short=8 HEAD)" >> "$GITHUB_ENV"
 

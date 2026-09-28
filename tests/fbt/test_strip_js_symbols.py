@@ -3,8 +3,9 @@
 the fork's exported lines are present at their sorted place, a row of another kind that shares
 one of their names does not stand in for them, the version is upstream's with the minor raised by
 FORK_MINOR_STEP (2, one per API round the fork has exported symbols in so far: 90.4 becomes
-90.6), and the script is idempotent. The golden check: the merge base's file (upstream's) becomes
-the fork's file exactly; it is skipped without upstream/dev (CI). Run from the project root:
+90.6), and the script is idempotent. The golden check: the file of the Momentum commit the fork
+builds on, pinned in tools/momentum-base.txt (tools/momentum_base.py), becomes the fork's file
+exactly; it is skipped when the checkout lacks that commit. Run from the project root:
 python3 tests/fbt/test_strip_js_symbols.py"""
 import os
 import subprocess
@@ -12,6 +13,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+from momentum_base import base as momentum_base  # noqa: E402
 from strip_js_symbols import OUR_LINES, strip  # noqa: E402
 
 FIRMWARE = os.path.join(ROOT, "Momentum-Firmware")
@@ -64,18 +66,18 @@ current = open(CSV, encoding="utf-8").read()
 same, changed_current = strip(current)
 check(same == current and not changed_current, "the fork's own file is left as it is")
 
-base = git("merge-base", "upstream/dev", "HEAD")
-if base.returncode != 0:
-    print("skipped the golden check: no upstream/dev in this checkout")
+base = momentum_base(FIRMWARE)
+if base is None:
+    print("skipped the golden check: the pinned base commit is not in this checkout")
 else:
-    upstream = git("show", f"{base.stdout.strip()}:targets/f7/api_symbols.csv").stdout
+    upstream = git("show", f"{base}:targets/f7/api_symbols.csv").stdout
     golden, _ = strip(upstream)
     if golden != current:
         import difflib
 
         for line in list(difflib.unified_diff(golden.splitlines(), current.splitlines(), "script", "fork", lineterm=""))[:20]:
             print(line)
-    check(golden == current, "golden: the merge base's file becomes the fork's file exactly")
+    check(golden == current, "golden: the base commit's file becomes the fork's file exactly")
 
 print(f"strip js symbols: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)

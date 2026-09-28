@@ -4,12 +4,12 @@ app's folder except the excluded basenames, top-level files first and then the s
 sorted; the subghz block's apptype becomes APP whatever upstream's file names, so the app is
 built in and not loaded from the card; only the App block with appid "subghz" changes, and a
 comment in it that mentions "sources=[" is left alone; the script is idempotent; the fork's
-manifest is what the script writes, with apptype APP; the golden check: the merge base's manifest
-(upstream's) through the script is the fork's file, comment lines aside; the excluded names are
-the "!" entries of the merge base's manifest; and --verify-upstream in a checkout without
-upstream/dev ends with one sentence and exit 1, not a traceback. The checks against the merge
-base are skipped without upstream/dev (CI). Run from the project root:
-python3 tests/fbt/test_subghz_manifest.py"""
+manifest is what the script writes, with apptype APP; the golden check: the manifest of the
+Momentum commit the fork builds on, pinned in tools/momentum-base.txt (tools/momentum_base.py),
+through the script is the fork's file, comment lines aside; the excluded names are the "!"
+entries of that manifest; and --verify-upstream in a checkout without the pinned commit ends with
+one sentence and exit 1, not a traceback. The checks against the base commit are skipped when the
+checkout lacks it. Run from the project root: python3 tests/fbt/test_subghz_manifest.py"""
 import os
 import re
 import shutil
@@ -19,6 +19,7 @@ import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
+from momentum_base import base as momentum_base  # noqa: E402
 from subghz_manifest import EXCLUDED, rewrite, sources, upstream_excludes  # noqa: E402
 
 FIRMWARE = os.path.join(ROOT, "Momentum-Firmware")
@@ -94,22 +95,23 @@ check(rewrite(current, sources(app_dir)) == current, "the fork's manifest is wha
 check("\n    apptype=FlipperAppType.APP,\n" in subghz_block(current), "the fork's subghz block has apptype APP: built in, not loaded from the card")
 
 with tempfile.TemporaryDirectory() as tmp:
-    # A copy of the script beside a firmware checkout that has no upstream/dev.
+    # A copy of the script beside a firmware checkout without the pinned commit, and no pin file.
     os.makedirs(os.path.join(tmp, "tools"))
     script = shutil.copy(os.path.join(ROOT, "tools", "subghz_manifest.py"), os.path.join(tmp, "tools"))
+    shutil.copy(os.path.join(ROOT, "tools", "momentum_base.py"), os.path.join(tmp, "tools"))
     subprocess.run(["git", "init", "-q", os.path.join(tmp, "Momentum-Firmware")], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     p = subprocess.run([sys.executable, script, "--verify-upstream", "--check", MANIFEST], capture_output=True, text=True)
     said = p.stderr.strip()
-    check(p.returncode == 1 and len(said.splitlines()) == 1 and "Traceback" not in said and "upstream/dev" in said,
-          f"--verify-upstream without upstream/dev: one sentence and exit 1, got exit {p.returncode}:\n{said}")
+    check(p.returncode == 1 and len(said.splitlines()) == 1 and "Traceback" not in said and "pinned base commit" in said,
+          f"--verify-upstream without the pinned commit: one sentence and exit 1, got exit {p.returncode}:\n{said}")
 
-base = git("merge-base", "upstream/dev", "HEAD")
-if base.returncode != 0:
-    print("skipped the golden check and the exclude list check: no upstream/dev in this checkout")
+base = momentum_base(FIRMWARE)
+if base is None:
+    print("skipped the golden check and the exclude list check: the pinned base commit is not in this checkout")
 else:
     rel = os.path.relpath(MANIFEST, FIRMWARE).replace(os.sep, "/")
-    upstream = git("show", f"{base.stdout.strip()}:{rel}").stdout
+    upstream = git("show", f"{base}:{rel}").stdout
     golden = rewrite(upstream, sources(app_dir))
     if without_comments(golden) != without_comments(current):
         import difflib
@@ -117,9 +119,9 @@ else:
         for line in list(difflib.unified_diff(without_comments(golden), without_comments(current), "script", "fork", lineterm=""))[:20]:
             print(line)
     check(without_comments(golden) == without_comments(current),
-          "golden: the merge base's manifest through the script is the fork's file, comment lines aside")
+          "golden: the base commit's manifest through the script is the fork's file, comment lines aside")
     theirs = upstream_excludes(MANIFEST)
-    check(set(theirs) == set(EXCLUDED), f"EXCLUDED equals the merge base's \"!\" entries; theirs: {sorted(set(theirs) ^ set(EXCLUDED))}")
+    check(set(theirs) == set(EXCLUDED), f"EXCLUDED equals the base commit's \"!\" entries; theirs: {sorted(set(theirs) ^ set(EXCLUDED))}")
 
 print(f"subghz manifest: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)

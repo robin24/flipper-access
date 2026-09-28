@@ -21,7 +21,8 @@ happens to share a name does not stand in for our Function. Rows keep fbt's orde
 Version, Header, Function, Variable, each sorted by name, so our lines are inserted at their
 sorted place. --check exits 1 if the file would change. PATH defaults to the submodule's
 targets/f7/api_symbols.csv. tests/fbt/test_strip_js_symbols.py checks all of this, and that the
-merge base's file becomes the fork's file exactly.
+file of the Momentum commit the fork builds on (tools/momentum-base.txt) becomes the fork's file
+exactly.
 """
 import argparse
 import os

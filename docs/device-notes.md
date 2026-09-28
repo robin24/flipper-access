@@ -86,6 +86,10 @@ These are the working notes for the one device Sonar is developed on, and the de
   rollback packages; `--dry` lists what would go.
 - `tools/flash_headroom.sh`: the image size against the flash the BLE stack leaves free; see
   Useful commands.
+- `tools/momentum-base.txt`: the Momentum commit the fork builds on, the merged release tag's.
+  The golden checks of the host tests compare the fork's API table and Sub-GHz manifest with
+  Momentum's at that commit, which the continuous build fetches alone. `tools/momentum_base.py`
+  reads it; see Merging Momentum.
 - `tools/ram_probe.py`: free heap while each core app runs; the logs are in `docs/measurements/`.
 - `tools/uart_log.py`: captures the debug console through the Wi-Fi dev board; see Crash
   diagnosis. `tools/flipper_log.py` captures the USB console's log stream instead, until the port
@@ -217,16 +221,20 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
    git -C Momentum-Firmware add applications/main/subghz/application.fam
    ```
 
-6. Resolve any other conflict, and commit the merge. Then compare the script's exclude list with
-   Momentum's new manifest. On a difference, update `EXCLUDED` in the script, run it again and
-   commit the result.
+6. Resolve any other conflict, and commit the merge. Then pin the merged tag's commit as the
+   fork's base in `tools/momentum-base.txt`: the golden checks of the host tests, the next
+   command and the continuous build compare with Momentum's files at that commit. Then compare
+   the script's exclude list with Momentum's new manifest. On a difference, update `EXCLUDED` in
+   the script, run it again and commit the result.
 
    ```bash
    git -C Momentum-Firmware commit -m "Merge Momentum mntm-013"
+   git -C Momentum-Firmware rev-parse "mntm-013^{commit}" > tools/momentum-base.txt
    tools/subghz_manifest.py --verify-upstream
    ```
 
-7. Run the host tests:
+7. Run the host tests. They fail while the pin is older than the merge base with upstream/dev or
+   is one of the fork's own commits.
 
    ```bash
    tools/run_host_tests.sh
@@ -249,8 +257,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
    .venv/bin/python tools/sr_drive.py
    ```
 
-10. Push `screen-reader` and bump the submodule in the project. Then tag the release on both
-    repositories, as section 7 of the release spec describes.
+10. Push `screen-reader` and bump the submodule in the project, in one commit with the new pin,
+    since the continuous build compares the new firmware with the pinned commit. Then tag the
+    release on both repositories, as section 7 of the release spec describes.
 
 ## The voice on this card
 
