@@ -12,13 +12,13 @@ Start on the home screen. Needs the screen reader firmware. The port is auto-det
 with FLIPPER_PORT.
 """
 import glob, os, re, sys, time, termios, tty, select
-import serial
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from flipper_cli import flipper_ports, open_port  # noqa: E402
 from flipper_cli import run as cli  # noqa: E402  (one console command, its reply without the prompt)
 
 ANSI = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
-PORT = os.environ.get("FLIPPER_PORT") or (sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0]
+PORT = os.environ.get("FLIPPER_PORT") or (flipper_ports() + sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0]
 
 KEYS = {"ok": b"\r", "up": b"\x1b[A", "down": b"\x1b[B", "right": b"\x1b[C", "left": b"\x1b[D", "back": b"\x7f", "tab": b"\t"}
 
@@ -298,7 +298,7 @@ def interactive(ser):
 def main():
     if not PORT:
         sys.exit("no Flipper port found")
-    with serial.Serial(PORT, 230400, timeout=0.1) as ser:
+    with open_port(PORT) as ser:
         if "--interactive" in sys.argv:
             return interactive(ser)
         if "--chords" in sys.argv:

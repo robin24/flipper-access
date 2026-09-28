@@ -5,9 +5,10 @@ Usage:
   tools/flipper_cli.py "info device" "loader list"
   tools/flipper_cli.py --timeout 120 "update backup /ext/backup.tar"
 
-The serial port is found automatically (/dev/cu.usbmodemflip_*). Override with --port
-or the FLIPPER_PORT environment variable. ANSI colour codes are stripped from the output
-so it reads cleanly in a terminal with a screen reader.
+The serial port is found automatically, by the Flipper's USB id on a Mac, Linux or Windows.
+Override with --port or the FLIPPER_PORT environment variable. The port is opened for this tool
+alone: when qFlipper or another tool has it, this one says so and stops. ANSI colour codes are
+stripped from the output so it reads cleanly in a terminal with a screen reader.
 """
 import argparse
 import glob
@@ -23,22 +24,52 @@ except ImportError:
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 PROMPT = b">: "
+# The Flipper's USB serial port has STMicroelectronics' virtual COM port id, which other boards
+# with ST's USB code share, so a port that names Flipper comes first
+FLIPPER_USB_ID = (0x0483, 0x5740)
+
+
+def flipper_ports(ports=None):
+    """The devices of the serial ports with the Flipper's USB id, those that name Flipper first,
+    then by device name. ports: list_ports.comports() entries, by default this computer's."""
+    if ports is None:
+        from serial.tools import list_ports
+
+        ports = list_ports.comports()
+
+    def named(p):
+        return "flipper" in " ".join(str(x or "") for x in (p.manufacturer, p.product, p.description, p.device)).lower()
+
+    found = [p for p in ports if (p.vid, p.pid) == FLIPPER_USB_ID]
+    return [p.device for p in sorted(found, key=lambda p: (not named(p), p.device))]
 
 
 def find_port(explicit=None):
+    """The port to use: explicit, else FLIPPER_PORT, else the first with the Flipper's USB id,
+    else the first /dev/cu.usbmodemflip_* (a Mac whose listing lacks the id). Exits with one
+    sentence when there is none."""
     if explicit:
         return explicit
     env = os.environ.get("FLIPPER_PORT")
     if env:
         return env
-    ports = sorted(glob.glob("/dev/cu.usbmodemflip_*"))
+    ports = flipper_ports() or sorted(glob.glob("/dev/cu.usbmodemflip_*"))
     if not ports:
-        sys.exit("No Flipper serial port found. Is the device plugged in and not in the updater?")
+        sys.exit("No Flipper serial port found. Is the device plugged in and not in the updater? Or name it with --port.")
     return ports[0]
 
 
+def open_port(port, timeout=0.1):
+    """The port, opened for this tool alone, so that qFlipper or a second tool on it is noticed at
+    once instead of a wait without a word; one sentence and exit when it cannot be opened."""
+    try:
+        return serial.Serial(port, 230400, timeout=timeout, exclusive=True)
+    except serial.SerialException as e:
+        sys.exit(f"cannot open {port}: {e}. Is qFlipper or another tool using it?")
+
+
 def open_cli(port):
-    ser = serial.Serial(port, 230400, timeout=0.1)
+    ser = open_port(port)
     ser.write(b"\r")
     time.sleep(0.4)
     ser.read(ser.in_waiting)  # discard the welcome banner

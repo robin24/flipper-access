@@ -611,14 +611,34 @@ class StalledRead:
                 raise TimeoutError(f"the device sent nothing for {self.stall:g} s")
 
 
+# The console's first prompt comes within a second of the port opening; much longer means another
+# program reads the port, or the device is not in its console
+STARTUP_STALL_S = 5
+
+
 def open_storage(port, stall=None):
-    """A console session through the firmware's storage protocol, whose reads give up after
-    READ_STALL_S seconds without a byte (or `stall`)."""
+    """A console session through the firmware's storage protocol, on the port given or found by
+    the Flipper's USB id (flipper_cli.find_port), opened for this tool alone, so qFlipper or a
+    second tool on it is named at once; the console's first prompt is awaited STARTUP_STALL_S
+    seconds, and the reads after it give up after READ_STALL_S seconds without a byte (or
+    `stall`)."""
     sys.path.insert(0, os.path.join(FW, "scripts"))
+    import serial  # noqa: E402
     from flipper.storage import FlipperStorage, FlipperStorageOperations  # noqa: E402
+    from flipper_cli import find_port  # noqa: E402
+    port = find_port(port)
     storage = FlipperStorage(port)
-    storage.read = StalledRead(storage.port, READ_STALL_S if stall is None else stall)
-    storage.start()
+    storage.port.exclusive = True
+    storage.read = StalledRead(storage.port, STARTUP_STALL_S)
+    try:
+        storage.start()
+    except serial.SerialException as e:
+        raise OSError(f"cannot open {port}: {e}. Is qFlipper or another tool using it?") from e
+    except TimeoutError as e:
+        storage.stop()
+        raise TimeoutError(f"the device on {port} did not answer within {STARTUP_STALL_S} s: is qFlipper or another "
+                           "tool reading the port, or the device in the updater?") from e
+    storage.read.stall = READ_STALL_S if stall is None else stall
     return storage, FlipperStorageOperations(storage)
 
 
@@ -1033,8 +1053,7 @@ def main():
     ap.add_argument("--mark-synced", action="store_true", help="write the set's synced.json from its manifest (every word's current hash), for a set that reached the card by some other means than --sync, such as a card reader")
     ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them, with the set's own backend and voice unless named")
     ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, migrating or syncing")
-    ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0],
-                    help="serial port, default: the first /dev/cu.usbmodemflip_* (the device's name is part of it)")
+    ap.add_argument("--port", help="serial port, default: found by the Flipper's USB id, or FLIPPER_PORT")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new clips (for trials)")
     a = ap.parse_args()

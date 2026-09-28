@@ -419,10 +419,11 @@ backends. `say`, the default, uses the Mac's voices:
 
 The Piper backend has not been run yet, so its output is untested.
 
-The tools that talk to the device look for its serial port under the name it has on a Mac. On
-any other system, give the port with `--port`, or in the `FLIPPER_PORT` environment variable for
-the console tools such as `tools/flipper_cli.py`. `tools/sr_drive.py` has no `--port` option, so
-set `FLIPPER_PORT` for it instead.
+The tools that talk to the device find its serial port by the Flipper's USB id, on a Mac, Linux
+or Windows. With two Flippers plugged in, or for another port, give it with `--port`, or in the
+`FLIPPER_PORT` environment variable; `tools/sr_drive.py` has no `--port` option, so set
+`FLIPPER_PORT` for it. Each tool opens the port for itself alone: when qFlipper or another tool
+has it, the tool says so and stops, instead of waiting without a word.
 
 `--extract` makes a clip for every word, about 2,900 words and 27 MB. The words come from:
 
