@@ -57,8 +57,11 @@ Tools and tests:
 - T3: `strip_js_symbols.py` sets the API version from upstream's own, so it is never raised twice.
 - T4: the sync prints a line per hundred clips, stops at the first connection error or refused
   write with one line, and never counts a refused clip as sent (also T10's write error).
-- T5, the part that puts nothing on the card: the sync looks up three clips before trusting
-  `synced.json`, and sends everything to a wiped or another card.
+- T5: the sync looks up three clips before trusting `synced.json`, and sends everything to a
+  wiped card. As you chose in question 2, a random code in the set's folder on the card,
+  `.sync-id`, which `synced.json` keeps too and a sync renews before its first clip, tells an older
+  copy, a second card or another computer's copy apart, which gets everything as well. A card
+  without the file keeps its clips when the three are there, and gets the file.
 - T6: `--pull-missing` keeps the words in the set's `pulled.txt` and leaves the card's list until
   a sync with nothing failed.
 - T8: the port is found by the Flipper's USB id on any system, opened for one tool alone, and the
@@ -90,23 +93,21 @@ roadmap, the docs index and the merge routine where the code changed.
 - G9's other three items: the file browser's position counts the parent folder entry and never
   says the folder's name; `elements_button_up` and `elements_button_down` have no button hint; and
   hyphenated or wrapped text splits words.
-- T5's card identifier, T7 and T9 change what is on your card: see the questions.
+- T7 and T9 change what is on your card: see the questions.
 - T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
   that wants a measurement on the device first.
 - R10's licence texts and source bundle, R11, R13 to R16, and R2, R3 and R5 to R9 belong to plan C.
 
 ## Questions for you
 
-1. T5: may the sync write a small file into each set's folder on the card, for example
-   `.sync-id`, so that a card holding an older copy of the set is recognized too?
-2. T7: when a word also occurs without an apostrophe, may the generator make the plain form, so
+1. T7: when a word also occurs without an apostrophe, may the generator make the plain form, so
    "were", "ill" and "id" are recorded as written? Those clips change on your card at the next
    sync.
-3. T9: may the generator add the app names from the apps' manifests, about 222 more words? They
+2. T9: may the generator add the app names from the apps' manifests, about 222 more words? They
    add clips to your card.
-4. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
+3. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
    fork's inherited GitHub files, and the About screen's website line.
-5. Shall I open pull requests for the two branches?
+4. Shall I open pull requests for the two branches?
 
 ## Checks on the device
 
@@ -220,6 +221,13 @@ line per hundred clips, and the card's missing list stays until the sync succeed
 
 ```bash
 .venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync
+```
+
+The card's code, T5: after that sync, run the same command again. It says "0 sent", and the
+set's folder on the card holds `.sync-id` (samantha here, or your set's name):
+
+```bash
+.venv/bin/python tools/flipper_cli.py "storage list /ext/sr/voices/samantha"
 ```
 
 With qFlipper connected to the Flipper, a tool says the port is in use and stops:

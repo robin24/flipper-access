@@ -22,9 +22,13 @@ tools/voice_names.txt is spoken as written there, which names the single letters
 word the device has no clip for. Clips land in the set's directory as <initial>/<word>.raw next
 to its manifest.json, which remembers the set's name, its settings and the settings each clip
 was made with, so a rerun makes only what is missing or changed, and its voice.txt, the settings
-line the device shows. --sync uploads new or changed clips to /ext/sr/voices/<set>/<hh>/<word>.raw
-on the card, hh being the word's FNV-1a hash modulo 64 as two hex digits, the same folder the
-firmware's speech_voice_path computes, and then the set's voice.txt. --pull-missing keeps the
+line the device shows. --sync uploads new or changed clips to
+/ext/sr/voices/<set>/<hh>/<word>.raw on the card, hh being the word's FNV-1a hash modulo 64 as
+two hex digits, the same folder the firmware's speech_voice_path computes, and then the set's
+voice.txt. The set's synced.json remembers what reached the card, so a rerun sends only what is
+new or changed; a code in the set's folder on the card, .sync-id, which synced.json keeps too,
+tells whether the card's copy is the one it describes, and when it is another, from another
+computer's sync, another card or an older copy, everything is sent. --pull-missing keeps the
 words it pulls in the set's pulled.txt, which every run adds to its words, and leaves the card's
 list alone; a sync with nothing failed, made or sent, then removes those words from the card's
 list, and the file. --migrate-sets moves the card's first layout, /ext/sr/voice and
@@ -78,7 +82,7 @@ and voice from its manifest unless the command line names them.
 --dry builds the word list and prints its counts without making clips, pulling missing.txt,
 migrating, marking synced or syncing.
 """
-import argparse, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, shutil, subprocess, sys, tempfile, time
+import argparse, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, secrets, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -118,6 +122,11 @@ UNKEYED = ("model", "voices_file")
 # The card's first layout, one vocabulary and its missing list, which --migrate-sets moves
 LEGACY_VOICE_DIR = "/ext/sr/voice"
 LEGACY_MISSING = "/ext/sr/missing.txt"
+# The card's copy of a set carries a random code in its folder, which the sync renews whenever it
+# changes the copy and keeps in the set's synced.json under the same name, which no clip can have;
+# after --mark-synced, synced.json holds ANY_CARD instead, for whichever card comes next
+SYNC_ID = ".sync-id"
+ANY_CARD = "any"
 
 
 def log(msg):
@@ -857,19 +866,59 @@ def card_lacks_synced(storage, card, synced, words):
     """True when clips that synced.json says are on the card are not: a wiped card, or another
     one, which would otherwise get nothing. The first, middle and last of those words still in
     the manifest are looked up, three round trips. A card with an older copy of the set, from
-    another sync, is not told apart."""
+    another sync, is told apart by its code (card_copy_differs), not here."""
     sent = sorted(w for w in synced if w in words)
     if not sent:
         return False
     return any(not storage.exist_file(f"{card}/{bucket(w)}/{w}.raw") for w in {sent[0], sent[len(sent) // 2], sent[-1]})
 
 
+def card_copy_differs(ours, theirs):
+    """True when the card's copy of the set is another than the one synced.json describes: its
+    code (theirs) is not the one synced.json keeps (ours), so the copy is from another computer's
+    sync, or it is another card or an older copy of this one, which another sync has overtaken.
+    A card without a code (theirs None), from before the codes or copied through a card reader, is
+    taken at its word, as the three lookups of card_lacks_synced still guard it; so is any card
+    after --mark-synced (ours ANY_CARD)."""
+    return theirs is not None and ours != ANY_CARD and theirs != ours
+
+
+def read_card_code(storage, card):
+    """The code in the set's folder on the card, or None when there is none."""
+    path = f"{card}/{SYNC_ID}"
+    if not storage.exist_file(path):
+        return None
+    with tempfile.TemporaryDirectory() as d:
+        local = os.path.join(d, "code")
+        storage.receive_file(path, local)
+        return open(local, encoding="ascii", errors="replace").read().strip() or None
+
+
+def write_card_code(storage, ops, card, code):
+    """Put the code into the set's folder on the card, making the folder when it is new. A card
+    that refuses it, a full one, stops the sync with one line, as a refused clip does."""
+    ops.mkpath(card)
+    with tempfile.TemporaryDirectory() as d:
+        local = os.path.join(d, "code")
+        with open(local, "w", encoding="ascii") as f:
+            f.write(code + "\n")
+        try:
+            send_to_card(storage, local, f"{card}/{SYNC_ID}")
+        except CardWriteError as e:
+            log(f"sync: stopped before the first clip: the card did not take the set's code, is it full? {e}")
+            raise SyncStopped(str(e)) from e
+
+
 def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
     """Send the set's voice.txt and the clip files the device actually uses (not .build, not
     manifest.json) to the set's folder on the card, /ext/sr/voices/<set>. The set's synced.json
     remembers the settings hash uploaded for each word, so a rerun only sends what's missing or
-    changed instead of asking the device to md5 every file; when a few of the clips it names are
-    not on the card, everything is sent, as --sync-all does (card_lacks_synced). A word whose
+    changed instead of asking the device to md5 every file. When the card's copy is another than
+    the one synced.json describes, by the code in the set's folder (card_copy_differs), or a few of
+    the clips it names are not on the card (card_lacks_synced), everything is sent, as --sync-all
+    does. Before the first clip of a sync that changes the card's copy, a new code goes into
+    synced.json and then onto the card, so a sync cut off leaves a card the next one continues,
+    and every other copy of the set differs from it; a card without a code gets one. A word whose
     local clip is missing or whose send fails is reported and left out of synced.json, so the
     next sync tries it again, and the other words still go. Returns the number of such words for
     main()'s exit code. With pulled, the words --pull-missing took from the card's missing.txt,
@@ -892,9 +941,20 @@ def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
         t0 = time.time()
         synced = {} if force_all else (json.load(open(synced_path)) if os.path.exists(synced_path) else {})
         words = manifest.get("words", {})
-        if card_lacks_synced(storage, card, synced, words):
+        theirs = None if force_all else read_card_code(storage, card)
+        if card_copy_differs(synced.get(SYNC_ID), theirs):
+            log("sync: the card's copy of the set is from another sync, another computer's or an older one, so everything is sent, as --sync-all does")
+            synced = {}
+        elif card_lacks_synced(storage, card, synced, words):
             log("sync: clips that synced.json lists are not on the card, a wiped card or another one, so everything is sent, as --sync-all does")
             synced = {}
+        if theirs is None or theirs != synced.get(SYNC_ID) or any(synced.get(w) != h for w, h in words.items()):
+            # Before the first clip: from here on synced.json describes this card's copy, so a
+            # sync cut off leaves a card the next one continues, and any other copy, an older one
+            # of this card's included, differs from it
+            synced[SYNC_ID] = secrets.token_hex(8)
+            save_manifest(synced, synced_path)
+            write_card_code(storage, ops, card, synced[SYNC_ID])
         made_dirs = set()
         sent = skipped = missing = failed = 0
         for i, word in enumerate(sorted(words), 1):
@@ -1046,9 +1106,10 @@ def mark_synced(manifest):
     """The synced.json for a set that reached the card by some other means than --sync, such as a
     copy through a card reader (voice_pack.py's tar, unpacked with tar -xf onto the card): every
     word's current hash, taken from the manifest, with nothing to verify it against since the
-    words were never actually sent by this tool. Without this the next --sync would see an empty
-    or stale synced.json and resend the whole set."""
-    return dict(manifest.get("words", {}))
+    words were never actually sent by this tool, and ANY_CARD for the code, so the next --sync
+    takes the card's copy at its word whatever code it holds, and gives it a new one. Without
+    this the next --sync would see an empty or stale synced.json and resend the whole set."""
+    return {**manifest.get("words", {}), SYNC_ID: ANY_CARD}
 
 
 def save_manifest(manifest, manifest_path):
@@ -1136,7 +1197,7 @@ def main():
             synced_path = os.path.join(out_dir, "synced.json")
             synced = mark_synced(manifest)
             save_manifest(synced, synced_path)
-            log(f"mark-synced: {len(synced)} words written to {synced_path}")
+            log(f"mark-synced: {len(manifest.get('words', {}))} words written to {synced_path}")
         if mark_synced_only:
             return 0
 

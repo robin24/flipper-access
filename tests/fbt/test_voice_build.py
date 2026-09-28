@@ -215,10 +215,12 @@ check(vb.legacy_refusal(lambda p: False) is None, "and so is a fresh card")
 
 # --mark-synced: a set that reached the card by some other means than --sync (a copy through a
 # card reader) still needs a synced.json, so the next --sync does not resend everything; it holds
-# exactly the manifest's own hashes, nothing verified against the card
-check(vb.mark_synced({"words": {"a": "x", "b": "y"}}) == {"a": "x", "b": "y"}, "every word's current hash, taken from the manifest")
-check(vb.mark_synced({"words": {}}) == {}, "an empty manifest gives an empty dict")
-check(vb.mark_synced({}) == {}, "a manifest with no words key gives an empty dict too")
+# exactly the manifest's own hashes, nothing verified against the card, and a code that takes any
+# card's (T5)
+check(vb.mark_synced({"words": {"a": "x", "b": "y"}}) == {"a": "x", "b": "y", vb.SYNC_ID: vb.ANY_CARD},
+      "every word's current hash, taken from the manifest, and any card's code")
+check(vb.mark_synced({"words": {}}) == {vb.SYNC_ID: vb.ANY_CARD}, "an empty manifest gives no words")
+check(vb.mark_synced({}) == {vb.SYNC_ID: vb.ANY_CARD}, "a manifest with no words key gives none either")
 
 # The voice's guard around a transfer, with a fake console. The mute is timed (sr voice off 60)
 # and renewed as the sync goes, so a tool that dies cannot leave the reader muted; the voice is
@@ -233,9 +235,12 @@ class FakeRead:
 class FakeConsole:
     """What sync, pull_missing and end_transfer use of flipper.storage.FlipperStorage."""
 
-    def __init__(self, voice="on", fail_send=None, fail_command=None, missing=None, files=None):
+    def __init__(self, voice="on", fail_send=None, fail_command=None, missing=None, files=None, code=None, fail_code=None):
         self.commands = []
         self.files = files or set()  # the files on the card, for exist_file
+        self.code = code  # the set's code on the card; its writes are kept apart from the sends
+        self.codes_written = []
+        self.fail_code = fail_code  # the exception writing the code raises
         self.looked_up = []
         self.sent = []
         self.stopped = 0
@@ -256,9 +261,15 @@ class FakeConsole:
 
     def exist_file(self, path):
         self.looked_up.append(path)
+        if path.endswith("/" + vb.SYNC_ID):
+            return self.code is not None
         return path in self.files or (self.missing is not None and path.endswith("/missing.txt"))
 
     def receive_file(self, remote, local):
+        if remote.endswith("/" + vb.SYNC_ID):
+            with open(local, "w") as f:
+                f.write(self.code + "\n")
+            return
         if isinstance(self.missing, BaseException):
             raise self.missing
         with open(local, "w") as f:
@@ -268,6 +279,12 @@ class FakeConsole:
         self.commands.append(f"remove {path}")
 
     def send_file(self, local, remote):
+        if remote.endswith("/" + vb.SYNC_ID):
+            if self.fail_code:
+                raise self.fail_code
+            self.code = open(local).read().strip()
+            self.codes_written.append(self.code)
+            return
         self.sent.append(remote)
         error = self.fail_send.get(len(self.sent))
         if error:
@@ -416,6 +433,111 @@ else:
               "words synced.json lists that the manifest no longer has are not looked up")
         check(not vb.card_lacks_synced(FakeConsole(), card, {}, words), "nothing synced, nothing to look up")
 
+        # The card's code (T5): synced.json keeps the code the last sync that changed the card
+        # wrote into the set's folder there; a card with another code, a copy from another sync,
+        # gets everything, even with the three clips there. A card without one is trusted, as
+        # before the codes, and gets one; so is any card after --mark-synced
+        for ours, theirs, differs in ((None, None, False), ("a1", None, False), (None, "a1", True), ("a1", "a1", False),
+                                      ("a1", "b2", True), (vb.ANY_CARD, "b2", False)):
+            check(vb.card_copy_differs(ours, theirs) == differs, f"synced.json's code {ours}, the card's {theirs}: differs {differs}")
+
+        def code_on_file():
+            return json.load(open(synced_path)).get(vb.SYNC_ID)
+
+        # A card without a code, its clips there: trusted, only voice.txt sent, and the new code
+        # both on the card and in synced.json
+        json.dump(words, open(synced_path, "w"))
+        c = FakeConsole(files=on_card)
+        result, opened, said = transfer([c], sync_changed)
+        check(result == 0 and c.sent == [f"{card}/voice.txt"] and len(c.codes_written) == 1
+              and c.code == code_on_file() and len(c.code) == 16,
+              f"a card without a code keeps its clips and gets the code: {c.sent}, {c.codes_written}, {code_on_file()}")
+        check(not any("everything" in line for line in said), f"and nothing says everything is sent: {said}")
+        first = c.code
+
+        # The same card again, nothing changed: only voice.txt, and the code stays
+        c = FakeConsole(files=on_card, code=first)
+        result, opened, said = transfer([c], sync_changed)
+        check(result == 0 and c.sent == [f"{card}/voice.txt"] and c.codes_written == [] and code_on_file() == first,
+              f"the same card with nothing changed keeps its code: {c.sent}, {c.codes_written}")
+
+        # A word changed: that clip is sent, under a new code, written to synced.json first
+        synced_now = json.load(open(synced_path))
+        synced_now["bravo"] = "old"
+        json.dump(synced_now, open(synced_path, "w"))
+        c = FakeConsole(files=on_card, code=first)
+        result, opened, said = transfer([c], sync_changed)
+        second = code_on_file()
+        check(result == 0 and c.sent == [f"{card}/{vb.bucket('bravo')}/bravo.raw", f"{card}/voice.txt"]
+              and c.codes_written == [second] and second != first,
+              f"a changed clip goes under a new code: {c.sent}, {c.codes_written}, {first}, {second}")
+
+        # Another card with the clips there but the first code, an older copy the last sync
+        # overtook: everything is sent, and it gets a new code
+        c = FakeConsole(files=on_card, code=first)
+        result, opened, said = transfer([c], sync_changed)
+        check(result == 0 and len(c.sent) == 4 and len(c.codes_written) == 1 and code_on_file() not in (first, second)
+              and c.code == code_on_file(),
+              f"an older copy gets everything and a new code: {c.sent}, {c.codes_written}")
+        check(any("another sync" in line and "everything" in line for line in said), f"and says why: {said}")
+        third = code_on_file()
+
+        # A code from another computer's sync: everything as well
+        c = FakeConsole(files=on_card, code="0123456789abcdef")
+        result, opened, said = transfer([c], sync_changed)
+        check(result == 0 and len(c.sent) == 4 and c.code == code_on_file() != third,
+              f"another computer's copy gets everything: {c.sent}")
+
+        # Cut off while the code goes to the card: synced.json has the new code already, so the
+        # card, still with its old one, gets everything next time instead of being trusted
+        fourth = code_on_file()
+        synced_now = json.load(open(synced_path))
+        synced_now["bravo"] = "old"
+        json.dump(synced_now, open(synced_path, "w"))
+        c1, c2 = FakeConsole(files=on_card, code=fourth, fail_code=KeyboardInterrupt()), FakeConsole()
+        result, opened, said = transfer([c1, c2], sync_changed)
+        check(isinstance(result, KeyboardInterrupt) and c1.sent == [] and code_on_file() not in (None, fourth),
+              f"the new code is in synced.json before the card has it: {result!r}, {code_on_file()}, {fourth}")
+        c = FakeConsole(files=on_card, code=fourth)
+        result, opened, said = transfer([c], sync_changed)
+        check(result == 0 and len(c.sent) == 4, f"so that card gets everything next time: {c.sent}")
+
+        # The new code comes before the first clip: a sync cut off at its first clip has renewed it,
+        # so another card that still holds the old one gets everything instead of being trusted
+        # with clips only the first card got
+        fifth = code_on_file()
+        synced_now = json.load(open(synced_path))
+        synced_now["bravo"] = "old"
+        json.dump(synced_now, open(synced_path, "w"))
+        c1, c2 = FakeConsole(files=on_card, code=fifth, fail_send={1: KeyboardInterrupt()}), FakeConsole()
+        result, opened, said = transfer([c1, c2], sync_changed)
+        check(isinstance(result, KeyboardInterrupt) and c1.code == code_on_file() != fifth,
+              f"a sync cut off at its first clip has renewed the code: {result!r}, {c1.code}, {fifth}")
+        c = FakeConsole(files=on_card, code=fifth)
+        result, opened, said = transfer([c], sync_changed)
+        check(result == 0 and len(c.sent) == 4, f"so another card with the old code gets everything: {c.sent}")
+
+        # A card that refuses the code, a full one: stopped before the first clip, in one line
+        c1, c2 = FakeConsole(files=on_card, fail_code=vb.CardWriteError(f"{card}/.sync-id: Storage error: filesystem full")), FakeConsole()
+        result, opened, said = transfer([c1, c2], lambda: vb.sync("port", out_dir, manifest, "heart", force_all=True))
+        check(isinstance(result, vb.SyncStopped) and c1.sent == [] and c2.commands == ["sr voice on\r"]
+              and sum("before the first clip" in line and "full" in line for line in said) == 1,
+              f"a refused code stops the sync with one line: {result!r}, {c1.sent}, {said}")
+
+        # After --mark-synced, whatever code the card holds, its copy is trusted and gets a new code
+        json.dump(vb.mark_synced(manifest), open(synced_path, "w"))
+        c = FakeConsole(files=on_card, code="0123456789abcdef")
+        result, opened, said = transfer([c], sync_changed)
+        check(result == 0 and c.sent == [f"{card}/voice.txt"] and c.code == code_on_file() not in (None, vb.ANY_CARD, "0123456789abcdef"),
+              f"after --mark-synced the card is trusted and gets a new code: {c.sent}, {c.codes_written}")
+
+        # --sync-all sends everything under a new code, without reading the card's
+        c = FakeConsole(files=on_card, code=code_on_file())
+        result, opened, said = transfer([c], lambda: vb.sync("port", out_dir, manifest, "heart", force_all=True))
+        check(result == 0 and len(c.sent) == 4 and len(c.codes_written) == 1 and c.code == code_on_file()
+              and not any(p.endswith(vb.SYNC_ID) for p in c.looked_up),
+              f"--sync-all sends everything under a new code: {c.sent}, {c.looked_up}")
+
         # A sync that sends every clip takes the pulled words off the card's list, and pulled.txt
         # goes; one with a clip failed leaves both for the next (T6)
         pulled_path = os.path.join(out_dir, "pulled.txt")
@@ -435,7 +557,8 @@ else:
         c1, c2 = FakeConsole(fail_send={2: KeyboardInterrupt()}), FakeConsole()
         result, opened, said = transfer([c1, c2], sync)
         kept = json.load(open(os.path.join(out_dir, "synced.json"))) if os.path.exists(os.path.join(out_dir, "synced.json")) else None
-        check(isinstance(result, KeyboardInterrupt) and kept == {"alpha": "h1"}, f"an interrupted sync keeps its record: {kept}")
+        check(isinstance(result, KeyboardInterrupt) and kept == {"alpha": "h1", vb.SYNC_ID: c1.code},
+              f"an interrupted sync keeps its record, with the code the card has, so the next one continues: {kept}, {c1.code}")
 
         # A voice that was off before the sync stays off, after a failure too: no fresh session
         c1 = FakeConsole(voice="off", fail_send={1: KeyboardInterrupt()})

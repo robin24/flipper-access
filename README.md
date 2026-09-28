@@ -494,9 +494,16 @@ hang it. This command switches the voice back on at once:
 .venv/bin/python tools/flipper_cli.py "sr voice on"
 ```
 
-The sync first looks up three of the clips it sent before. When they are not on the card, after
-a wipe or on another card, it sends everything. A card that holds an older copy of the set, from
-another computer's sync, is not told apart; for such a card `--sync-all` resends everything:
+The sync tells the card's copy of a set apart by a small file in the set's folder on the card,
+`.sync-id`, which holds a random code. The set's `synced.json` on the computer keeps the same
+code, and a sync that changes the card writes a new one to both before its first clip. When the
+card's code is another, the copy is from another computer's sync, or it is a second card or an
+older copy, and the sync sends everything. The sync also looks up three of the clips it sent
+before, and sends everything when they are not on the card, after a wipe. Syncing two cards in
+turn, or one card from two computers, therefore sends the whole set at each switch. A card
+without the file, from before it, keeps its clips when the three are there, and gets the file.
+`--mark-synced` makes the next sync keep whatever copy is on the card. To resend everything
+anyway:
 
 ```bash
 .venv/bin/python tools/voice_build.py --sync --sync-all
