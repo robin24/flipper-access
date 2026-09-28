@@ -447,7 +447,9 @@ The sync sends new or changed clips and `voice.txt` to the card:
 ```
 
 A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what changed,
-which takes seconds. The voice is switched off on the device during the transfer and switched back
+which takes seconds. It prints a line every hundred clips and a summary at the end. When the
+connection fails or the card refuses a clip, a full card for example, it stops at that clip with
+one line saying where and why, and the next sync sends what is left. The voice is switched off on the device during the transfer and switched back
 on afterwards. The mute lasts a minute at a time and the generator renews it while the transfer
 goes, so if the transfer dies, through Ctrl-C, a killed process, a dead port or power loss, the
 voice comes back by itself within a minute. The generator's reads give up after 30 seconds

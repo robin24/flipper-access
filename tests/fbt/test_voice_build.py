@@ -227,7 +227,7 @@ def transfer(consoles, run, renew_s=0):
     or raised, the stall each open asked for, the log)."""
     opened, said = [], []
     queue = list(consoles)
-    saved = vb.open_storage, vb.log, vb.GUARD_RENEW_S
+    saved = vb.open_storage, vb.log, vb.GUARD_RENEW_S, vb.send_to_card
 
     def fake_open(port, stall=None):
         opened.append(stall)
@@ -237,13 +237,14 @@ def transfer(consoles, run, renew_s=0):
         return c, FakeOps()
 
     vb.open_storage, vb.log, vb.GUARD_RENEW_S = fake_open, said.append, renew_s
+    vb.send_to_card = lambda storage, local, remote: storage.send_file(local, remote)
     try:
         try:
             outcome = run()
         except BaseException as e:  # noqa: B902 (a Ctrl-C is what these checks are about)
             outcome = e
     finally:
-        vb.open_storage, vb.log, vb.GUARD_RENEW_S = saved
+        vb.open_storage, vb.log, vb.GUARD_RENEW_S, vb.send_to_card = saved
     return outcome, opened, said
 
 
@@ -302,10 +303,31 @@ else:
         # per word, and the voice is restored through a fresh session
         c1, c2 = FakeConsole(fail_send={2: TimeoutError("the device sent nothing for 30 s")}), FakeConsole()
         result, opened, said = transfer([c1, c2], sync)
-        check(isinstance(result, TimeoutError) and len(c1.sent) == 2,
+        check(isinstance(result, vb.SyncStopped) and isinstance(result.__cause__, TimeoutError) and len(c1.sent) == 2,
               f"a failed connection stops the sync: {result!r}, {c1.sent}")
         check(sum("stopped at word 2 of 3" in line for line in said) == 1 and c2.commands == ["sr voice on\r"],
               f"one line says where, and the voice is restored: {said}, {c2.commands}")
+
+        # A port error of the system's own, not pyserial's, stops it the same way (T4)
+        c1, c2 = FakeConsole(fail_send={2: OSError(5, "Input/output error")}), FakeConsole()
+        result, opened, said = transfer([c1, c2], sync)
+        check(isinstance(result, vb.SyncStopped) and len(c1.sent) == 2 and c2.commands == ["sr voice on\r"],
+              f"an OSError stops the sync: {result!r}, {c1.sent}, {c2.commands}")
+        check(len([line for line in said if "failed" in line]) == 1, f"with one line, not one per word left: {said}")
+
+        # The card refusing a clip's data, a full card: stopped, as every clip after it would be, and
+        # the session ended, since the rest of the chunk reached the console as input (T10)
+        c1, c2 = FakeConsole(fail_send={2: vb.CardWriteError("/ext/sr/voices/heart/7c/bravo.raw: Storage error: filesystem full")}), FakeConsole()
+        result, opened, said = transfer([c1, c2], sync)
+        check(isinstance(result, vb.SyncStopped) and len(c1.sent) == 2 and c1.stopped >= 1 and c2.commands == ["sr voice on\r"],
+              f"a refused write stops the sync: {result!r}, {c1.sent}, {c2.commands}")
+        check(any("stopped at word 2 of 3" in line and "full" in line for line in said), f"and says so: {said}")
+
+        # One word that fails for itself, not the connection's: counted, and the others still go
+        c = FakeConsole(fail_send={2: ValueError("a clip the protocol refused")})
+        result, opened, said = transfer([c], sync)
+        check(result == 1 and len(c.sent) == 4 and c.commands[-1] == "sr voice on\r",
+              f"a failed word is counted and the sync goes on: {result!r}, {c.sent}")
 
         # A voice that was off before the sync stays off, after a failure too: no fresh session
         c1 = FakeConsole(voice="off", fail_send={1: KeyboardInterrupt()})
@@ -322,6 +344,86 @@ else:
     result, opened, said = transfer([c], lambda: vb.pull_missing("port", "heart"))
     check(result == {"zulu"} and c.commands[-1] == "sr voice on\r" and len(opened) == 1,
           f"a clean pull restores the voice in the same session: {result}, {c.commands}")
+
+
+# send_to_card over the storage protocol: write_chunk, "Ready", the data, the prompt; no line of its
+# own, where storage.send_file prints one per file; an error before the data raises the protocol's
+# exception, one after it CardWriteError
+if importlib.util.find_spec("serial") is not None:
+    import contextlib
+    import io
+    import tempfile
+
+    class ProtocolRead:
+        def __init__(self, answers):
+            self.answers = list(answers)
+
+        def until(self, eol):
+            return bytearray(self.answers.pop(0))
+
+    class ProtocolPort:
+        def __init__(self):
+            self.data = b""
+
+        def write(self, data):
+            self.data += data
+
+    class ProtocolConsole:
+        CLI_EOL = "\r\n"
+        CLI_PROMPT = ">: "
+        chunk_size = 4
+
+        def __init__(self, answers, exists=False):
+            self.read = ProtocolRead(answers)
+            self.port = ProtocolPort()
+            self.exists = exists
+            self.commands = []
+
+        def exist_file(self, path):
+            return self.exists
+
+        def remove(self, path):
+            self.commands.append(f"remove {path}")
+
+        def send_and_wait_eol(self, line):
+            self.commands.append(line)
+
+        def has_error(self, data):
+            return data.find(b"Storage error:") != -1
+
+        def get_error(self, data):
+            from flipper.storage import StorageErrorCode
+            return StorageErrorCode.from_value(data.decode("ascii").split(": ")[1].strip())
+
+    sys.path.insert(0, os.path.join(vb.FW, "scripts"))
+    with tempfile.TemporaryDirectory() as d:
+        clip = os.path.join(d, "clip.raw")
+        open(clip, "wb").write(b"0123456789")
+        c = ProtocolConsole([b"Ready", b"", b"Ready", b"", b"Ready", b""], exists=True)
+        printed = io.StringIO()
+        with contextlib.redirect_stdout(printed):
+            vb.send_to_card(c, clip, "/ext/x.raw")
+        check(c.port.data == b"0123456789" and c.commands[0] == "remove /ext/x.raw"
+              and c.commands[1:] == ['storage write_chunk "/ext/x.raw" 4\r'] * 2 + ['storage write_chunk "/ext/x.raw" 2\r'],
+              f"a file goes in chunks after the old one is removed: {c.commands}, {c.port.data!r}")
+        check(printed.getvalue() == "", f"and prints nothing: {printed.getvalue()!r}")
+        # Answers for all three chunks, so that a send ignoring the error would run to the end
+        c = ProtocolConsole([b"Ready", b"Storage error: filesystem full\r\n", b"Ready", b"", b"Ready", b""])
+        try:
+            vb.send_to_card(c, clip, "/ext/x.raw")
+            raised = None
+        except vb.CardWriteError as e:
+            raised = str(e)
+        check(raised is not None and "filesystem full" in raised and len(c.port.data) == 4,
+              f"an error after the data is read, not taken for success: {raised}")
+        from flipper.storage import FlipperStorageException
+        c = ProtocolConsole([b"Storage error: file/dir not exist", b""])
+        try:
+            vb.send_to_card(c, clip, "/ext/x.raw")
+            raised = None
+        except FlipperStorageException as e:
+            raised = e
+        check(raised is not None and c.port.data == b"", f"an error before the data sends none of it: {raised!r}")
 
 
 # StalledRead: the reply up to the prompt, or TimeoutError once the device has sent nothing for

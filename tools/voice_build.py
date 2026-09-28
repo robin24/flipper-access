@@ -620,6 +620,43 @@ def open_storage(port, stall=None):
     return storage, FlipperStorageOperations(storage)
 
 
+class CardWriteError(Exception):
+    """The card answered a file's data with an error, a full card for one."""
+
+
+class SyncStopped(Exception):
+    """A sync that cannot go on: its connection failed, or the card refused a file's data, which
+    every file after it would meet as well. The sync has said where, in one line."""
+
+
+def send_to_card(storage, local_path, card_path):
+    """storage.send_file without its progress line, which a screen reader would read once per
+    clip, ten thousand times in a full sync, and with the device's answer to the data read too:
+    write_chunk stops reading at a write that fails, so an error there, a full card for one,
+    raises CardWriteError instead of the file counting as sent (and the rest of the chunk has
+    reached the console as input, so the session must end). An error before the data, a file the
+    card cannot open, raises the storage protocol's own exception."""
+    from flipper.storage import FlipperStorageException  # noqa: E402  (open_storage put it on the path)
+    if storage.exist_file(card_path):
+        storage.remove(card_path)
+    with open(local_path, "rb") as f:
+        while True:
+            data = f.read(storage.chunk_size)
+            if not data:
+                return
+            storage.send_and_wait_eol(f'storage write_chunk "{card_path}" {len(data)}\r')
+            answer = storage.read.until(storage.CLI_EOL)
+            if storage.has_error(answer):
+                error = storage.get_error(answer)
+                storage.read.until(storage.CLI_PROMPT)
+                raise FlipperStorageException.from_error_code(card_path, error)
+            storage.port.write(data)
+            answer = storage.read.until(storage.CLI_PROMPT)
+            if storage.has_error(answer):
+                said = bytes(answer).decode("ascii", "replace").strip()
+                raise CardWriteError(f"{card_path}: {said}")
+
+
 def list_card_apps(storage):
     """*.fap base names on the card: the direct contents of /ext/apps, in case a stray file
     sits there, and of each of its category folders one level down. Nothing deeper is visited --
@@ -789,11 +826,14 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
                 if folder not in made_dirs:
                     ops.mkpath(f"{card}/{folder}")
                     made_dirs.add(folder)
-                storage.send_file(local_path, f"{card}/{folder}/{word}.raw")
-            except (serial.SerialException, TimeoutError) as e:
+                send_to_card(storage, local_path, f"{card}/{folder}/{word}.raw")
+            except CardWriteError as e:
+                log(f"sync: stopped at word {i} of {len(words)}, {word}: the card did not take the data, is it full? {e}")
+                raise SyncStopped(str(e)) from e
+            except (serial.SerialException, TimeoutError, OSError) as e:
                 # The connection, not the word: every word after it would fail the same way
                 log(f"sync: stopped at word {i} of {len(words)}, {word}: the connection failed: {e}")
-                raise
+                raise SyncStopped(str(e)) from e
             except Exception as e:  # one bad word must not stop the sync
                 log(f"sync: failed: {word}: {type(e).__name__}: {e}")
                 failed += 1
@@ -805,7 +845,7 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
                 save_manifest(synced, synced_path)
         # Saved before voice.txt goes, so a failure there cannot lose the record of what was sent
         save_manifest(synced, synced_path)
-        storage.send_file(os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
+        send_to_card(storage, os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
         log(f"sync: {sent} sent, {skipped} skipped, {missing} missing, {failed} failed, {time.time() - t0:.0f} s")
         return missing + failed
     except BaseException:
@@ -1080,3 +1120,9 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         log("stopped")
         sys.exit(130)
+    except SyncStopped:
+        sys.exit(1)  # the sync has said where and why, in one line
+    except (OSError, TimeoutError) as e:
+        # The device's connection, or a file: one line, not a traceback for a screen reader
+        log(f"stopped: {type(e).__name__}: {e}")
+        sys.exit(1)
