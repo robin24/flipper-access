@@ -372,6 +372,8 @@ boot:
 - words spelled letter by letter because they had no clip;
 - words logged as missing;
 - items completed muted, with the voice off or no vocabulary on the card;
+- items completed silently because the app on screen left less than 4 KB of memory free in one
+  block, which opening the clips needs for a moment;
 - the longest and the latest clip open, in ms.
 
 ```bash
