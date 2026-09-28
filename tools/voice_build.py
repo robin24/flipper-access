@@ -780,14 +780,27 @@ def pull_missing(port, set_name):
     return words
 
 
+def card_lacks_synced(storage, card, synced, words):
+    """True when clips that synced.json says are on the card are not: a wiped card, or another
+    one, which would otherwise get nothing. The first, middle and last of those words still in
+    the manifest are looked up, three round trips. A card with an older copy of the set, from
+    another sync, is not told apart."""
+    sent = sorted(w for w in synced if w in words)
+    if not sent:
+        return False
+    return any(not storage.exist_file(f"{card}/{bucket(w)}/{w}.raw") for w in {sent[0], sent[len(sent) // 2], sent[-1]})
+
+
 def sync(port, out_dir, manifest, set_name, force_all=False):
     """Send the set's voice.txt and the clip files the device actually uses (not .build, not
     manifest.json) to the set's folder on the card, /ext/sr/voices/<set>. The set's synced.json
     remembers the settings hash uploaded for each word, so a rerun only sends what's missing or
-    changed instead of asking the device to md5 every file. A word whose local clip is missing
-    or whose send fails is reported and left out of synced.json, so the next sync tries it
-    again, and the other words still go. Returns the number of such words for main()'s exit
-    code. Refused, before anything is sent, on a card that still has the first layout."""
+    changed instead of asking the device to md5 every file; when a few of the clips it names are
+    not on the card, everything is sent, as --sync-all does (card_lacks_synced). A word whose
+    local clip is missing or whose send fails is reported and left out of synced.json, so the
+    next sync tries it again, and the other words still go. Returns the number of such words for
+    main()'s exit code. Refused, before anything is sent, on a card that still has the first
+    layout."""
     card = set_card_dir(set_name)
     storage, ops = open_storage(port)
     import serial  # pyserial, which open_storage has loaded: its errors are the connection's
@@ -802,8 +815,11 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
         t0 = time.time()
         synced_path = os.path.join(out_dir, "synced.json")
         synced = {} if force_all else (json.load(open(synced_path)) if os.path.exists(synced_path) else {})
-        made_dirs = set()
         words = manifest.get("words", {})
+        if card_lacks_synced(storage, card, synced, words):
+            log("sync: clips that synced.json lists are not on the card, a wiped card or another one, so everything is sent, as --sync-all does")
+            synced = {}
+        made_dirs = set()
         sent = skipped = missing = failed = 0
         for i, word in enumerate(sorted(words), 1):
             h = words[word]
@@ -843,8 +859,10 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
             if i % 100 == 0:
                 log(f"sync: {i} of {len(words)}, {sent} sent, {skipped} skipped, {time.time() - t0:.0f} s")
                 save_manifest(synced, synced_path)
-        # Saved before voice.txt goes, so a failure there cannot lose the record of what was sent
+        # Saved before voice.txt goes, so a failure there cannot lose the record of what was sent;
+        # the set's folder made first, which a card without a single clip of the set lacks
         save_manifest(synced, synced_path)
+        ops.mkpath(card)
         send_to_card(storage, os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
         log(f"sync: {sent} sent, {skipped} skipped, {missing} missing, {failed} failed, {time.time() - t0:.0f} s")
         return missing + failed

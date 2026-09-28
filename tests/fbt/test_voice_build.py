@@ -175,8 +175,10 @@ class FakeRead:
 class FakeConsole:
     """What sync, pull_missing and end_transfer use of flipper.storage.FlipperStorage."""
 
-    def __init__(self, voice="on", fail_send=None, fail_command=None, missing=None):
+    def __init__(self, voice="on", fail_send=None, fail_command=None, missing=None, files=None):
         self.commands = []
+        self.files = files or set()  # the files on the card, for exist_file
+        self.looked_up = []
         self.sent = []
         self.stopped = 0
         self.read = FakeRead()
@@ -195,7 +197,8 @@ class FakeConsole:
         return False
 
     def exist_file(self, path):
-        return self.missing is not None and path.endswith("/missing.txt")
+        self.looked_up.append(path)
+        return path in self.files or (self.missing is not None and path.endswith("/missing.txt"))
 
     def receive_file(self, remote, local):
         if isinstance(self.missing, BaseException):
@@ -328,6 +331,30 @@ else:
         result, opened, said = transfer([c], sync)
         check(result == 1 and len(c.sent) == 4 and c.commands[-1] == "sr voice on\r",
               f"a failed word is counted and the sync goes on: {result!r}, {c.sent}")
+
+        # synced.json against the card (T5): a card that has the clips it lists gets only voice.txt,
+        # after three lookups; a wiped card, or one that lacks any of the three, gets everything, the
+        # lookups ending at the first clip missing
+        def sync_changed():
+            return vb.sync("port", out_dir, manifest, "heart")
+
+        card = vb.set_card_dir("heart")
+        on_card = {f"{card}/{vb.bucket(w)}/{w}.raw" for w in words}
+        synced_path = os.path.join(out_dir, "synced.json")
+        for files, sends, what in ((on_card, 1, "the card has them all"), (set(), 4, "a wiped card"),
+                                   (on_card - {f"{card}/{vb.bucket('bravo')}/bravo.raw"}, 4, "the middle one gone")):
+            json.dump(words, open(synced_path, "w"))
+            c = FakeConsole(files=files)
+            result, opened, said = transfer([c], sync_changed)
+            lookups = [p for p in c.looked_up if p.endswith(".raw")]
+            check(result == 0 and len(c.sent) == sends and c.sent[-1] == f"{card}/voice.txt"
+                  and 1 <= len(lookups) <= 3 and (len(lookups) == 3 or sends == 4),
+                  f"{what}: {sends} sent after at most three lookups, all three when the clips are there: "
+                  f"{result!r}, {c.sent}, {lookups}")
+            check(any("wiped" in line for line in said) == (sends == 4), f"{what}: said why only when all is sent: {said}")
+        check(not vb.card_lacks_synced(FakeConsole(), card, {"gone": "h9"}, words),
+              "words synced.json lists that the manifest no longer has are not looked up")
+        check(not vb.card_lacks_synced(FakeConsole(), card, {}, words), "nothing synced, nothing to look up")
 
         # A voice that was off before the sync stays off, after a failure too: no fresh session
         c1 = FakeConsole(voice="off", fail_send={1: KeyboardInterrupt()})

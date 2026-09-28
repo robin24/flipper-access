@@ -460,7 +460,9 @@ switches the voice back on at once:
 .venv/bin/python tools/flipper_cli.py "sr voice on"
 ```
 
-After the card was wiped or replaced, `--sync-all` resends everything:
+The sync first looks up three of the clips it sent before. When they are not on the card, after
+a wipe or on another card, it sends everything. A card that holds an older copy of the set, from
+another computer's sync, is not told apart; for such a card `--sync-all` resends everything:
 
 ```bash
 .venv/bin/python tools/voice_build.py --sync --sync-all
