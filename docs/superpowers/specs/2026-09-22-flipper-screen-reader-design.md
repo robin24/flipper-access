@@ -391,6 +391,15 @@ original text.
   change without a key press can be dropped; desktop layer popups whose only new text is a
   button label are silent; moving between keyboard rows is announced with kind "screen"
   instead of "focus" with identical text.
+- Changed after the review of 2026-09-28 (G1 to G5): a screen whose focus is in the keyboard
+  font is an on-screen keyboard. Without a title in the primary font, its top line (y 12 or
+  above) is the title; it opens with the title, the field and the other lines outside the
+  keyboard font, then the key; its key rows take no part in the typed rule, the change
+  announcements and the screen change rule, and its focus is compared ignoring case. A field
+  row missing on one side is empty text for the typed rule. The byte input hints its selected
+  key and byte, names Save and Backspace, and tells its value in a note; the number input names
+  its icon keys; the text input says its cursor in the cursor mode and hints its whole text.
+  The glyph tap skips control characters.
 
 ### Phase 2 as built
 

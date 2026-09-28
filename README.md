@@ -298,6 +298,21 @@ removes a folder with everything in it.
 One flaw is known: when a menu opens over the list, the reader reads the menu's words mixed with
 the file names showing behind it. The selection is read correctly after that.
 
+### Keyboards
+
+The on-screen keyboards for text, numbers and bytes open with their prompt, the value in the
+field and the selected key, for example "Name the signal. RAW_433. Save". Moving says the key;
+Save, Backspace, the keyboard switch and the number keyboard's sign key are said by name. A
+character typed into the field is said, a space as "space", and "deleted" when one is removed.
+
+Up from the top row of the text keyboard moves into the field. The reader then says where the
+cursor is, such as "Cursor after r, 3 of 4", and again whenever Left or Right moves it. Down goes
+back to the keys.
+
+The byte keyboard, used for NFC keys, RFID data and the Bad USB IDs, says the bytes on screen and
+the byte being edited after every key press, such as "12 A4 56 78, byte 2 of 4, digit 2": digit
+2 means the next key sets the byte's second digit.
+
 ## The voice
 
 The reader speaks with recorded clips from the SD card, one clip per word, played word by word.
