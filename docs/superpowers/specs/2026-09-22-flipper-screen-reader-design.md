@@ -928,7 +928,12 @@ app, on its release. The chord key stays swallowed across a change of mode, so t
 on or off in the middle of the chord drops the rest of it all the same. One timing differs by mode:
 with Back let go before Down's Long, Back's Short passes while the reader is off, since no chord
 has run yet, and the toggle still comes at Down's Long; with the reader on the chord began at
-Down's Press, and the Short is dropped. The reader runs the toggle on its service thread whether it
+Down's Press, and the Short is dropped. Changed after the review of 2026-09-28 (F8): Back's Long,
+held back to the release, is dropped when Back is let go while Down is held back, since Down may
+still make the chord, which drops it; before, it was delivered, opening the power-off dialog on
+the lock screen, and Down's Long turned the reader on as well. And a chord key held on past its
+Back hold (`key_orphaned`) still names its command, but no longer charges it to a new hold of Back
+begun meanwhile, whose own Short and Long stay Back's. The reader runs the toggle on its service thread whether it
 is on or off, and on every screen, the lock screen and the PIN entry included, where Back with Down
 means nothing else: after a reboot into a PIN lock with the reader off it is how speech comes back.
 (The first build ignored the toggle while the desktop was locked; the review found that this gate
