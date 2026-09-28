@@ -168,7 +168,7 @@ OK. The lock menu's Momentum tile opens the same app. The app first reads the fi
 then its list of four: Interface, Protocols, Misc and Accessibility. Press Up once, or Down three
 times, to reach Accessibility, and press OK.
 
-The Accessibility screen has four rows. Up and Down move between them. Left and Right change the
+The Accessibility screen has five rows. Up and Down move between them. Left and Right change the
 value of the row you are on.
 
 - Screen Reader, ON or OFF. OFF turns the reader off at once: nothing more is read, and the
@@ -182,6 +182,10 @@ value of the row you are on.
   ```bash
   .venv/bin/python tools/flipper_cli.py "sr on"
   ```
+- Voice, the recorded voice set the reader speaks with: Auto, the first set on the card in name
+  order, then each set on the card by name. None when the card holds no set. Auto is also what
+  the reader falls back to when the set chosen is no longer on the card. The console's
+  `sr voice use` sets the same, with a set's name, in quotes when it has a space, or auto.
 - Volume, from 0 to 100 in steps of 10. This is the same setting the Back and Left or Right
   chords change.
 - Verbosity, Terse, Normal or Verbose. Terse leaves out the button labels at the bottom of a

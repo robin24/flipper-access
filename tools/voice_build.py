@@ -122,8 +122,10 @@ def log(msg):
 
 
 def set_valid(name):
-    """A set name the card, the settings and the console accept: 1 to 31 characters of lower
-    case letters, digits, hyphen and underscore; "auto" is reserved for the first set found."""
+    """A set name the generator makes: 1 to 31 characters of lower case letters, digits, hyphen
+    and underscore; "auto" is reserved for the first set found. The engine, the console's
+    sr voice use and the settings app's Voice row take these and any other name of a folder that
+    is not hidden and has no slash."""
     return name != "auto" and re.fullmatch(r"[a-z0-9_-]{1,31}", name) is not None
 
 
