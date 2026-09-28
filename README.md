@@ -643,7 +643,8 @@ git -C Momentum-Firmware checkout screen-reader
 
 This moves the submodule to the branch's tip, which is the recorded commit only while the
 project's pointer is current. A source build of exactly the recorded commit keeps the detached
-HEAD instead.
+HEAD instead. The branch's name also ends the Firmware Info page under Settings, About, where a
+release build, made from a version tag, names this project, flipper-access.
 
 fbt, the firmware's build tool, downloads its toolchain on first use. Only the Flipper Zero
 target, f7, is built. The release options, `COMPACT=1` and `DEBUG=0`, are the defaults, so the

@@ -47,6 +47,10 @@ Firmware:
   dialog beside the toggle.
 - F9: `sr voice use` takes every set the engine lists, a quoted name too, and the Voice row
   offers Auto first.
+- R9, as you chose in question 8: on a release build, made from a version tag, the About
+  screen's Firmware Info page ends with "flipper-access" instead of Momentum's website. A build
+  from a branch still shows the branch's name there. The About app lives on the card, so the
+  flash image does not change.
 
 Tools and tests:
 
@@ -106,12 +110,12 @@ roadmap, the docs index and the merge routine where the code changed.
   hyphenated or wrapped text splits words.
 - T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
   that wants a measurement on the device first.
-- R10's licence texts and source bundle, R11, R13 to R16, and R2, R3 and R5 to R9 belong to plan C.
+- R10's licence texts and source bundle, R11, R13 to R16, and R2, R3 and R5 to R8 belong to plan C.
 
 ## Questions for you
 
-1. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
-   fork's inherited GitHub files, and the About screen's website line.
+1. The report's questions 2 to 4: the card-reader install path, a listening test at 11 kHz,
+   and the fork's inherited GitHub files.
 2. Shall I open pull requests for the two branches?
 
 ## Checks on the device
@@ -209,6 +213,10 @@ Chord corners, F8: with the reader off, on the lock screen, hold Back until its 
 Down, let go of Back, and hold Down: "Screen reader on", and no power-off dialog. The other
 corner, a chord key held into a second hold of Back, needs all of it within OK's 300 ms, which is
 too quick to try by hand; the host tests cover it.
+
+About screen, R9: under Settings, About, the Firmware Info page still ends with the branch's name
+as before, such as screen-reader, since your builds come from a branch. Only a release build
+shows "flipper-access".
 
 Voice sets, F9: the Voice row's first value is Auto, then your sets. Auto speaks with the first set
 in name order. On the console:

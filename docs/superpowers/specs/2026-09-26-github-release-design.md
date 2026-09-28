@@ -271,7 +271,9 @@ tag (`DIST_SUFFIX`) and `scripts/version.py` shows a tag as the firmware version
 device's About screen; and on the project repository, which triggers the release. The release
 job fetches the fork's tags for the submodule, checks that the submodule commit carries the
 same tag, fails otherwise, and also sets `DIST_SUFFIX` from the tag in the environment, which
-fbt honours over its own naming.
+fbt honours over its own naming. On such a build, the About screen's firmware page ends with
+"flipper-access", the project's name, where Momentum puts its website (review of 2026-09-28,
+R9); a build from a branch shows the branch's name there.
 `FIRMWARE_ORIGIN` in `fbt_options.py` changes from `Momentum` to `Sonar`, the firmware's name,
 which `info device` shows as `firmware.origin.fork`.
 
