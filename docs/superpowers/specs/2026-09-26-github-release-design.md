@@ -164,8 +164,9 @@ plan B; the trial files used the Samantha settings (high-pass 500, gain 1.3, sof
 The voice pack: `tools/voice_pack.py --set <name>` writes `voice-<name>-sonar-X.Y.Z.tar` with
 `sr/voices/<name>/...`, its `voice.txt` and a `LICENSE.txt` naming the engine, the model and
 its licence (Kokoro: Apache 2.0, with attribution; eSpeak-NG: GPL-3), and the pack's own terms,
-CC0 for what the fork adds. Plain tar, uncompressed (8-bit PCM compresses poorly, and the
-device's tar library can unpack it, section 6). A release ships the Kokoro set and the eSpeak
+CC0 for what the fork adds. Plain tar, uncompressed (8-bit PCM compresses poorly), in the USTAR
+format with an entry for every folder before the files in it, since the device's unpacker makes
+a folder only from its entry (section 6). A release ships the Kokoro set and the eSpeak
 set; the install script puts on the card the sets the user chooses, the Kokoro one by default.
 
 The generator remains a user tool: anyone can make a set in another Kokoro voice, with eSpeak,
@@ -178,7 +179,8 @@ or with `say` for personal use, and the README says how.
 (`tools/flipper_storage.py`, adapted from Momentum's `scripts/flipper/storage.py`, GPL-3 like
 the rest), so a user needs only the release assets and this script, not the firmware tree.
 Progress is plain lines, one per step, for the computer's own screen reader; errors are
-sentences; the exit code is non-zero on failure. The console protocol the script uses (each
+sentences; the exit code is non-zero on failure. The device says nothing until Sonar runs with
+the voice on the card, so the script narrates every step on the computer, to the last. The console protocol the script uses (each
 command, its reply, the chunked write, the wait for the reboot) is documented in
 `docs/install-protocol.md`, so the later desktop app can implement it without reading Python.
 Neither Python nor Node is preinstalled on Windows; the script is the interim path, and the
@@ -195,16 +197,20 @@ Steps:
    Momentum.
 2. `update backup /ext/backup-<date>.tar`: internal storage to the card, for a rollback with
    `update restore`.
-3. Put the voice on the card: file by file, or as one archive unpacked on the device, whichever
-   the time goal below settles on.
+3. Put the voice on the card: upload the pack as one file to `/ext`, unpack it with
+   `storage extract /ext/<pack>.tar /ext`, and remove the tar (the archive lever below). These
+   are commands the official firmware has, so the step works from 1.4.3, Momentum and Sonar
+   alike. When step 1 found Sonar running, `sr voice off` before the unpack and `sr voice on`
+   after it keep the reader from holding open a clip that the unpack replaces, as the sync
+   guard does.
 4. Upload the update package folder to `/ext/update/<name>/`.
 5. `update install /ext/update/<name>/update.fuf`; the device reboots into the updater.
 6. Wait for the console to come back (the updater reboots twice), read `info device` again,
    compare the hash with the package's, and say "done" or what differs.
 7. Prune older packages of ours with `card_prune.py`.
 
-Re-running is safe: on the file-by-file path, clips already on the card with the same size are
-skipped; on the archive path the unpack overwrites; the package folder is replaced.
+Re-running is safe: the unpack overwrites every clip and keeps the folders that are already
+there; the package folder is replaced.
 
 Time goal: a fresh install in under 15 minutes on a Mac, voice included. The measured baseline
 is 6.4 files per second over the console (2,828 clips in 442 s on 2026-09-24), which puts the
@@ -212,11 +218,17 @@ current 10,789 clips at about 28 minutes. Two levers, measured in the spike, shi
 
 - Larger transfer chunks: `storage.py` sends 8 KB per round trip; the spike measures 8, 32 and
   64 KB on a 5 MB file and on a folder of small files.
-- One archive instead of 11,000 files: a new console command `sr voice unpack <tar>` in the
-  screen reader's CLI plugin calls the firmware's `tar_archive_unpack_to` into
-  `/ext/sr/voice`, with the voice muted during the unpack as the sync guard does, and removes
-  the archive afterwards. The script uploads the pack as one file and runs the command. The
-  device unpacks at card speed, which is much faster than the console's per-file overhead.
+- One archive instead of 11,000 files: the console's own `storage extract <archive>
+  <destination>`, in the official firmware since June 2024 and so in 1.4.3, Momentum and
+  Sonar, calls `tar_archive_unpack_to`, the unpacker the updater uses for the resources. The
+  script uploads the pack as one file to `/ext`, runs `storage extract` into `/ext`, reads the
+  line it prints for every entry without showing them, says the result, and removes the tar.
+  The unpacker makes a folder only from a folder entry and opens every file with create-always,
+  so the pack is USTAR with an entry for every folder first (`tools/voice_pack.py`, whose test
+  unpacks it with the firmware's own tar reader, `tests/host/tar_unpack.c`). The device unpacks
+  at card speed, without the console's per-file round trips; the spike measures a full pack.
+  This replaces the earlier plan of a new `sr voice unpack` command: it would have been Sonar's
+  own, so missing from the firmware the script starts from (review of 2026-09-28, R4).
 
 Rejected: shipping the voice inside the update package's resources tarball. The updater would
 carry a manifest of 11,000 more entries and process it at every update, forever, and that path
@@ -344,7 +356,7 @@ release.
 3. The voice sets in the firmware and the generator; the Kokoro and eSpeak backends; the
    Kokoro set tuned by ear on the piezo; both sets on Robin's card beside Samantha; the pack
    tool.
-4. The install script, the transfer measurements, the unpack command if needed.
+4. The install script, the transfer measurements, the unpack through `storage extract`.
 5. Continuous builds, then the release workflow and its rehearsal.
 6. The public documentation, reviewed by Robin.
 7. The round-trip install test from the official firmware.
