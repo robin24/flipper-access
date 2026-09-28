@@ -72,6 +72,11 @@ Tools and tests:
   with the firmware's texts alone.
 - T8: the port is found by the Flipper's USB id on any system, opened for one tool alone, and the
   console's first prompt is awaited 5 seconds.
+- T9: as you chose in question 4, the extraction also reads the names and folder names the
+  menus show, from the apps' `application.fam`: the firmware's own apps always, the card's with
+  `--card-apps`, every app with `--extract-all`. With the apps the update installs and your usual
+  command, that is 10 more words: the nine of the question and "notifications", from the Settings
+  entry "LCD and Notifications". Checked against the old code: no word lost.
 - T10: `upstream_check.sh` names a missing remote; a silent clip counts as failed; `--jobs 0` is
   refused; the expander builds with clang, cc or gcc; an interrupted sync keeps `synced.json`.
 - T11: a host test holds the generator's words and card folders to the device's, over every
@@ -99,18 +104,15 @@ roadmap, the docs index and the merge routine where the code changed.
 - G9's other three items: the file browser's position counts the parent folder entry and never
   says the folder's name; `elements_button_up` and `elements_button_down` have no button hint; and
   hyphenated or wrapped text splits words.
-- T9 changes what is on your card: see the questions.
 - T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
   that wants a measurement on the device first.
 - R10's licence texts and source bundle, R11, R13 to R16, and R2, R3 and R5 to R9 belong to plan C.
 
 ## Questions for you
 
-1. T9: may the generator add the app names from the apps' manifests, about 222 more words? They
-   add clips to your card.
-2. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
+1. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
    fork's inherited GitHub files, and the About screen's website line.
-3. Shall I open pull requests for the two branches?
+2. Shall I open pull requests for the two branches?
 
 ## Checks on the device
 
@@ -232,6 +234,9 @@ chose. After it, "were" sounds as written:
 ```bash
 .venv/bin/python tools/flipper_cli.py "sr say They were here"
 ```
+
+App names, T9: after that sync, the Apps menu's Sub-GHz folder says "Chief Cooker" in words,
+and Settings says "LCD and Notifications".
 
 The card's code, T5: after that sync, run the same command again. It says "0 sent", and the
 set's folder on the card holds `.sync-id` (samantha here, or your set's name):

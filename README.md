@@ -461,10 +461,12 @@ has it, the tool says so and stops, instead of waiting without a word.
 `--extract` makes a clip for every word, about 2,900 words and 27 MB. The words come from:
 
 - the base list `tools/voice_words.txt`;
-- every string in the firmware's core apps and services;
+- every string in the firmware's core apps and services, and the names and folder names their
+  menus show, read from each app's `application.fam`;
 - the dolphin's speech bubble texts;
 - the apps on the card, with `--card-apps`, or every app under `applications/external` with
-  `--extract-all`, for a wider one-off build instead of just the ones installed.
+  `--extract-all`, for a wider one-off build instead of just the ones installed: their strings,
+  and their names and folder names as the Apps menu shows them.
 
 Everything goes through the reader's own pronunciation code. With `say` on a Mac, the 2,900 words
 took about 16 minutes with `--jobs 8`, or 22 minutes with the default of 4 jobs. The limit is
@@ -520,8 +522,8 @@ the card's list only once every clip was made and sent; until then they wait in 
 `pulled.txt` on the computer, so a run that fails or is stopped loses none of them, and the next
 run makes them again. `--extract` is there because the spoken form of a word with an apostrophe
 comes from the extraction, not from `missing.txt`, which has already lost the apostrophe.
-`--card-apps` adds the strings of the apps actually on the card, so a newly installed app's own
-words get clips too. For a few words it takes about 3 to 4 seconds.
+`--card-apps` adds the strings, names and folder names of the apps actually on the card, so a
+newly installed app's own words get clips too. For a few words it takes about 3 to 4 seconds.
 
 `--check` makes ten test clips in a temporary folder and checks their format:
 

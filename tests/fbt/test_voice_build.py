@@ -105,6 +105,55 @@ check(both == {"were": None, "ill": "i'll", "dont": "don't", "its": "it's", "id"
 check(vb.spoken_forms(own, C({("dont", None): 99}))[0] == vb.spoken_forms(own, C())[0],
       "an app never changes a word of the firmware's own")
 
+# The apps' names and categories as the menus show them (T9): each App's own name, for the kinds
+# a menu lists, and each fap_category; not a Lib's name inside an App, a plugin's or a service's,
+# nor a commented-out App; a manifest Python cannot read is left out
+import tempfile  # noqa: E402
+with tempfile.TemporaryDirectory() as d:
+    def manifest(folder, text):
+        os.makedirs(os.path.join(d, folder))
+        with open(os.path.join(d, folder, "application.fam"), "w") as f:
+            f.write(text)
+    manifest("core/space", """App(
+    appid="space",
+    name="Space Playground",
+    apptype=FlipperAppType.EXTERNAL,
+    fap_category="Games",
+    fap_private_libs=[Lib(name="driver")],
+)
+# App(appid="off", name="Commented Out", apptype=FlipperAppType.EXTERNAL)
+App(appid="parser", name="Parser Plugin", apptype=FlipperAppType.PLUGIN)
+App(appid="bg", name="Background Service", apptype=FlipperAppType.SERVICE)
+App(appid="main", name="Main Thing", apptype=FlipperAppType.MENUEXTERNAL, fap_category="Tools")
+App(appid="notes", name="Notifications", apptype=FlipperAppType.SETTINGS)
+""")
+    manifest("core/broken", 'App(appid="x", name="Never Read"')
+    manifest("apps/cooker", 'App(appid="cooker", name="Chief Cooker", apptype=FlipperAppType.EXTERNAL, fap_category="Games")\n')
+    with open(os.path.join(d, "apps", "cooker", "cooker.c"), "w") as f:
+        f.write('const char* hint = "Stir gently";\n')
+    shown = vb.manifest_names([os.path.join(d, "core")])
+    check(shown == {"Space Playground", "Games", "Main Thing", "Tools", "Notifications"},
+          f"the names a menu shows and the categories, nothing else: {sorted(shown)}")
+
+    # Folded into the extraction: the firmware's own apps always, an extra source's with its strings
+    if vb.c_compiler() is None:
+        print("skipped the extraction of app names: no C compiler")
+    else:
+        saved = vb.core_roots, vb.firmware_strings, vb.bubble_texts, vb.log
+        vb.core_roots = lambda: [os.path.join(d, "core")]
+        vb.firmware_strings = lambda: ["Hello"]
+        vb.bubble_texts = lambda: []
+        vb.log = lambda msg: None
+        os.makedirs(os.path.join(d, "work"))
+        try:
+            words, _, added = vb.extract_words(os.path.join(d, "work"), [("card-apps", [os.path.join(d, "apps", "cooker")])])
+        finally:
+            vb.core_roots, vb.firmware_strings, vb.bubble_texts, vb.log = saved
+        check({"hello", "space", "playground", "games", "notifications", "chief", "cooker", "stir"} <= words
+              and not {"driver", "parser", "background", "never"} & words,
+              f"the names come in with the strings, the others not: {sorted(words)}")
+        check(added == {"card-apps": 4}, f"an extra source's names count as its own words, chief, cooker, stir, gently: {added}")
+
 # A clip the engine makes silent is a failure, not 30 ms of silence played for the word (T10)
 import wave  # noqa: E402
 

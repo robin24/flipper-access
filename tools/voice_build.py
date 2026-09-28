@@ -15,24 +15,24 @@ works on, samantha by default.
 
 Words come from tools/voice_words.txt and, when it exists, tools/voice_words.local.txt (personal
 words such as a device name, not in git), from every string literal in the firmware's core apps
-and services and the dolphin's speech bubble texts, run through the real pronunciation layer
-(--extract), and from the set's missing.txt on the card (--pull-missing). A clip's name is the
-word in lower case without apostrophes ("don't" is dont, spoken as "don't"), spoken as the texts
-write it most often when they write it both ways (spoken_forms); a clip listed in
-tools/voice_names.txt is spoken as written there, which names the single letters that spell a
-word the device has no clip for. Clips land in the set's directory as <initial>/<word>.raw next
-to its manifest.json, which remembers the set's name, its settings and the settings each clip
-was made with, so a rerun makes only what is missing or changed, and its voice.txt, the settings
-line the device shows. --sync uploads new or changed clips to
-/ext/sr/voices/<set>/<hh>/<word>.raw on the card, hh being the word's FNV-1a hash modulo 64 as
-two hex digits, the same folder the firmware's speech_voice_path computes, and then the set's
-voice.txt. The set's synced.json remembers what reached the card, so a rerun sends only what is
-new or changed; a code in the set's folder on the card, .sync-id, which synced.json keeps too,
-tells whether the card's copy is the one it describes, and when it is another, from another
-computer's sync, another card or an older copy, everything is sent. --pull-missing keeps the
-words it pulls in the set's pulled.txt, which every run adds to its words, and leaves the card's
-list alone; a sync with nothing failed, made or sent, then removes those words from the card's
-list, and the file. --migrate-sets moves the card's first layout, /ext/sr/voice and
+and services, the names and categories their menus show and the dolphin's speech bubble texts,
+run through the real pronunciation layer (--extract), and from the set's missing.txt on the card
+(--pull-missing). A clip's name is the word in lower case without apostrophes ("don't" is dont,
+spoken as "don't"), spoken as the texts write it most often when they write it both ways
+(spoken_forms); a clip listed in tools/voice_names.txt is spoken as written there, which names
+the single letters that spell a word the device has no clip for. Clips land in the set's
+directory as <initial>/<word>.raw next to its manifest.json, which remembers the set's name, its
+settings and the settings each clip was made with, so a rerun makes only what is missing or
+changed, and its voice.txt, the settings line the device shows. --sync uploads new or changed
+clips to /ext/sr/voices/<set>/<hh>/<word>.raw on the card, hh being the word's FNV-1a hash
+modulo 64 as two hex digits, the same folder the firmware's speech_voice_path computes, and then
+the set's voice.txt. The set's synced.json remembers what reached the card, so a rerun sends
+only what is new or changed; a code in the set's folder on the card, .sync-id, which synced.json
+keeps too, tells whether the card's copy is the one it describes, and when it is another, from
+another computer's sync, another card or an older copy, everything is sent. --pull-missing keeps
+the words it pulls in the set's pulled.txt, which every run adds to its words, and leaves the
+card's list alone; a sync with nothing failed, made or sent, then removes those words from the
+card's list, and the file. --migrate-sets moves the card's first layout, /ext/sr/voice and
 /ext/sr/missing.txt, into /ext/sr/voices/samantha, and refuses when the new place is taken;
 until then --sync and --pull-missing refuse such a card, since a set folder they started there
 would stand in the migration's way. --mark-synced writes the set's synced.json from its manifest
@@ -75,15 +75,16 @@ numpy and scipy for the espeak and kokoro backends, kokoro-onnx for kokoro. Run 
 with the project virtualenv's Python (.venv/bin/python), not the system python3. It needs Python
 3.10 or newer, since storage.py does, and says so when it starts on an older one.
 
---extract-all folds in every app under applications/external (hundreds of them); --card-apps
-folds in only the ones actually installed on the card, which is the routine choice, and needs
-the device but only to list it, never to write to it. Both need --extract to have an effect.
+--extract-all folds in every app under applications/external (hundreds of them), its strings,
+name and category; --card-apps folds in only the ones actually installed on the card, which is
+the routine choice, and needs the device but only to list it, never to write to it. Both need
+--extract to have an effect.
 --check makes ten clips into a temporary directory and verifies them, with the set's own backend
 and voice from its manifest unless the command line names them.
 --dry builds the word list and prints its counts without making clips, pulling missing.txt,
 migrating, marking synced or syncing.
 """
-import argparse, collections, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, secrets, shutil, subprocess, sys, tempfile, time
+import argparse, ast, collections, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, secrets, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -99,6 +100,8 @@ DIGIT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "e
 FAM_APPID_RE = re.compile(r'appid\s*=\s*"([^"]+)"')
 FAM_FILENAME_RE = re.compile(r'fap_file_name\s*=\s*"([^"]+)"')
 APP_MANIFEST_DIRS = ("external", "main", "system", "settings", "debug")
+# The kinds of App(...) whose name a menu shows: the main menu's, the Apps menu's, Settings'
+MENU_APPTYPES = ("APP", "ARCHIVE", "EXTERNAL", "MENUEXTERNAL", "SETTINGS")
 
 HZ = 16000
 SETS_DIR = "/ext/sr/voices"
@@ -318,14 +321,44 @@ def strings_in(roots):
     return seen
 
 
-def firmware_strings():
-    """Every string literal in the firmware's core C sources, unescaped, printf fields removed."""
-    # The core apps and services only: applications/external holds hundreds of community apps
-    # whose strings would multiply the vocabulary and the upload time for nothing, unless asked
-    # for with --extract-all or --card-apps.
+def core_roots():
+    """The firmware's own sources: the core apps and services only. applications/external holds
+    hundreds of community apps whose strings would multiply the vocabulary and the upload time
+    for nothing, unless asked for with --extract-all or --card-apps."""
     roots = [os.path.join(FW, "applications", d) for d in ("main", "services", "settings", "system")]
     roots.append(os.path.join(FW, "lib", "toolbox"))
-    return sorted(strings_in(roots))
+    return roots
+
+
+def firmware_strings():
+    """Every string literal in the firmware's core C sources, unescaped, printf fields removed."""
+    return sorted(strings_in(core_roots()))
+
+
+def manifest_names(roots):
+    """What the menus show of the apps whose application.fam lies under the given directories:
+    the name of each App(...) of a kind a menu lists (MENU_APPTYPES), and each fap_category,
+    the folder the Apps menu files an app in. The manifests are read as Python, as fbt reads
+    them, but never run: an App's own name is one of its keywords, not a Lib's inside it, and a
+    commented-out App is no App. A manifest Python cannot read is left out."""
+    found = set()
+    for root in roots:
+        for path in glob.glob(os.path.join(root, "**", "application.fam"), recursive=True):
+            try:
+                tree = ast.parse(open(path, encoding="utf-8", errors="replace").read(), path)
+            except (OSError, SyntaxError, ValueError):
+                continue
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "App"):
+                    continue
+                fields = {k.arg: k.value.value for k in node.keywords
+                          if isinstance(k.value, ast.Constant) and isinstance(k.value.value, str)}
+                kind = next((k.value.attr for k in node.keywords if k.arg == "apptype" and isinstance(k.value, ast.Attribute)), None)
+                if kind in MENU_APPTYPES and fields.get("name"):
+                    found.add(fields["name"])
+                if fields.get("fap_category"):
+                    found.add(fields["fap_category"])
+    return found
 
 
 def external_app_dirs():
@@ -447,9 +480,10 @@ def spoken_forms(own, apps):
 
 
 def extract_words(workdir, extra=()):
-    """The words of the firmware's strings and the bubble texts, run through the pronunciation
-    layer. extra is a list of (label, directories) pairs -- --extract-all's app directories,
-    --card-apps's matched ones -- whose own .c and .h strings are folded into the same pipeline
+    """The words of the firmware's strings, its apps' names and categories as the menus show
+    them (manifest_names) and the bubble texts, run through the pronunciation layer. extra is a
+    list of (label, directories) pairs -- --extract-all's app directories, --card-apps's matched
+    ones -- whose own .c and .h strings, names and categories are folded into the same pipeline
     on top of the firmware's own, each in turn. The second return value maps each clip spoken
     with an apostrophe to that spelling (spoken_forms). The third maps each label to how many
     words it alone added on top of everything folded in before it, so the caller can report an
@@ -457,13 +491,15 @@ def extract_words(workdir, extra=()):
     exe = build_expander(workdir)
     strings = firmware_strings()
     bubbles = bubble_texts()
-    log(f"extract: {len(strings)} distinct strings from the firmware sources, {len(bubbles)} bubble texts")
-    lines = set(strings) | set(bubbles)
+    names = manifest_names(core_roots())
+    log(f"extract: {len(strings)} distinct strings from the firmware sources, {len(names)} app names and "
+        f"categories, {len(bubbles)} bubble texts")
+    lines = set(strings) | names | set(bubbles)
     words, own = _expand(exe, lines)
     apps = collections.Counter()
     added = {}
     for label, dirs in extra:
-        new = strings_in(dirs) - lines
+        new = (strings_in(dirs) | manifest_names(dirs)) - lines
         lines |= new
         new_words, new_spellings = _expand(exe, new)
         added[label] = len(new_words - words)
