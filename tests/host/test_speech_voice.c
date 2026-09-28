@@ -160,23 +160,23 @@ static void test_paths(void) {
 }
 
 static void test_sets(void) {
-    CHECK(speech_voice_set_valid("samantha"));
-    CHECK(speech_voice_set_valid("heart"));
-    CHECK(speech_voice_set_valid("en-us_f3"));
-    CHECK(speech_voice_set_valid("a"));
-    CHECK(speech_voice_set_valid("abcdefghijklmnopqrstuvwxyz01234"));
-    CHECK(!speech_voice_set_valid(""));
-    CHECK(!speech_voice_set_valid("abcdefghijklmnopqrstuvwxyz012345"));
-    CHECK(!speech_voice_set_valid("Heart"));
-    CHECK(!speech_voice_set_valid("two words"));
-    CHECK(!speech_voice_set_valid("a/b"));
-    CHECK(!speech_voice_set_valid("."));
-    CHECK(!speech_voice_set_valid(".."));
-    CHECK(!speech_voice_set_valid("héart"));
-    // Reserved for the first set found (sr voice use auto); only the whole name
-    CHECK(!speech_voice_set_valid("auto"));
-    CHECK(speech_voice_set_valid("autos"));
-    CHECK(speech_voice_set_valid("my-auto"));
+    // The names the engine lists, and so the ones sr voice use and the settings app take: the
+    // generator's own (lower case, digits, hyphen, underscore), and those of a folder made by hand
+    CHECK(speech_voice_set_listable("samantha"));
+    CHECK(speech_voice_set_listable("heart"));
+    CHECK(speech_voice_set_listable("en-us_f3"));
+    CHECK(speech_voice_set_listable("a"));
+    CHECK(speech_voice_set_listable("abcdefghijklmnopqrstuvwxyz01234"));
+    CHECK(speech_voice_set_listable("Heart"));
+    CHECK(speech_voice_set_listable("two words"));
+    CHECK(speech_voice_set_listable("héart"));
+    CHECK(speech_voice_set_listable("auto")); // a folder; sr voice use keeps the word for Auto
+    CHECK(!speech_voice_set_listable(""));
+    CHECK(!speech_voice_set_listable("abcdefghijklmnopqrstuvwxyz012345"));
+    CHECK(!speech_voice_set_listable("a/b"));
+    CHECK(!speech_voice_set_listable("."));
+    CHECK(!speech_voice_set_listable(".."));
+    CHECK(!speech_voice_set_listable(".hidden"));
     char out[SPEECH_VOICE_PATH_MAX];
     CHECK(speech_voice_set_file("heart", "voice.txt", out, sizeof(out)) == strlen("/ext/sr/voices/heart/voice.txt"));
     CHECK(strcmp(out, "/ext/sr/voices/heart/voice.txt") == 0);
