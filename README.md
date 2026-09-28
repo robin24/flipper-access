@@ -130,8 +130,10 @@ More about the chords:
   of Down while Back is held does nothing then: the reader holds Down back until it is held long.
 - Back and Down held works on the lock screen too, where Back with Down means nothing else. After
   a reboot into a lock with the reader off, it is the way to get speech back.
-- Chords work with the device's buttons and with `input send` on the console. Keys sent from
-  `sr watch` bypass the chords. That console command streams the reader's announcements and lets
+- Chords work with the device's buttons and with `input send` on the console, each on its own:
+  a Back sent from the console makes chords only with keys sent from the console, so a script
+  cut off between a Back press and its release cannot turn the buttons into chords. Keys sent
+  from `sr watch` bypass the chords. That console command streams the reader's announcements and lets
   arrows, Enter and Backspace drive the device. The tethered reader in this repository runs it:
 
   ```bash

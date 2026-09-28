@@ -576,7 +576,10 @@ docs/measurements/2026-09-24-phase-3.txt.
   passes and the chord state is reset. Publishers that bypass the filter: remote control
   (rpc_gui.c) and the keys of `sr watch` (sr_cli_press). Console keys (`input send`) pass it but
   have no press timer: a press followed by a release never makes a Long, and `input send back
-  long` sends Press, Long, Release.
+  long` sends Press, Long, Release. Changed after the review of 2026-09-28 (F3): the console
+  marks its events as made in software, as the remote control does, and the filter keeps their
+  chord state apart from the keys' (SrChordSources), so a console press whose release never
+  comes cannot swallow the keys.
 - sr_chords keeps no time of its own (now_ms is reserved; the input service's 300 ms threshold
   decides the Long). OK decides on its Short (repeat) or its Long (spell); a Short after a Long
   is ignored. 73 host checks, including Back held past 300 ms before the chord key.

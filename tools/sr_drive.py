@@ -44,7 +44,8 @@ SCRIPT = [
 KEYBOARD_APP = "/ext/apps/Media/text2sam.fap"
 
 # Third session: the Back chords of phase 3. They are sent with the console's input send, which
-# passes the input filter as the device's own keys do (sr watch's keys and remote control do not).
+# passes the input filter as the device's own keys do, with a chord state of its own (sr watch's
+# keys and remote control do not pass it).
 # input send ok short and ok long publish OK's Press, Short or Long and Release themselves; the
 # ok press before and ok release after them are the plan's sequence, and show that stray OK events
 # around a chord do not navigate either. Down, like OK, names its chord on its Short (the status
