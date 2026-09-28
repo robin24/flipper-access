@@ -6,19 +6,29 @@
 # tests/fbt/test_card_prune.py, test_momentum_base.py, test_strip_js_symbols.py,
 # test_subghz_manifest.py, test_upstream_check.py, test_voice_build.py and test_voice_pack.py.
 # Each Python check prints its skip lines, then its summary, so a run shows what it left out, such
-# as the golden checks without upstream/dev or the pinned base commit, or the voice generator's
-# resampler checks without numpy and scipy.
+# as the golden checks without the pinned base commit, or the voice generator's resampler checks
+# without numpy and scipy. With --no-skips, as the continuous build runs it with the packages of
+# requirements.txt, a skipped check fails the run.
+#   tools/run_host_tests.sh [--no-skips]
 set -e
+case "${1:-}" in
+  "") NO_SKIPS=0 ;;
+  --no-skips) NO_SKIPS=1 ;;
+  *) echo "usage: tools/run_host_tests.sh [--no-skips]" >&2; exit 1 ;;
+esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 SRC="$ROOT/Momentum-Firmware/applications/services/screen_reader"
 TESTS="$ROOT/tests/host"
 OUT="${TMPDIR:-/tmp}/screen_reader_host_tests"
 mkdir -p "$OUT"
+: > "$OUT/skipped.txt"
 CFLAGS=(-std=c11 -Wall -Wextra -Werror -O1)
 
 # A Python check's skip lines, then its last line, its summary, unless that was a skip line too.
+# The skip lines are also kept for --no-skips.
 summary() {
   awk '/^skipped/ { print } { last = $0; skip = /^skipped/ } END { if (!skip) print last }' "$1"
+  grep '^skipped' "$1" >> "$OUT/skipped.txt" || true
 }
 
 clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
@@ -160,3 +170,8 @@ if ! TAR_UNPACK="$TAR_UNPACK" python3 "$ROOT/tests/fbt/test_voice_pack.py" > "$O
   exit 1
 fi
 summary "$OUT/voice_pack.txt"
+
+if [ "$NO_SKIPS" = 1 ] && [ -s "$OUT/skipped.txt" ]; then
+  echo "--no-skips: $(wc -l < "$OUT/skipped.txt" | tr -d ' ') skipped, see above"
+  exit 1
+fi

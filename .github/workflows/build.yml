@@ -47,8 +47,20 @@ jobs:
           path: Momentum-Firmware/toolchain
           key: toolchain-${{ hashFiles('Momentum-Firmware/scripts/toolchain/fbtenv.sh') }}
 
+      # Python 3.10, the oldest the tools support, with the packages of requirements.txt, so that
+      # every Python check runs; --no-skips fails the tests if one does not
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install the tools' Python packages
+        run: pip install -r requirements.txt
+
       - name: Host tests
-        run: tools/run_host_tests.sh
+        run: tools/run_host_tests.sh --no-skips
 
       # What Momentum's own lint workflow checks: the C formatting, the build scripts' Python and
       # the images

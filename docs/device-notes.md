@@ -72,7 +72,9 @@ These are the working notes for the one device Sonar is developed on, and the de
   voice helpers, the chords and the change throttle. They run with clang on the Mac, and the
   Python checks in `tests/fbt/` follow. The voice pack's check also unpacks a pack with the
   firmware's own tar reader, `tests/host/tar_unpack.c` built from the firmware's `lib/microtar`,
-  following the device's rules; it is skipped until fbt has checked out that submodule.
+  following the device's rules; it is skipped until fbt has checked out that submodule. Some
+  Python checks need the packages of `requirements.txt` and are skipped without them. With
+  `--no-skips`, as the continuous build runs it on Python 3.10, a skipped check fails the run.
 - `tests/host/`: the unit tests.
 - `tests/fbt/test_exclusions.py`: a plain Python test of the build's app and category exclusions,
   `EXCLUDE_EXT_APPS` and `EXCLUDE_EXT_CATEGORIES` in `fbt_options.py`, over synthetic manifests.
