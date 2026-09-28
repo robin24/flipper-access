@@ -48,8 +48,9 @@ Removed:
 Changed:
 
 - The screen reader is on from the first boot.
-- The main menu starts in the List style, the only style whose focus the reader can name. In the
-  other styles the reader finds the focus by its inverted highlight where possible.
+- The main menu starts in the List style, which the reader reads most cleanly. The other styles
+  name the selected app and its position too, but some draw text of their own beside the apps,
+  such as a clock or the free memory, which is read with the screen.
 - FreeRTOS checks the threads' stacks for overflow, which Momentum ships switched off. An
   overflow crashes the device at once as "StackOverflow"; only the debug log names the thread.
 

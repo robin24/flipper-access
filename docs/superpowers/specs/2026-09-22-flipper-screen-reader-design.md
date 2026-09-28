@@ -378,7 +378,8 @@ original text.
   loading placeholders and are dropped.
 - Focus hints exist in the submenu, settings list, file browser, Archive browser, button menu,
   text input keyboard and the List style of the main menu. Other main menu styles are read by
-  inversion where possible and get hints in a later phase.
+  inversion where possible and get hints in a later phase. Changed after the review of
+  2026-09-28 (G8): every main menu style hints its selected item with its position.
 - Latency: frames settle for 50 ms, with a 300 ms cap when frames keep coming.
 - Console: `sr watch` replaces the announcement ring of section 6 with a queue attached by the
   watching command; Tab prints the whole screen description; a bare Escape is ignored and
