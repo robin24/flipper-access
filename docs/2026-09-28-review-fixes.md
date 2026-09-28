@@ -91,7 +91,7 @@ Continuous build, R12: Momentum's `lint_all`; a check that the build changed no 
 golden checks against the Momentum commit pinned in `tools/momentum-base.txt`, which the host tests
 check against upstream/dev; the Python packages on 3.10 with `--no-skips`; the headroom limit read
 from the update package's radio address; and a build of the fork's `screen-reader` tip every
-Monday and by hand. The weekly and manual runs start working once the branch is merged into main.
+Monday and by hand. The weekly and manual runs work from main, where the branch is merged.
 
 Documents: the README's voice sections for the voice sets, the three backends, the licences and
 credits, the Accessibility screen's five rows, the virtual environment, the 64 words the missing
@@ -110,16 +110,47 @@ roadmap, the docs index and the merge routine where the code changed.
   hyphenated or wrapped text splits words.
 - T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
   that wants a measurement on the device first.
-- R10's licence texts and source bundle, R11, R13 to R16, and R2, R3 and R5 to R8 belong to plan C.
+- R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
+  plan C.
   Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
   step: the script asks whether to copy the voice through a card reader or over USB, the card
   reader being the default, and clips at 11,025 samples a second wait for a listening test,
   made only if USB is still too slow once the transfer is measured.
 
-## Questions for you
+## Your answers
 
-1. The report's question 4: the fork's inherited GitHub files.
-2. Shall I open pull requests for the two branches?
+All nine questions are answered, and each answer is carried out:
+
+1. External CC1101 modules: speech has a DMA channel of its own, and the README says an external
+   module is untried with the reader on (F1).
+2. A code in each set's folder on the card, `.sync-id`, tells its copy apart (T5).
+3. A word written both with and without an apostrophe is recorded as the texts write it most
+   often, the firmware's own texts deciding the words they hold (T7).
+4. The apps' names and folder names come from their manifests (T9).
+5. The install script asks whether to copy the voice through a card reader or over USB, the card
+   reader being the default (release spec, R11).
+6. No listening test at 11 kHz for now: it waits until USB's speed is measured (release spec,
+   R11).
+7. The fork's inherited GitHub files stay, and settings keep them from doing anything: the steps
+   are below (R14).
+8. A release build's About screen names flipper-access (R9).
+9. A pull request for each branch, merged once its build is green: the fork's into
+   `screen-reader`, this project's into main.
+
+## On GitHub, for you
+
+The fork's GitHub files stay as they are, and these settings keep them from doing anything
+(R14). Issues and Discussions are off already, and the fork's description already points to
+flipper-access. GitHub's labels may differ slightly from these.
+
+1. Actions off: on the fork's settings, under Actions and then General, choose "Disable actions"
+   under "Actions permissions", then Save. The page is
+   https://github.com/robin24/Momentum-Firmware/settings/actions
+2. The Sponsor button off: on the fork's settings, General, in the Features section, uncheck
+   Sponsorships. The page is https://github.com/robin24/Momentum-Firmware/settings
+3. The website: on the fork's main page, the About section's edit button, "Edit repository
+   details", opens a Website field that holds https://momentum-fw.dev. Replace it with
+   https://github.com/robin24/flipper-access and save.
 
 ## Checks on the device
 
@@ -269,5 +300,6 @@ Min, stays clear of zero:
 .venv/bin/python tools/flipper_cli.py "top 0"
 ```
 
-The continuous build, R12: once the branch is merged into main, run the Build workflow by hand
-from the Actions tab with the fork's `screen-reader`, and see the weekly run on Monday.
+The continuous build, R12: on Monday, the Actions tab shows the weekly build of the fork's
+`screen-reader`. A run by hand, with Run workflow on the Build workflow there, builds any branch,
+tag or commit of the fork.
