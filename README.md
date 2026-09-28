@@ -137,10 +137,10 @@ More about the chords:
   holding Back clears the selected byte when you let go.
 - Back and Down held works on the lock screen too, where Back with Down means nothing else. After
   a reboot into a lock with the reader off, it is the way to get speech back.
-- Chords work with the device's buttons and with `input send` on the console, each on its own:
-  a Back sent from the console makes chords only with keys sent from the console, so a script
-  cut off between a Back press and its release cannot turn the buttons into chords. Keys sent
-  from `sr watch` bypass the chords. That console command streams the reader's announcements and lets
+- Chords work with the device's buttons and with `input send` on the console, each on its own: a
+  Back sent from the console makes chords only with keys sent from the console, so a script cut off
+  between a Back press and its release cannot turn the buttons into chords. Keys sent from
+  `sr watch` bypass the chords. That console command streams the reader's announcements and lets
   arrows, Enter and Backspace drive the device. The tethered reader in this repository runs it:
 
   ```bash
@@ -288,9 +288,9 @@ keys move the way they point.
 
 ### NFC-V emulation
 
-When NFC emulates an ISO15693 card, also called NFC-V, its "Emulating" screen is read in full
-first. Then the emulation takes over the speaker, and the reader stays silent until you leave with
-Back.
+When NFC emulates an ISO15693 card, also called NFC-V, its "Emulating" screen is read as usual.
+From the first exchange with an NFC reader on, the emulation keeps the speaker, whose timer it
+needs, and the screen reader stays silent until you leave with Back.
 
 ### The file browser's menus
 
@@ -334,23 +334,30 @@ apart, so nothing is left unspoken. The letters are recorded by their names, so 
 "en eff see", not "capital N capital F capital C". The names are in `tools/voice_names.txt`. A
 letter whose clip is missing too is skipped and noted, like a word.
 
-Every word the device had to spell is noted on the card in `/ext/sr/missing.txt`, one per line,
-each at most once per boot. The generator's missing-word command, under Making a vocabulary,
-fetches that list, makes clips for its words, sends them to the card and removes the list. So a
-spelled word gets its own clip at the next run.
+Every word the device had to spell is noted on the card, one per line, in the `missing.txt` of
+the voice set in use. The device remembers the last 64 words it noted, so a word is noted once
+per boot unless 64 others came after it. The generator's missing-word command, under Making a
+vocabulary, fetches that list, makes clips for its words and sends them to the card. So a spelled
+word gets its own clip at the next run.
 
 ### On the card
 
-Each clip is a file `/ext/sr/voice/<hh>/<word>.raw`, where `<hh>` is one of 64 folders, named by
-two hex digits: the word's FNV-1a hash modulo 64. Finding a file on the card means reading its
-folder's entries one by one, so many small folders keep every clip quick to open. A clip is raw
-unsigned 8-bit mono sound at 16,000 samples per second, where 128 is silence.
+The card holds one folder per voice set, `/ext/sr/voices/<set>/`. A set is a vocabulary made with
+one engine and one voice: `heart`, made with Kokoro's voice af_heart, for example, or `samantha`,
+made on a Mac with its Samantha voice. The reader speaks with the set chosen in the Accessibility
+settings' Voice row or with `sr voice use`; Auto, the default, is the first set in name order.
 
-The file `/ext/sr/voice/voice.txt` holds the generator's settings line, which `sr voice status`
-shows. With the defaults it reads:
+In a set's folder, each clip is a file `<hh>/<word>.raw`, where `<hh>` is one of 64 folders,
+named by two hex digits: the word's FNV-1a hash modulo 64. Finding a file on the card means
+reading its folder's entries one by one, so many small folders keep every clip quick to open. A
+clip is raw unsigned 8-bit mono sound at 16,000 samples per second, where 128 is silence.
+
+Beside the clip folders are `voice.txt`, the generator's settings line, which `sr voice status`
+shows; `missing.txt`, the words the device had to spell; and, in a set from a release,
+`LICENSE.txt`. The settings line of a Kokoro set reads:
 
 ```text
-say Samantha rate 175 highpass 500 gain 1.3 soft 16000
+kokoro af_heart rate 100 highpass 500 gain 1.3 soft 16000
 ```
 
 ### Voice commands on the console
@@ -376,6 +383,19 @@ for a minute:
 
 The setting is not saved: the voice is on again after every reboot.
 
+This command names the voice sets on the card and marks the one in use:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr voice list"
+```
+
+This one picks a set by its name, as the Voice row does, and saves it. A name with a space goes in
+quotes, and `auto` goes back to the first set in name order:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr voice use heart"
+```
+
 `sr voice status` prints the first 63 characters of the settings line, and these counts since
 boot:
 
@@ -398,26 +418,39 @@ on.
 
 ### Licensing
 
-The vocabulary shipped with a release is made with Piper and a freely licensed voice, and carries
-its own licence file. The generator can also use the voices of macOS's `say`, which Apple licenses
-for use on the Mac, so a vocabulary made that way is for the maker's own device only.
+A release ships two voice sets made with free engines, each with its own licence file: `heart`,
+made with Kokoro, an open speech model by hexgrad under the Apache License 2.0, with its voice
+af_heart; and `espeak`, made with eSpeak-NG under the GPL-3.0, with its voice en-us+f3. The
+generator can also use the voices of macOS's `say`, which Apple licenses for use on the Mac, so a
+set made that way is for the maker's own device only.
 
 ### Making a vocabulary
 
-`tools/voice_build.py` makes the clips on a computer and copies them to the card. It has two
-backends. `say`, the default, uses the Mac's voices:
+`tools/voice_build.py` makes the clips of one voice set on a computer and copies them to the
+card. `--set` names the set, `samantha` by default. It has three backends, each with its default
+voice. `say`, the default, uses the Mac's voices, Samantha unless `--voice` names another:
 
 ```bash
 .venv/bin/python tools/voice_build.py --extract --jobs 8
 ```
 
-`piper` runs on any platform and takes a Piper voice model, a file ending in `.onnx`:
+`espeak` uses eSpeak-NG, from the system's package manager, such as Homebrew's `espeak-ng` on a
+Mac, with the voice en-us+f3:
 
 ```bash
-.venv/bin/python tools/voice_build.py --extract --jobs 8 --backend piper --model <voice.onnx>
+.venv/bin/python tools/voice_build.py --set espeak --backend espeak --extract --jobs 8
 ```
 
-The Piper backend has not been run yet, so its output is untested.
+`kokoro` uses Kokoro through the kokoro-onnx package, with the voice af_heart. It needs the model
+files `kokoro-v1.0.onnx` and `voices-v1.0.bin`, from the kokoro-onnx project's model-files-v1.0
+release, in the project's folder `voice-models/`. The whole vocabulary takes about 17 minutes:
+
+```bash
+.venv/bin/python tools/voice_build.py --set heart --backend kokoro --extract --jobs 8
+```
+
+A set keeps the backend and voice it was made with: a run that names others is refused, since it
+would make the whole set again.
 
 The tools that talk to the device find its serial port by the Flipper's USB id, on a Mac, Linux
 or Windows. With two Flippers plugged in, or for another port, give it with `--port`, or in the
@@ -447,15 +480,15 @@ The sync sends new or changed clips and `voice.txt` to the card:
 .venv/bin/python tools/voice_build.py --sync
 ```
 
-A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what changed,
-which takes seconds. It prints a line every hundred clips and a summary at the end. When the
-connection fails or the card refuses a clip, a full card for example, it stops at that clip with
-one line saying where and why, and the next sync sends what is left. The voice is switched off on the device during the transfer and switched back
-on afterwards. The mute lasts a minute at a time and the generator renews it while the transfer
-goes, so if the transfer dies, through Ctrl-C, a killed process, a dead port or power loss, the
-voice comes back by itself within a minute. The generator's reads give up after 30 seconds
-without an answer, and a Ctrl-C during the restore at the end cannot hang it. This command
-switches the voice back on at once:
+A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what changed, which
+takes seconds. It prints a line every hundred clips and a summary at the end. When the connection
+fails or the card refuses a clip, a full card for example, it stops at that clip with one line
+saying where and why, and the next sync sends what is left. The voice is switched off on the device
+during the transfer and switched back on afterwards. The mute lasts a minute at a time and the
+generator renews it while the transfer goes, so if the transfer dies, through Ctrl-C, a killed
+process, a dead port or power loss, the voice comes back by itself within a minute. The generator's
+reads give up after 30 seconds without an answer, and a Ctrl-C during the restore at the end cannot
+hang it. This command switches the voice back on at once:
 
 ```bash
 .venv/bin/python tools/flipper_cli.py "sr voice on"
@@ -475,13 +508,13 @@ The missing-word command gives the words the device had to spell their own clips
 .venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync
 ```
 
-It fetches `missing.txt` from the card, makes clips for those words and sends them. The words
-leave the card's list only once every clip was made and sent; until then they wait in the set's
+It fetches `missing.txt` from the card, makes clips for those words and sends them. The words leave
+the card's list only once every clip was made and sent; until then they wait in the set's
 `pulled.txt` on the computer, so a run that fails or is stopped loses none of them, and the next
-run makes them again. `--extract` is there because the spoken form of a word with an apostrophe comes from the
-extraction, not from `missing.txt`, which has already lost the apostrophe. `--card-apps` adds the
-strings of the apps actually on the card, so a newly installed app's own words get clips too. For
-a few words it takes about 3 to 4 seconds.
+run makes them again. `--extract` is there because the spoken form of a word with an apostrophe
+comes from the extraction, not from `missing.txt`, which has already lost the apostrophe.
+`--card-apps` adds the strings of the apps actually on the card, so a newly installed app's own
+words get clips too. For a few words it takes about 3 to 4 seconds.
 
 `--check` makes ten test clips in a temporary folder and checks their format:
 
@@ -492,25 +525,29 @@ a few words it takes about 3 to 4 seconds.
 `--sync`, `--pull-missing` and `--card-apps` use the firmware's serial storage helper, so they
 need Python with pyserial, as in the virtual environment of the examples.
 
-The defaults were chosen by ear for the Samantha voice through the device's speaker. Written out,
-they are:
+The processing was chosen by ear for the Samantha voice through the device's speaker, and every
+backend uses it. Written out, the defaults of `say` are:
 
 ```text
---backend say --voice Samantha --rate 175 --highpass 500 --gain 1.3 --soft --hz 16000
+--backend say --voice Samantha --rate 175 --highpass 500 --gain 1.3 --soft
 ```
 
-The folder `voice/` in the project holds the clips, as `voice/<first letter>/<word>.raw`, and two
-records: `manifest.json` records which clips were made and with which settings, and `synced.json`
-records what is on the card. The sync puts each clip into its hashed folder on the card. Do not
-delete `voice/`: without it the next build starts from scratch, and the next sync resends
-everything.
+The clips are always made at 16,000 samples per second.
+
+On the computer, the set `samantha` is the project's folder `voice/`, where the vocabulary was
+before there were sets, and every other set is `voices/<set>/`. A set's folder holds the clips, as
+`<first letter>/<word>.raw`, and its records: `manifest.json` records which clips were made and
+with which settings, `synced.json` records what is on the card, and `pulled.txt` holds pulled
+missing words until they are synced. The sync puts each clip into its hashed folder on the card.
+Do not delete a set's folder: without it the next build starts from scratch, and the next sync
+resends everything.
 
 ### Limits of the voice
 
 - A clip's name is a word of lower case letters, up to 16 of them, or a single digit. Words longer
   than 16 letters never get a clip, so they are spelled letter by letter.
 - Tokens that mix letters and digits, such as `md5`, `i2c` or `p1`, never get a clip. They are
-  spelled every time, `md5` as "em dee five", logged as missing once per boot, and dropped by
+  spelled every time, `md5` as "em dee five", logged as missing, and dropped by
   `--pull-missing`.
 - Apostrophes are left out of clip names: "don't" is `dont.raw`, recorded as "don't". So two words
   that differ only by an apostrophe share one clip: "ill" plays the clip recorded as "i'll".
@@ -520,7 +557,8 @@ everything.
 
 ## Known limits
 
-- Without the SD card, or without `/ext/sr/voice` on it, the reader is silent, since SAM is gone.
+- Without the SD card, or without a voice set under `/ext/sr/voices` on it, the reader is silent,
+  since SAM is gone.
   Without a card most main apps are missing too, since they load from the card, as in Momentum.
 - The screen shown after a firmware update is not read. Back closes it.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
@@ -542,7 +580,9 @@ everything.
 When the device crashes, it reboots and shows a popup, and the reader reads it: "Flipper crashed
 and was rebooted", then the message, most often "furi_check failed". The last line is "at" and an
 address of eight hexadecimal digits, such as "at 0803ABCD". Back closes the popup. The address
-stays, across reboots and firmware updates, until the next crash.
+stays, across reboots and firmware updates, until the next crash. It is kept in two of the clock's
+backup registers, which the official firmware and Momentum leave unused; after another firmware
+that uses them, the last crash shown may be wrong until the next one.
 
 The reader says the address character by character, with two exceptions. One to three digits
 after a letter are said as a number unless they start with 0: "AB20" is "ay B twenty", and "AB05"
@@ -638,5 +678,8 @@ Credits:
 
 - Momentum and its contributors, whose firmware Sonar is built on.
 - Flipper Devices, for the device and the official firmware.
-- Piper, the voice synthesizer the released vocabulary is made with.
+- Kokoro, the open speech model by hexgrad (https://huggingface.co/hexgrad/Kokoro-82M), under the
+  Apache License 2.0, which the release's `heart` voice set is made with, and the kokoro-onnx
+  project, which runs it.
+- eSpeak-NG, under the GPL-3.0, which the release's `espeak` voice set is made with.
 - The Black Magic Probe project, whose firmware on the Wi-Fi dev board serves as the crash catcher.
