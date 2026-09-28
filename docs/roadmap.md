@@ -78,5 +78,5 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
 - Licensing: the firmware is GPL-3 like Momentum and the official firmware; the shipped vocabulary must come from a redistributable voice (Piper models with permissive licences), Apple voices are for personal vocabularies only.
 - Documentation for blind users first: install, first boot, the console commands, the voice generator, and the known limits:
   - NFC-V emulation silences the reader.
-  - The sync guard reads the voice flag once per item: an utterance already playing when `sr voice off` arrives keeps opening clips, and writes the missing list at its end, while the generator has already started the transfer.
+  - Fixed after the review of 2026-09-28 (S4): the sync guard read the voice flag once per item, so an utterance already playing when `sr voice off` arrived kept opening clips and wrote the missing list at its end, while the generator had already started the transfer. Now `sr voice off` stops that utterance and answers once it has ended, and the missing list waits for an utterance with the voice on.
   - `sr play` still plays a file with the voice off, by design.
