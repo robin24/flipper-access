@@ -673,6 +673,24 @@ static void test_long_dialog_keeps_its_buttons(void) {
     CHECK(strncmp(out[0].text, "Delete the file?. Every signal", 30) == 0);
 }
 
+// G6 of the review of 2026-09-28: keys drawn one character at a time make runs such as
+// "qwertyuiop", which Back and Up read as words. On a keyboard the description leaves them out
+static void test_keyboard_description_leaves_out_the_keys(void) {
+    SrFrame f = text_input_frame("RAW_433", false, "Save");
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    char text[SR_DESCRIBE_TEXT_MAX];
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Name the signal. RAW_433. Save");
+    // Text in the keyboard font on a screen that is no keyboard is still read
+    SrFrame t;
+    frame_init(&t, SrLayerWindow);
+    add(&t, 0, 20, SrLayerWindow, SrFontKeyboard, false, false, 0, 0, "00 11 22 33");
+    sr_screen_build(&t, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "00 11 22 33");
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -1136,6 +1154,7 @@ int main(void) {
     test_text_input_edges();
     test_cuts_end_at_a_word();
     test_long_dialog_keeps_its_buttons();
+    test_keyboard_description_leaves_out_the_keys();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();
