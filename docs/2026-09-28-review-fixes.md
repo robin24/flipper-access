@@ -111,11 +111,14 @@ roadmap, the docs index and the merge routine where the code changed.
 - T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
   that wants a measurement on the device first.
 - R10's licence texts and source bundle, R11, R13 to R16, and R2, R3 and R5 to R8 belong to plan C.
+  Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
+  step: the script asks whether to copy the voice through a card reader or over USB, the card
+  reader being the default, and clips at 11,025 samples a second wait for a listening test,
+  made only if USB is still too slow once the transfer is measured.
 
 ## Questions for you
 
-1. The report's questions 2 to 4: the card-reader install path, a listening test at 11 kHz,
-   and the fork's inherited GitHub files.
+1. The report's question 4: the fork's inherited GitHub files.
 2. Shall I open pull requests for the two branches?
 
 ## Checks on the device

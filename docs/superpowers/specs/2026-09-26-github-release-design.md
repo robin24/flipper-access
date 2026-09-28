@@ -197,14 +197,23 @@ Steps:
    Momentum.
 2. `update backup /ext/backup-<date>.tar`: internal storage to the card, for a rollback with
    `update restore`.
-3. Put the voice on the card: upload the pack as one file to `/ext`, unpack it with
-   `storage extract /ext/<pack>.tar /ext`, and remove the tar (the archive lever below). These
-   are commands the official firmware has, so the step works from 1.4.3, Momentum and Sonar
-   alike. When step 1 found Sonar running, a timed mute before the unpack and `sr voice on`
-   after it keep the reader from holding open a clip that the unpack replaces, as the sync
-   guard does: `sr voice off <seconds>`, with the unpack's time from the spike and a margin,
-   since the console is busy for the whole unpack and the mute cannot be renewed meanwhile; if
-   the script dies, the voice comes back by itself.
+3. Put the voice on the card. The script asks which way, through a card reader or over USB,
+   and the card reader is the default answer (Robin, 2026-09-28, the review's question 2):
+   - Through a card reader, about a minute for the voice: the script first writes a small
+     marker file to the card over USB, then asks the user to take the microSD card out of the
+     Flipper and put it into the computer's card reader. It finds the card among the mounted
+     volumes by that marker, unpacks the pack onto it with Python's own tar reader, which
+     writes no macOS metadata files, removes the marker, ejects the card, and asks the user to
+     put it back into the Flipper, then waits until the console sees the card again. When no
+     card with the marker appears within a few minutes, the script says so and offers USB.
+   - Over USB: upload the pack as one file to `/ext`, unpack it with
+     `storage extract /ext/<pack>.tar /ext`, and remove the tar (the archive lever below).
+     These are commands the official firmware has, so the step works from 1.4.3, Momentum and
+     Sonar alike. When step 1 found Sonar running, a timed mute before the unpack and
+     `sr voice on` after it keep the reader from holding open a clip that the unpack replaces,
+     as the sync guard does: `sr voice off <seconds>`, with the unpack's time from the spike and
+     a margin, since the console is busy for the whole unpack and the mute cannot be renewed
+     meanwhile; if the script dies, the voice comes back by itself.
 4. Upload the update package folder to `/ext/update/<name>/`.
 5. `update install /ext/update/<name>/update.fuf`; the device reboots into the updater.
 6. Wait for the console to come back (the updater reboots twice), read `info device` again,
@@ -214,9 +223,10 @@ Steps:
 Re-running is safe: the unpack overwrites every clip and keeps the folders that are already
 there; the package folder is replaced.
 
-Time goal: a fresh install in under 15 minutes on a Mac, voice included. The measured baseline
-is 6.4 files per second over the console (2,828 clips in 442 s on 2026-09-24), which puts the
-current 10,789 clips at about 28 minutes. Two levers, measured in the spike, ship as needed:
+Time goal: a fresh install in under 15 minutes on a Mac, voice included. Through a card reader
+the voice takes about a minute. Over USB, the measured baseline is 6.4 files per second over the
+console (2,828 clips in 442 s on 2026-09-24), which puts the current 10,789 clips at about 28
+minutes. Two levers, measured in the spike, ship as needed:
 
 - Larger transfer chunks: `storage.py` sends 8 KB per round trip; the spike measures 8, 32 and
   64 KB on a 5 MB file and on a folder of small files.
@@ -231,6 +241,11 @@ current 10,789 clips at about 28 minutes. Two levers, measured in the spike, shi
   at card speed, without the console's per-file round trips; the spike measures a full pack.
   This replaces the earlier plan of a new `sr voice unpack` command: it would have been Sonar's
   own, so missing from the firmware the script starts from (review of 2026-09-28, R4).
+
+Held back: clips at 11,025 samples a second instead of 16,000, which would make the pack about a
+third smaller. It changes the sound, so it waits for a listening test through the piezo, and that
+test is made only if USB is still too slow once the spike has measured the two levers above
+(Robin, 2026-09-28, the review's question 3).
 
 Rejected: shipping the voice inside the update package's resources tarball. The updater would
 carry a manifest of 11,000 more entries and process it at every update, forever, and that path
