@@ -498,6 +498,49 @@ static void test_byte_input_reads_its_value(void) {
     CHECK_STR(out[0].text, "12 A4 56 78, byte 2 of 4, digit 2");
 }
 
+// G3 of the review of 2026-09-28: in the number input, moving from 9 onto the sign or Save key
+// was said, interrupting, as the typed character "9", since the key row "5678" became "56789"
+// once the 9 was no longer selected. Key rows take no part in the typed rule; with the keys named
+// the move says the key
+static void test_key_rows_are_never_typed(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    // A key row one character longer, the focus unchanged: no typed character, and on a keyboard
+    // the key rows are no news either
+    sr_model_init(&m, 1);
+    SrFrame f = text_input_frame("RAW_433", false, "Save");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    SrFrame g = text_input_frame("RAW_433", false, "Save");
+    snprintf(g.records[4].text, SR_TEXT_MAX, "zxcvbnm,");
+    size_t n = sr_model_process(&m, &g, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 0);
+
+    // The number input's move from the 9 onto the sign key, with the keys named as it now draws
+    // them: the 9 joins its row, and the move says the key
+    sr_model_init(&m, 1);
+    f = number_input_frame("Frequency", "433", true);
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    frame_init(&g, SrLayerFullscreen);
+    add(&g, 2, 9, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Frequency");
+    add(&g, 8, 25, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "433");
+    add(&g, 7, 41, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "01234");
+    add(&g, 7, 53, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "56789");
+    add(&g, 62, 48, SrLayerFullscreen, SrFontKeyboard, false, true, 0, 0, "Change sign");
+    n = sr_model_process(&m, &g, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Change sign");
+
+    // Back onto the 9, and OK: a digit typed into the field is still a typed character
+    f = number_input_frame("Frequency", "433", true);
+    n = sr_model_process(&m, &f, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "9");
+    f = number_input_frame("Frequency", "4339", true);
+    n = sr_model_process(&m, &f, 1300, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "9");
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -957,6 +1000,7 @@ int main(void) {
     test_typing_announces_the_character();
     test_keyboard_opens_with_prompt_and_value();
     test_byte_input_reads_its_value();
+    test_key_rows_are_never_typed();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();
