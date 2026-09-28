@@ -1,7 +1,9 @@
 #!/bin/bash
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
-# helpers, the chords and the throttle; and tests/host/tar_unpack.c, the firmware's tar reader
-# unpacking as the device does, for the voice pack check. Then the Python checks: the build's
+# helpers, the chords and the throttle; tests/host/tar_unpack.c, the firmware's tar reader
+# unpacking as the device does, for the voice pack check; and tests/host/voice_words.c, the words
+# the device looks up in a text, for the check of the generator's words against them,
+# tests/fbt/test_voice_parity.py. Then the Python checks: the build's
 # exclusion filter, the built-in Sub-GHz app's source list, and the tests of nine tools:
 # tests/fbt/test_card_prune.py, test_flash_headroom.py, test_flipper_cli.py, test_momentum_base.py,
 # test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py, test_voice_build.py
@@ -109,6 +111,11 @@ if [ -f "$MICROTAR/microtar.c" ]; then
   TAR_UNPACK="$OUT/tar_unpack"
 fi
 
+# The words the device looks up in a text, for test_voice_parity.py
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$SRC" -o "$OUT/voice_words" \
+  "$TESTS/voice_words.c" "$SRC/speech_text.c" "$SRC/speech_voice.c"
+
 if ! python3 "$ROOT/tests/fbt/test_exclusions.py" > "$OUT/fbt_exclusions.txt"; then
   cat "$OUT/fbt_exclusions.txt"
   echo "fbt exclusion checks failed"
@@ -185,6 +192,13 @@ if ! TAR_UNPACK="$TAR_UNPACK" python3 "$ROOT/tests/fbt/test_voice_pack.py" > "$O
   exit 1
 fi
 summary "$OUT/voice_pack.txt"
+
+if ! VOICE_WORDS="$OUT/voice_words" python3 "$ROOT/tests/fbt/test_voice_parity.py" > "$OUT/voice_parity.txt"; then
+  cat "$OUT/voice_parity.txt"
+  echo "voice parity checks failed"
+  exit 1
+fi
+summary "$OUT/voice_parity.txt"
 
 if [ "$NO_SKIPS" = 1 ] && [ -s "$OUT/skipped.txt" ]; then
   echo "--no-skips: $(wc -l < "$OUT/skipped.txt" | tr -d ' ') skipped, see above"

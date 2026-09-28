@@ -379,6 +379,22 @@ def bubble_texts():
     return sorted(seen)
 
 
+def expansion_words(line):
+    """The clip names in one line of the pronunciation layer's output and, for each one an
+    apostrophe was stripped from, the original token to speak ("dont" is spoken as "don't").
+    tests/fbt/test_voice_parity.py holds these to the words the device looks up."""
+    words, originals = set(), {}
+    for token in line.split():
+        token = token.strip(".,?!;:")
+        n = clip_name(token)
+        if n:
+            words.add(n)
+            core = token.strip("'").lower()
+            if "'" in core:  # inside the word, not quotes around it
+                originals[n] = min(originals.get(n, core), core)
+    return words, originals
+
+
 def _expand(exe, lines):
     """Run the pronunciation layer over a set of source strings, returning the clip-name words
     it produces and, for each word an apostrophe was stripped from, the original token to speak
@@ -386,14 +402,10 @@ def _expand(exe, lines):
     out = subprocess.run([exe], input="\n".join(sorted(lines)) + "\n", capture_output=True, text=True, check=True).stdout
     words, originals = set(), {}
     for line in out.splitlines():
-        for token in line.split():
-            token = token.strip(".,?!;:")
-            n = clip_name(token)
-            if n:
-                words.add(n)
-                core = token.strip("'").lower()
-                if "'" in core:  # inside the word, not quotes around it
-                    originals[n] = min(originals.get(n, core), core)
+        line_words, line_originals = expansion_words(line)
+        words |= line_words
+        for n, core in line_originals.items():
+            originals[n] = min(originals.get(n, core), core)
     return words, originals
 
 
