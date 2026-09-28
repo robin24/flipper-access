@@ -607,6 +607,43 @@ static void test_text_input_edges(void) {
     CHECK_STR(out[0].text, "x");
 }
 
+// S2 of the review of 2026-09-28: rows, announcements and the change said without a key press
+// were cut inside a word, whose fragment speech spelled and logged as a missing word. They end
+// after their last whole word
+static void test_cuts_end_at_a_word(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 36, 31, SrLayerFullscreen, SrFontPrimary, false, false, 0, 0, "Wrong PIN!");
+    add(&f, 64, 38, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Timeout: 1s");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    // Joined with ". ", the 80th character falls inside the second row's "foxtrot"
+    const char* words = "alpha bravo charlie delta echo foxtrot golf";
+    add(&f, 2, 46, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    add(&f, 2, 54, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    add(&f, 2, 60, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    size_t n = sr_model_process(&m, &f, 1100, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnChange);
+    size_t len = strlen(out[0].text);
+    CHECK(len > 60 && len <= 80);
+    CHECK_STR(out[0].text + len - 4, "echo");
+
+    // A row of more than 63 characters, two records on one baseline: the 64th character falls
+    // inside "julietts"
+    SrFrame r;
+    frame_init(&r, SrLayerFullscreen);
+    add(&r, 2, 30, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    const char* more = "hotels indias julietts kilos";
+    add(&r, 90, 30, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, more);
+    SrScreen s;
+    sr_screen_build(&r, &s);
+    len = strlen(s.rows[0].text);
+    CHECK(len <= SR_ROW_TEXT_MAX - 1 && len > 40);
+    CHECK_STR(s.rows[0].text + len - 6, "indias");
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -1068,6 +1105,7 @@ int main(void) {
     test_byte_input_reads_its_value();
     test_key_rows_are_never_typed();
     test_text_input_edges();
+    test_cuts_end_at_a_word();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();

@@ -1,3 +1,5 @@
+#include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include "speech_text.h"
@@ -437,6 +439,80 @@ static void test_text_buffer(void) {
     CHECK(n > 640); // a 640 byte buffer would have cut this text
 }
 
+/** The expansion cut at SPEECH_TEXT_MAX against the whole one: the same, up to a word's end. */
+static bool cut_at_word(const char* in, char* why, size_t why_size) {
+    static char whole[16 * SPEECH_TEXT_MAX];
+    char out[SPEECH_TEXT_MAX];
+    size_t n = speech_text_expand(in, out, sizeof(out));
+    speech_text_expand(in, whole, sizeof(whole));
+    if(strncmp(out, whole, n) != 0) {
+        snprintf(why, why_size, "not a prefix of the whole expansion");
+        return false;
+    }
+    // A word ends at a space, at the end, or at the punctuation attached to it
+    if(n && whole[n] != '\0' && !strchr(" .,?!", whole[n])) {
+        const char* tail = n > 20 ? out + n - 20 : out;
+        snprintf(why, why_size, "ends inside a word: ...%s|%.12s", tail, whole + n);
+        return false;
+    }
+    return true;
+}
+
+// S2 of the review of 2026-09-28: an expansion longer than the buffer ended in a fragment, as
+// "seven se" or "fiv", which the device spelled, logged as missing, and --pull-missing made into
+// a clip of its own. It now ends after its last whole word
+static void test_cut_after_a_whole_word(void) {
+    char in[161] = "";
+    for(int k = 0; k < 31; k++)
+        strcat(in, "7777 ");
+    char why[80] = "";
+    CHECK(cut_at_word(in, why, sizeof(why)));
+    char out[SPEECH_TEXT_MAX];
+    size_t n = speech_text_expand(in, out, sizeof(out));
+    CHECK(n > 700 && strcmp(out + n - strlen("seven"), "seven") == 0);
+
+    strcpy(in, "0");
+    for(int k = 0; k < 158; k++)
+        in[k + 1] = (char)('0' + (k * 7 + 3) % 10);
+    in[159] = '\0';
+    CHECK(cut_at_word(in, why, sizeof(why)));
+
+    // Fuzzed texts of 100 to 159 characters, mostly numbers of three and four digits, which
+    // expand the most, with letters and separators between them
+    static const char digits[] = "0123456789";
+    static const char other[] = " . , : - / % A F a f k H z";
+    uint32_t seed = 20260928u;
+    int bad = 0, cut = 0;
+    for(int t = 0; t < 20000; t++) {
+        seed = seed * 1103515245u + 12345u;
+        size_t len = 100 + (seed >> 16) % 60, k = 0;
+        while(k < len) {
+            seed = seed * 1103515245u + 12345u;
+            bool number = (seed >> 16) % 6 != 0;
+            size_t run = number ? 2 + (seed >> 20) % 3 : 1;
+            for(size_t r = 0; r < run && k < len; r++, k++) {
+                seed = seed * 1103515245u + 12345u;
+                size_t pick = seed >> 16;
+                in[k] = number ? digits[pick % 10] : other[pick % (sizeof(other) - 1)];
+            }
+            if(k < len) in[k++] = ' ';
+        }
+        in[len] = '\0';
+        char out_small[SPEECH_TEXT_MAX];
+        if(speech_text_expand(in, out_small, sizeof(out_small)) > SPEECH_TEXT_MAX - 60) cut++;
+        if(!cut_at_word(in, why, sizeof(why)) && bad++ < 3) printf("FAIL \"%s\": %s\n", in, why);
+    }
+    checks += 2;
+    if(bad) {
+        failures++;
+        printf("FAIL %d fuzzed texts cut inside a word\n", bad);
+    }
+    if(cut < 1000) {
+        failures++;
+        printf("FAIL only %d fuzzed texts came near the buffer's end\n", cut);
+    }
+}
+
 // Behaviour the rule list does not decide. These pin what the code does today so a change is
 // noticed; the report lists each one.
 static void test_beyond_the_rule_list(void) {
@@ -459,10 +535,11 @@ static void test_beyond_the_rule_list(void) {
     expect("a ^ b $ c", "a b c");
     // A rule 7 letter run longer than 20 characters is copied in rule 8's pieces.
     expect("ABCDEFGHIJKLMNOPQRSTUVWXYZ1", "ABCDEFGHIJKLMNOPQRST UVWXYZ one");
-    // The output buffer: truncated, always terminated; a null input gives an empty string.
+    // The output buffer: truncated after the last whole word, always terminated; a null input
+    // gives an empty string.
     char small[8];
-    CHECK(speech_text_expand("Hello world", small, sizeof(small)) == 7);
-    CHECK(strcmp(small, "Hello w") == 0);
+    CHECK(speech_text_expand("Hello world", small, sizeof(small)) == 5);
+    CHECK(strcmp(small, "Hello") == 0);
     CHECK(speech_text_expand(NULL, small, sizeof(small)) == 0);
     CHECK(small[0] == '\0');
 }
@@ -530,6 +607,7 @@ int main(void) {
     test_rule13_upper_a();
     test_rule14_slash_of();
     test_text_buffer();
+    test_cut_after_a_whole_word();
     test_beyond_the_rule_list();
     test_spell_copy();
     printf("%d checks, %d failures\n", checks, failures);
