@@ -70,7 +70,9 @@ These are the working notes for the one device Sonar is developed on, and the de
   the main menu. `--chords` runs only the chords. Start it on the home screen.
 - `tools/run_host_tests.sh`: unit tests for the screen model, the speech text, queue, PCM and
   voice helpers, the chords and the change throttle. They run with clang on the Mac, and the
-  Python checks in `tests/fbt/` follow.
+  Python checks in `tests/fbt/` follow. The voice pack's check also unpacks a pack with the
+  firmware's own tar reader, `tests/host/tar_unpack.c` built from the firmware's `lib/microtar`,
+  following the device's rules; it is skipped until fbt has checked out that submodule.
 - `tests/host/`: the unit tests.
 - `tests/fbt/test_exclusions.py`: a plain Python test of the build's app and category exclusions,
   `EXCLUDE_EXT_APPS` and `EXCLUDE_EXT_CATEGORIES` in `fbt_options.py`, over synthetic manifests.

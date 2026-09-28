@@ -27,6 +27,11 @@ jobs:
       - name: Check out the firmware submodule
         run: git submodule update --init --depth 1 Momentum-Firmware
 
+      # The host tests unpack the voice pack with the firmware's tar reader; fbt checks out the
+      # firmware's other submodules itself, after the tests
+      - name: Check out the firmware's tar reader
+        run: git -C Momentum-Firmware submodule update --init --depth 1 lib/microtar
+
       - name: Name the build after the firmware commit
         run: echo "DIST_SUFFIX=sonar-ci-$(git -C Momentum-Firmware rev-parse --short=8 HEAD)" >> "$GITHUB_ENV"
 

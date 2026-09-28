@@ -1,11 +1,13 @@
 #!/bin/bash
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
-# helpers, the chords and the throttle. Then the Python checks: the build's exclusion filter, the
-# built-in Sub-GHz app's source list, and the tests of six tools: tests/fbt/test_card_prune.py,
-# test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py, test_voice_build.py
-# and test_voice_pack.py. Each Python check prints its skip lines, then its summary, so a run
-# shows what it left out, such as the golden checks that need upstream/dev, which the continuous
-# build does not have, or the voice generator's resampler checks, which need numpy and scipy.
+# helpers, the chords and the throttle; and tests/host/tar_unpack.c, the firmware's tar reader
+# unpacking as the device does, for the voice pack check. Then the Python checks: the build's
+# exclusion filter, the built-in Sub-GHz app's source list, and the tests of six tools:
+# tests/fbt/test_card_prune.py, test_strip_js_symbols.py, test_subghz_manifest.py,
+# test_upstream_check.py, test_voice_build.py and test_voice_pack.py. Each Python check prints its
+# skip lines, then its summary, so a run shows what it left out, such as the golden checks that
+# need upstream/dev, which the continuous build does not have, or the voice generator's resampler
+# checks, which need numpy and scipy.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 SRC="$ROOT/Momentum-Firmware/applications/services/screen_reader"
@@ -84,6 +86,18 @@ if ! "$OUT/test_sr_throttle" > "$OUT/sr_throttle.txt"; then
 fi
 echo "throttle: $(tail -n 1 "$OUT/sr_throttle.txt")"
 
+# The firmware's own tar reader walked as the device unpacks, for test_voice_pack.py. lib/microtar
+# is one of the firmware's submodules, which fbt checks out on its first run; without it the
+# voice pack check says it skipped the unpack.
+MICROTAR="$ROOT/Momentum-Firmware/lib/microtar/src"
+TAR_UNPACK=""
+if [ -f "$MICROTAR/microtar.c" ]; then
+  clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+    -I "$MICROTAR" -o "$OUT/tar_unpack" \
+    "$TESTS/tar_unpack.c" "$MICROTAR/microtar.c" "$MICROTAR/microtar-stdio.c"
+  TAR_UNPACK="$OUT/tar_unpack"
+fi
+
 if ! python3 "$ROOT/tests/fbt/test_exclusions.py" > "$OUT/fbt_exclusions.txt"; then
   cat "$OUT/fbt_exclusions.txt"
   echo "fbt exclusion checks failed"
@@ -133,7 +147,7 @@ if ! python3 "$ROOT/tests/fbt/test_voice_build.py" > "$OUT/voice_build.txt"; the
 fi
 summary "$OUT/voice_build.txt"
 
-if ! python3 "$ROOT/tests/fbt/test_voice_pack.py" > "$OUT/voice_pack.txt"; then
+if ! TAR_UNPACK="$TAR_UNPACK" python3 "$ROOT/tests/fbt/test_voice_pack.py" > "$OUT/voice_pack.txt"; then
   cat "$OUT/voice_pack.txt"
   echo "voice pack checks failed"
   exit 1
