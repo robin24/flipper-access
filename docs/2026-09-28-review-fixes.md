@@ -10,7 +10,7 @@ How it was checked, for every fix below:
   fix came with new tests, the tests were also run against the code before the fix, or against a
   deliberately broken copy, and failed there.
 - A release build after every firmware change, with the headroom check. The last build, commit
-  e8aa07e of the fork, is 869,128 bytes, 11,512 below the limit of 880,640.
+  c71bd08 of the fork, is 869,120 bytes, 11,520 below the limit of 880,640.
 - The continuous build, green on every push. Since R12 it installs `requirements.txt` on Python
   3.10 and runs the host tests with `--no-skips`, so no check is left out there.
 
@@ -20,6 +20,9 @@ Nothing was tried on the device; the checks for it are at the end.
 
 Firmware:
 
+- F1, as you chose in question 1: speech moves its samples through DMA1 channel 3, which nothing
+  else in the firmware or its apps uses, off DMA2 channel 4, which the external CC1101 radio's
+  driver transmits through. The README says external modules are untried with the reader on.
 - F2: the settings are loaded at boot without a card too, so a chord before the card mounts no
   longer saves the defaults over them.
 - S1: the NFC-V listener keeps the speaker from its first exchange until it ends.
@@ -79,7 +82,6 @@ roadmap, the docs index and the merge routine where the code changed.
 
 ## Not done
 
-- F1 waits for your answer to question 1 below.
 - F7, the program counter for fault crashes: it means naked fault handlers in an upstream file,
   checked only by crashing the device on purpose, and the idle crashes seen so far are failed
   checks, whose address is already right. The design: read the stacked PC in HardFault, MemManage,
@@ -95,17 +97,16 @@ roadmap, the docs index and the merge routine where the code changed.
 
 ## Questions for you
 
-1. The report's question 1: should 0.1.0 support external CC1101 modules? F1 depends on it.
-2. T5: may the sync write a small file into each set's folder on the card, for example
+1. T5: may the sync write a small file into each set's folder on the card, for example
    `.sync-id`, so that a card holding an older copy of the set is recognized too?
-3. T7: when a word also occurs without an apostrophe, may the generator make the plain form, so
+2. T7: when a word also occurs without an apostrophe, may the generator make the plain form, so
    "were", "ill" and "id" are recorded as written? Those clips change on your card at the next
    sync.
-4. T9: may the generator add the app names from the apps' manifests, about 222 more words? They
+3. T9: may the generator add the app names from the apps' manifests, about 222 more words? They
    add clips to your card.
-5. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
+4. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
    fork's inherited GitHub files, and the About screen's website line.
-6. Shall I open pull requests for the two branches?
+5. Shall I open pull requests for the two branches?
 
 ## Checks on the device
 
@@ -140,6 +141,16 @@ Screens, G5, G7, G8 and G9: a text box no longer says "question mark" at its lin
 dialog, such as deleting a file with a long name, ends with its buttons; every main menu style,
 set under Interface in the Momentum settings, says "Apps, 1 of 11" as you move; the file browser's
 menu reads its own items; the Loading screen says "Loading".
+
+Speech's channel, F1: speech sounds as before, without crackle and at its usual speed, in a long
+read such as Back and Up on a menu. Then `sr status` still says "underruns 0" on its speech line:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr status"
+```
+
+An external CC1101 module was not tried: with one, the check is a Sub-GHz transmit with the reader
+on, watched by a second receiver such as another Flipper.
 
 Speech, S2 to S10: a long screen read with Back and Up ends on a whole word; this mutes at once,
 mid-word:

@@ -571,6 +571,10 @@ resends everything.
   one hundred", and counts such as "Keys found: 5/32" read the same way. So does a date drawn with
   slashes, which only a few NFC card parsers show; that has not been tried on a device. Any other
   slash is "slash": "/ext/apps" is "slash ext slash apps".
+- An external CC1101 radio module, the add-on board for a stronger Sub-GHz radio, has not been
+  tried with the reader on. Speech moves its sound through a DMA channel that the external
+  radio's driver does not use, so a transmit and speech should not disturb each other, but no
+  transmission has been checked.
 - The device has rebooted a few times while idle, with a "furi_check failed" popup, and the cause
   is unknown. The popup now carries an address, and `sr status` the build, so a report with both
   helps: see When it crashes.

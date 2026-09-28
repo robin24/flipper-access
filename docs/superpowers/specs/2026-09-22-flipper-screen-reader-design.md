@@ -442,11 +442,12 @@ and 14, this list is what the code does.
   stop list of about a hundred common upper case words (ON, OFF, SAVE, READ, MENU and so on)
   keeps them as words. The console stream still receives the untouched text.
 - Output path: TIM16 is the 50 kHz PWM carrier (prescaler 4, autoreload 255) on the speaker pin
-  as in section 8, but the samples move by DMA2 channel 4 with the TIM16 update event as its
+  as in section 8, but the samples move by DMA1 channel 3 with the TIM16 update event as its
   DMAMUX request, not DMA1 channel 1, which every bundled audio app uses; there is no second
-  timer. The firmware's own drivers do not use DMA2 channel 4, but the external CC1101 radio
-  driver in the apps submodule uses it for its asynchronous transmit, so speech during a Sub-GHz
-  transmit with an external radio garbles both; it cannot hang or crash.
+  timer. Nothing else in the firmware or in the apps built with it uses DMA1 channel 3. Until
+  2026-09-28 speech used DMA2 channel 4, which the external CC1101 radio driver in the apps
+  submodule uses for its asynchronous transmit, so speech during a Sub-GHz transmit with an
+  external radio garbled both.
 - Ring buffer 4096 bytes, about 82 ms, in two halves. The DMA's half and complete interrupts set
   thread flags on the worker, which waits for the flag of the half it is about to fill (no
   semaphore); an underrun is counted when the DMA has already moved into the half being filled.
