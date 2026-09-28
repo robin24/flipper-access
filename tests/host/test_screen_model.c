@@ -390,6 +390,72 @@ static void test_typing_announces_the_character(void) {
     CHECK_STR(out[0].text, "deleted");
 }
 
+/** A text input as text_input.c draws it with the fork's hints: the prompt at the top in the
+ * secondary font, the name in the field (drawn inverted while the default name is selected), the
+ * keys in the keyboard font, and the selected key with a focus hint; Save is an icon, named by a
+ * focus note in the keyboard font. */
+static SrFrame text_input_frame(const char* field, bool field_selected, const char* key) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 2, 8, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Name the signal");
+    add(&f, 4, 22, SrLayerFullscreen, SrFontSecondary, field_selected, false, 0, 0, field);
+    add(&f, 1, 40, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "qwertyuiop");
+    add(&f, 1, 52, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "asdfghjkl");
+    add(&f, 1, 64, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "zxcvbnm");
+    add(&f, 100, 64, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, key);
+    return f;
+}
+
+/** A number input as number_input.c draws it: the prompt at the top, the value in the field, the
+ * keys in the keyboard font, the selected one inverted. */
+static SrFrame number_input_frame(const char* prompt, const char* value, bool hints) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    if(prompt[0]) add(&f, 2, 9, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, prompt);
+    add(&f, 8, 25, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, value);
+    add(&f, 7, 41, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "01234");
+    add(&f, 7, 53, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "5678");
+    add(&f, 51, 53, SrLayerFullscreen, SrFontKeyboard, true, hints, 0, 0, "9");
+    return f;
+}
+
+// G2 of the review of 2026-09-28: a keyboard opened with only its key, "Save" or "9", since its
+// prompt is in the secondary font and the model read only the title and the focus
+static void test_keyboard_opens_with_prompt_and_value(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f = text_input_frame("RAW_433", true, "Save");
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Name the signal. RAW_433. Save");
+
+    sr_model_init(&m, 1);
+    f = number_input_frame("Frequency", "433", false);
+    n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Frequency. 433. 9");
+
+    // Without a prompt the field is read, but it is not the title: the title stays what the
+    // screen is, while the field changes with every key
+    SrScreen s;
+    f = number_input_frame("", "433", false);
+    sr_screen_build(&f, &s);
+    CHECK(s.on_keyboard && s.title_row < 0);
+    sr_model_init(&m, 1);
+    n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK_STR(out[0].text, "433. 9");
+
+    // Text in the keyboard font without a focus is no keyboard (a text box in hex, a terminal):
+    // its top line in the secondary font is no title
+    SrFrame t;
+    frame_init(&t, SrLayerWindow);
+    add(&t, 2, 8, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Received");
+    add(&t, 0, 20, SrLayerWindow, SrFontKeyboard, false, false, 0, 0, "00 11 22 33");
+    sr_screen_build(&t, &s);
+    CHECK(s.has_keyboard && !s.on_keyboard && s.title_row < 0);
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -847,6 +913,7 @@ int main(void) {
     test_spontaneous_changes_are_all_reported();
     test_keyboard_focus_is_the_single_key();
     test_typing_announces_the_character();
+    test_keyboard_opens_with_prompt_and_value();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();
