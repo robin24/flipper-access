@@ -17,7 +17,8 @@ Words come from tools/voice_words.txt and, when it exists, tools/voice_words.loc
 words such as a device name, not in git), from every string literal in the firmware's core apps
 and services and the dolphin's speech bubble texts, run through the real pronunciation layer
 (--extract), and from the set's missing.txt on the card (--pull-missing). A clip's name is the
-word in lower case without apostrophes ("don't" is dont, spoken as "don't"); a clip listed in
+word in lower case without apostrophes ("don't" is dont, spoken as "don't"), spoken as the texts
+write it most often when they write it both ways (spoken_forms); a clip listed in
 tools/voice_names.txt is spoken as written there, which names the single letters that spell a
 word the device has no clip for. Clips land in the set's directory as <initial>/<word>.raw next
 to its manifest.json, which remembers the set's name, its settings and the settings each clip
@@ -82,7 +83,7 @@ and voice from its manifest unless the command line names them.
 --dry builds the word list and prints its counts without making clips, pulling missing.txt,
 migrating, marking synced or syncing.
 """
-import argparse, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, secrets, shutil, subprocess, sys, tempfile, time
+import argparse, collections, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, secrets, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -389,57 +390,92 @@ def bubble_texts():
 
 
 def expansion_words(line):
-    """The clip names in one line of the pronunciation layer's output and, for each one an
-    apostrophe was stripped from, the original token to speak ("dont" is spoken as "don't").
-    tests/fbt/test_voice_parity.py holds these to the words the device looks up."""
-    words, originals = set(), {}
+    """The clip names in one line of the pronunciation layer's output, and how each token was
+    written: a Counter of (name, spelling) pairs, the spelling the token with its inner
+    apostrophe ("don't" for dont), or None for a token without one. tests/fbt/test_voice_parity.py
+    holds the names to the words the device looks up."""
+    words, spellings = set(), collections.Counter()
     for token in line.split():
         token = token.strip(".,?!;:")
         n = clip_name(token)
         if n:
             words.add(n)
             core = token.strip("'").lower()
-            if "'" in core:  # inside the word, not quotes around it
-                originals[n] = min(originals.get(n, core), core)
-    return words, originals
+            spellings[n, core if "'" in core else None] += 1  # inside the word, not quotes around it
+    return words, spellings
 
 
 def _expand(exe, lines):
     """Run the pronunciation layer over a set of source strings, returning the clip-name words
-    it produces and, for each word an apostrophe was stripped from, the original token to speak
-    ("dont" is spoken as "don't")."""
+    it produces and how often each was written with and without an apostrophe
+    (expansion_words). The layer takes each line on its own."""
     out = subprocess.run([exe], input="\n".join(sorted(lines)) + "\n", capture_output=True, text=True, check=True).stdout
-    words, originals = set(), {}
+    words, spellings = set(), collections.Counter()
     for line in out.splitlines():
-        line_words, line_originals = expansion_words(line)
+        line_words, line_spellings = expansion_words(line)
         words |= line_words
-        for n, core in line_originals.items():
-            originals[n] = min(originals.get(n, core), core)
-    return words, originals
+        spellings += line_spellings
+    return words, spellings
+
+
+def spoken_forms(own, apps):
+    """Which clips to speak with their apostrophe ("dont" as "don't"), from how often each was
+    written with and without one: own counts the firmware's own texts, apps the apps' texts
+    that are not also the firmware's (expansion_words' Counters). A word the firmware's texts
+    hold is decided by those alone, so an app never changes how it sounds, and the others by the
+    apps'. The spelling written most often wins, a tie going to the apostrophe; among several
+    apostrophe spellings the most frequent, then the first in order. Returns the spoken form of
+    each clip that takes an apostrophe, and each clip written both ways, anywhere, with the form
+    chosen, or None for the word as written."""
+    by_name = ({}, {})
+    for counts, names in zip((own, apps), by_name):
+        for (n, spelling), c in counts.items():
+            names.setdefault(n, collections.Counter())[spelling] += c
+    forms, both = {}, {}
+    for n in sorted(set(by_name[0]) | set(by_name[1])):
+        spellings = [names.get(n, collections.Counter()) for names in by_name]
+        if not any(s for written in spellings for s in written if s):
+            continue  # never written with an apostrophe
+        written = spellings[0] or spellings[1]
+        apostrophes = sorted((s for s in written if s), key=lambda s: (-written[s], s))
+        chosen = apostrophes[0] if apostrophes and sum(written[s] for s in apostrophes) >= written[None] else None
+        if chosen:
+            forms[n] = chosen
+        if any(written[None] for written in spellings):
+            both[n] = chosen
+    return forms, both
 
 
 def extract_words(workdir, extra=()):
     """The words of the firmware's strings and the bubble texts, run through the pronunciation
     layer. extra is a list of (label, directories) pairs -- --extract-all's app directories,
     --card-apps's matched ones -- whose own .c and .h strings are folded into the same pipeline
-    on top of the firmware's own, each in turn. The third return value maps each label to how
-    many words it alone added on top of everything folded in before it, so the caller can report
-    an optional source's worth."""
+    on top of the firmware's own, each in turn. The second return value maps each clip spoken
+    with an apostrophe to that spelling (spoken_forms). The third maps each label to how many
+    words it alone added on top of everything folded in before it, so the caller can report an
+    optional source's worth."""
     exe = build_expander(workdir)
     strings = firmware_strings()
     bubbles = bubble_texts()
     log(f"extract: {len(strings)} distinct strings from the firmware sources, {len(bubbles)} bubble texts")
     lines = set(strings) | set(bubbles)
-    words, originals = _expand(exe, lines)
+    words, own = _expand(exe, lines)
+    apps = collections.Counter()
     added = {}
     for label, dirs in extra:
-        lines |= strings_in(dirs)
-        more_words, more_originals = _expand(exe, lines)
-        added[label] = len(more_words - words)
-        words, originals = more_words, more_originals
+        new = strings_in(dirs) - lines
+        lines |= new
+        new_words, new_spellings = _expand(exe, new)
+        added[label] = len(new_words - words)
+        words |= new_words
+        apps += new_spellings
+    originals, both = spoken_forms(own, apps)
     longest = sorted(words, key=lambda w: (-len(w), w))[:10]
     log(f"extract: {len(words)} words; longest: {' '.join(longest)}")
     log(f"extract: {len(originals)} with an apostrophe: {' '.join(originals[n] for n in sorted(originals))}")
+    if both:
+        log(f"extract: {len(both)} written both with and without an apostrophe, spoken as written most often: "
+            + ", ".join(f"{n} as {both[n] or n}" for n in sorted(both)))
     return words, originals, added
 
 

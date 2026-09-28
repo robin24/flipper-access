@@ -8,6 +8,7 @@ or voice than the set was made with; the backend and voice a check speaks with; 
 the engine check before the pool starts; and the refusal of a Python older than 3.10, first thing.
 Importable without pyserial, numpy or the engines (they are imported where they are used). Run
 from the project root: python3 tests/fbt/test_voice_build.py"""
+import collections
 import hashlib
 import importlib.util
 import json
@@ -77,6 +78,32 @@ try:
     check(said is not None and "C compiler" in said, f"--extract without a compiler: one sentence: {said}")
 finally:
     vb.shutil.which = saved_which
+
+# A clip written with and without an apostrophe (T7): the device looks both up by the name
+# without it, so the clip has one spoken form. The spelling written most often wins, a tie going
+# to the apostrophe; a word the firmware's own texts hold is decided by those alone, so an app
+# never changes how it sounds. The counts here are the real ones, with every app
+words, spellings = vb.expansion_words("Don't stop, dont 'quote' we're I'll")
+check(words == {"dont", "stop", "quote", "were", "ill"}
+      and spellings == {("dont", "don't"): 1, ("dont", None): 1, ("stop", None): 1, ("quote", None): 1,
+                        ("were", "we're"): 1, ("ill", "i'll"): 1},
+      f"each token counted with its inner apostrophe, quotes around a word not one: {words}, {spellings}")
+C = collections.Counter
+own = C({("were", None): 2, ("ill", "i'll"): 2, ("dont", None): 2, ("dont", "don't"): 13, ("its", None): 2, ("its", "it's"): 2,
+         ("youre", "you're"): 1})
+apps = C({("were", None): 7, ("were", "we're"): 2, ("ill", None): 1, ("its", None): 25, ("its", "it's"): 11,
+          ("id", None): 119, ("id", "i'd"): 1, ("cant", None): 5, ("cant", "can't"): 94, ("ab", "a'b"): 1, ("ab", "ab'"): 2})
+forms, both = vb.spoken_forms(own, apps)
+check("were" not in forms and "id" not in forms, f"were and id are said as written: {forms}")
+check(forms.get("ill") == "i'll", f"the firmware's own I'll outweighs an app's ill: {forms}")
+check(forms.get("dont") == "don't" and forms.get("cant") == "can't",
+      f"a few texts without the apostrophe do not outweigh the many with it: {forms}")
+check(forms.get("its") == "it's", f"a tie in the firmware's texts goes to the apostrophe, whatever the apps say: {forms}")
+check(forms.get("youre") == "you're" and forms.get("ab") == "ab'", f"otherwise the apostrophe, the most frequent spelling: {forms}")
+check(both == {"were": None, "ill": "i'll", "dont": "don't", "its": "it's", "id": None, "cant": "can't"},
+      f"each word written both ways is reported with the form chosen: {both}")
+check(vb.spoken_forms(own, C({("dont", None): 99}))[0] == vb.spoken_forms(own, C())[0],
+      "an app never changes a word of the firmware's own")
 
 # A clip the engine makes silent is a failure, not 30 ms of silence played for the word (T10)
 import wave  # noqa: E402

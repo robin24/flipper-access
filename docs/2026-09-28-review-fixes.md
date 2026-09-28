@@ -64,6 +64,12 @@ Tools and tests:
   without the file keeps its clips when the three are there, and gets the file.
 - T6: `--pull-missing` keeps the words in the set's `pulled.txt` and leaves the card's list until
   a sync with nothing failed.
+- T7: as you chose in question 3, a word written both with and without an apostrophe is
+  recorded as the texts write it most often, the firmware's own texts deciding the words they
+  hold, and a tie going to the apostrophe. "were" and "id" are recorded as written, and "don't",
+  "can't", "doesn't" and "I'll" keep their apostrophe whichever apps are extracted. Checked
+  against the old code: the same words, and with every app 9 clips spoken differently, none
+  with the firmware's texts alone.
 - T8: the port is found by the Flipper's USB id on any system, opened for one tool alone, and the
   console's first prompt is awaited 5 seconds.
 - T10: `upstream_check.sh` names a missing remote; a silent clip counts as failed; `--jobs 0` is
@@ -93,21 +99,18 @@ roadmap, the docs index and the merge routine where the code changed.
 - G9's other three items: the file browser's position counts the parent folder entry and never
   says the folder's name; `elements_button_up` and `elements_button_down` have no button hint; and
   hyphenated or wrapped text splits words.
-- T7 and T9 change what is on your card: see the questions.
+- T9 changes what is on your card: see the questions.
 - T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
   that wants a measurement on the device first.
 - R10's licence texts and source bundle, R11, R13 to R16, and R2, R3 and R5 to R9 belong to plan C.
 
 ## Questions for you
 
-1. T7: when a word also occurs without an apostrophe, may the generator make the plain form, so
-   "were", "ill" and "id" are recorded as written? Those clips change on your card at the next
-   sync.
-2. T9: may the generator add the app names from the apps' manifests, about 222 more words? They
+1. T9: may the generator add the app names from the apps' manifests, about 222 more words? They
    add clips to your card.
-3. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
+2. The report's questions 2 to 5: the card-reader install path, a listening test at 11 kHz, the
    fork's inherited GitHub files, and the About screen's website line.
-4. Shall I open pull requests for the two branches?
+3. Shall I open pull requests for the two branches?
 
 ## Checks on the device
 
@@ -221,6 +224,13 @@ line per hundred clips, and the card's missing list stays until the sync succeed
 
 ```bash
 .venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync
+```
+
+Apostrophes, T7: that sync's extraction lists the words written both ways, with the form it
+chose. After it, "were" sounds as written:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr say They were here"
 ```
 
 The card's code, T5: after that sync, run the same command again. It says "0 sent", and the

@@ -557,7 +557,11 @@ resends everything.
   spelled every time, `md5` as "em dee five", logged as missing, and dropped by
   `--pull-missing`.
 - Apostrophes are left out of clip names: "don't" is `dont.raw`, recorded as "don't". So two words
-  that differ only by an apostrophe share one clip: "ill" plays the clip recorded as "i'll".
+  that differ only by an apostrophe share one clip, recorded as the texts write it most often: the
+  firmware's own texts decide for the words they hold, and the apps' texts only for the others,
+  with a tie going to the apostrophe. The dolphin's "I'll" makes "ill" play as "i'll", while
+  "were" and "id" are recorded as written, though an app writes "we're" and "I'd". The
+  extraction lists each word written both ways, with the form it chose.
 - A word the device logs as missing has already lost its apostrophe, so `--pull-missing` records
   "wont" as it is spelled, not as "won't". Words from the firmware's own strings keep their spoken
   form.
