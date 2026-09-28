@@ -268,13 +268,21 @@ def spoken_text(word, names):
     return word
 
 
+def c_compiler():
+    """The first of clang, cc and gcc on the PATH; None without any."""
+    return next((c for c in ("clang", "cc", "gcc") if shutil.which(c)), None)
+
+
 def build_expander(workdir):
     exe = os.path.join(workdir, "speech_expand")
     src = os.path.join(ROOT, "tests", "host", "speech_expand.c")
     layer = os.path.join(SRC, "speech_text.c")
     newest = max(os.path.getmtime(p) for p in (src, layer, os.path.join(SRC, "speech_text.h")))
     if not os.path.exists(exe) or os.path.getmtime(exe) < newest:
-        subprocess.run(["clang", "-std=c11", "-O1", "-I", SRC, "-o", exe, src, layer], check=True)
+        cc = c_compiler()
+        if cc is None:
+            sys.exit("--extract builds the firmware's speech expander, which needs a C compiler: clang, cc or gcc")
+        subprocess.run([cc, "-std=c11", "-O1", "-I", SRC, "-o", exe, src, layer], check=True)
     return exe
 
 
@@ -559,6 +567,9 @@ def make_clip(job):
         x = highpass(x, hz, settings["highpass"])
         x = finish(x, settings["gain"], settings["soft"])
         x = trim(x, hz)
+        if not x:
+            # Written, it would be 30 ms of silence, played where the word should be spelled
+            return word, False, "the engine gave silence, so no clip is made and the device spells the word"
         x = pad(x, hz)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "wb") as f:
@@ -858,6 +869,8 @@ def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
     import serial  # pyserial, which open_storage has loaded: its errors are the connection's
     was_on = False
     clean = True
+    synced = None  # what has reached the card, saved however the sync ends
+    synced_path = os.path.join(out_dir, "synced.json")
     try:
         refusal = legacy_refusal(storage.exist)
         if refusal:
@@ -865,7 +878,6 @@ def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
         was_on = voice_off(storage)
         renewed = time.monotonic()
         t0 = time.time()
-        synced_path = os.path.join(out_dir, "synced.json")
         synced = {} if force_all else (json.load(open(synced_path)) if os.path.exists(synced_path) else {})
         words = manifest.get("words", {})
         if card_lacks_synced(storage, card, synced, words):
@@ -927,6 +939,13 @@ def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
         return missing + failed
     except BaseException:
         clean = False
+        if synced is not None:
+            # A sync stopped or cut off keeps the record of what it sent, so the next one does
+            # not send it again
+            try:
+                save_manifest(synced, synced_path)
+            except BaseException:
+                pass
         raise
     finally:
         end_transfer(storage, port, was_on, clean)
@@ -1057,6 +1076,8 @@ def main():
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new clips (for trials)")
     a = ap.parse_args()
+    if a.jobs < 1:
+        sys.exit(f"--jobs {a.jobs}: at least one job is needed")
     if not set_valid(a.set):
         sys.exit(f"{a.set!r} is not a set name: 1 to 31 lower case letters, digits, hyphens and underscores, and not auto")
     out_dir = set_local_dir(a.set)

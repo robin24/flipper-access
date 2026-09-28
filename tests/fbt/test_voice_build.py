@@ -46,6 +46,64 @@ finally:
     vb.PYTHON_MIN, sys.argv = saved_min, saved_argv
 check(refused is not None and "99.0 or newer" in refused, f"main() checks the version before anything else: {refused}")
 
+# --jobs below one is refused in one sentence, before anything else is done
+saved_argv = sys.argv
+sys.argv = ["voice_build.py", "--jobs", "0", "--dry"]
+try:
+    vb.main()
+    refused = None
+except SystemExit as e:
+    refused = str(e.code)
+finally:
+    sys.argv = saved_argv
+check(refused is not None and "--jobs 0" in refused, f"--jobs 0 is refused: {refused}")
+
+# The expander's compiler: clang, else cc, else gcc; without any, one sentence
+saved_which = vb.shutil.which
+try:
+    vb.shutil.which = lambda name: "/usr/bin/gcc" if name == "gcc" else None
+    check(vb.c_compiler() == "gcc", "gcc when there is no clang or cc")
+    vb.shutil.which = lambda name: f"/usr/bin/{name}"
+    check(vb.c_compiler() == "clang", "clang first")
+    vb.shutil.which = lambda name: None
+    check(vb.c_compiler() is None, "none")
+    import tempfile as _tempfile
+    with _tempfile.TemporaryDirectory() as d:
+        try:
+            vb.build_expander(d)
+            said = None
+        except SystemExit as e:
+            said = str(e.code)
+    check(said is not None and "C compiler" in said, f"--extract without a compiler: one sentence: {said}")
+finally:
+    vb.shutil.which = saved_which
+
+# A clip the engine makes silent is a failure, not 30 ms of silence played for the word (T10)
+import wave  # noqa: E402
+
+def fake_say(samples):
+    def synth(text, voice, rate, wav_path):
+        with wave.open(wav_path, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(16000)
+            w.writeframes(b"".join(int(v).to_bytes(2, "little", signed=True) for v in samples))
+    return synth
+
+saved_say = vb.synth_say
+try:
+    with _tempfile.TemporaryDirectory() as d:
+        settings = vb.settings_for("say", {})
+        out = os.path.join(d, "q", "quiet.raw")
+        vb.synth_say = fake_say([0] * 1600)
+        word, ok, msg = vb.make_clip(("quiet", "quiet", settings, out))
+        check(not ok and "silence" in msg and not os.path.exists(out), f"a silent clip fails and is not written: {ok}, {msg}")
+        vb.synth_say = fake_say([int(12000 * math.sin(i / 3)) for i in range(3200)])
+        word, ok, msg = vb.make_clip(("tone", "tone", settings, out))
+        check(ok and os.path.getsize(out) > 480, f"a clip with sound is written: {ok}, {msg}")
+finally:
+    vb.synth_say = saved_say
+
 for name in ["samantha", "heart", "espeak", "en-us_f3", "a" * 31]:
     check(vb.set_valid(name), f"valid set name: {name}")
 for name in ["", "Heart", "two words", "a/b", ".", "a" * 32, "héart", "auto"]:
@@ -369,6 +427,15 @@ else:
             check(result == (0 if cleared else 1) and removed == cleared and os.path.exists(pulled_path) != cleared,
                   f"pulled words cleared only after a sync without failures ({cleared}): {result!r}, {c.commands}")
         os.remove(pulled_path)
+
+        # Cut off at the second clip: synced.json keeps the first, so the next sync does not send it
+        # again (T10)
+        if os.path.exists(os.path.join(out_dir, "synced.json")):
+            os.remove(os.path.join(out_dir, "synced.json"))
+        c1, c2 = FakeConsole(fail_send={2: KeyboardInterrupt()}), FakeConsole()
+        result, opened, said = transfer([c1, c2], sync)
+        kept = json.load(open(os.path.join(out_dir, "synced.json"))) if os.path.exists(os.path.join(out_dir, "synced.json")) else None
+        check(isinstance(result, KeyboardInterrupt) and kept == {"alpha": "h1"}, f"an interrupted sync keeps its record: {kept}")
 
         # A voice that was off before the sync stays off, after a failure too: no fresh session
         c1 = FakeConsole(voice="off", fail_send={1: KeyboardInterrupt()})
