@@ -204,7 +204,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
    ```
 
 4. The API table: if it conflicts, take Momentum's side. Then run the script in any case, since
-   it also removes a JavaScript line that merged without a conflict.
+   it also removes a JavaScript line that merged without a conflict. It sets the version to the
+   merged table's own with the fork's step added, so a table that already has the fork's version
+   keeps it.
 
    ```bash
    git -C Momentum-Firmware checkout --theirs targets/f7/api_symbols.csv
