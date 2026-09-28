@@ -129,6 +129,12 @@ More about the chords:
 - While the reader is off, the chords are ordinary key presses, all but Back and Down held, which
   turns the reader on again. Back and Up on the home screen then opens the lock menu. A short press
   of Down while Back is held does nothing then: the reader holds Down back until it is held long.
+  If you let go of Back before Down's long press, a long press of Back is dropped, so the chord
+  can still turn the reader on without the power-off dialog opening as well.
+- Holding Back does not repeat, with the reader on or off, and for sighted users too, since the
+  long press of Back waits for its release. In the text keyboard, holding Back deletes one
+  character when you let go, not one after another while you hold it. In the byte keyboard,
+  holding Back clears the selected byte when you let go.
 - Back and Down held works on the lock screen too, where Back with Down means nothing else. After
   a reboot into a lock with the reader off, it is the way to get speech back.
 - Chords work with the device's buttons and with `input send` on the console, each on its own:
