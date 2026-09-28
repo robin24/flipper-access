@@ -241,11 +241,19 @@ is untested; the separate pack also lets the voice change without a firmware upd
 Workflows live in the project repository; the fork's stay disabled.
 
 `build.yml`, on every push and pull request: check out with submodules (shallow, with
-`FBT_GIT_SUBMODULE_SHALLOW=1` as Momentum's workflow does); run the host tests with clang on
-Ubuntu (`run_host_tests.sh` gets a bash-compatible form, and `flash_headroom.sh` a portable
-`stat`); run `tests/fbt`; build the firmware with `./fbt COMPACT=1 DEBUG=0 updater_package`
-(fbt downloads the toolchain itself); check the headroom against the 880,640-byte limit;
-upload the package as a workflow artifact. Expected time: fifteen to twenty minutes.
+`FBT_GIT_SUBMODULE_SHALLOW=1` as Momentum's workflow does), and fetch alone the Momentum commit
+the fork builds on, pinned in `tools/momentum-base.txt`, for the golden checks; run the host
+tests with clang on Ubuntu (`run_host_tests.sh` gets a bash-compatible form, and
+`flash_headroom.sh` a portable `stat`) and `tests/fbt` on Python 3.10, the oldest the tools
+support, with the packages of `requirements.txt`, and `--no-skips`, so that no check is left
+out; run Momentum's lint, `./fbt lint_all`; build the firmware with
+`./fbt COMPACT=1 DEBUG=0 updater_package` (fbt downloads the toolchain itself); check with
+`git diff --exit-code` that the build changed no tracked file, since fbt rewrites the API table
+when the API drifts; check the headroom against the radio stack's address in the package's
+`update.fuf`, 880,640 bytes with ble_light 1.20.0; upload the package as a workflow artifact.
+The fork's own workflows stay disabled, so the same workflow builds the fork's `screen-reader`
+tip every Monday, and by hand any branch, tag or commit of the fork. Expected time: fifteen to
+twenty minutes.
 
 `release.yml`, on a tag `sonar-X.Y.Z` in the project repository: the same build, and a GitHub
 Release with these assets: the update package `.tgz` from fbt, the voice packs

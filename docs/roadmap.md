@@ -31,7 +31,7 @@ Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-gi
 
 - Intrusive hooks stay tiny and isolated: the canvas text tap in gui, the speaker mutex in the signal reader. Everything else is a service under `applications/services/screen_reader`.
 - Removals happen through build configuration and app manifests, not by deleting code, so merges from Momentum stay mechanical.
-- A CI build (GitHub Actions, Linux fbt) with the host tests runs on every push, so also on the submodule bump that follows each merge from Momentum; the flash boundary check (`tools/flash_headroom.sh`) is part of it.
+- A CI build (GitHub Actions, Linux fbt) with the host tests runs on every push, so also on the submodule bump that follows each merge from Momentum. Part of it are the flash boundary check (`tools/flash_headroom.sh`), against the radio stack's address in the build's update package; Momentum's lint; a check that the build changed no tracked file; and the golden checks against the Momentum commit pinned in `tools/momentum-base.txt`. Since pushes to the fork build nothing, it also builds the fork's `screen-reader` tip every Monday.
 - If Momentum ever wants the canvas hook behind a flag, that small change can be Robin's own contribution and shrinks the delta.
 
 ## Memory plan, in order
