@@ -5,7 +5,8 @@ changes A and adds C, a branch "theirs" that changes A and B (a conflict on A), 
 changed on both sides, name the conflicts of the dry-run merge, and exit 2, 0 and 0. With the
 fetch on, a ref without a slash, such as a release tag, is fetched from the remote "upstream"
 with its tags, and a ref with a slash from the remote named before the slash. An option given
-last without its value ends with one sentence and exit 1. The dry run needs git merge-tree
+last without its value ends with one sentence and exit 1, and so do a missing remote, with the
+command that adds Momentum's, and a fetch that fails. The dry run needs git merge-tree
 --write-tree, git 2.38 or newer; with an older git the test says it skipped and exits 0. Run
 from the project root: python3 tests/fbt/test_upstream_check.py"""
 import os
@@ -102,6 +103,12 @@ with tempfile.TemporaryDirectory() as tmp:
     code, out = run_check(repo, "nonexistent", "ours")
     check(code == 1, f"a bad ref exits 1, got {code}")
 
+    # No remote "upstream" yet: one sentence with the command that adds it, and exit 1, not git's 128
+    code, out = run_check(repo, "mntm-013", "ours", fetch=True)
+    said = out.strip()
+    check(code == 1 and len(said.splitlines()) == 1 and "remote add upstream https://github.com/Next-Flip/Momentum-Firmware.git" in said,
+          f"a missing remote: one sentence and exit 1, got {code}:\n{said}")
+
     # Two remotes that "r" has not fetched yet: "upstream" with a release tag, "other" with a branch.
     for name in ("upstream", "other"):
         remote = os.path.join(tmp, name)
@@ -121,6 +128,12 @@ with tempfile.TemporaryDirectory() as tmp:
     code, out = run_check(repo, "other/newer", "ours", fetch=True)
     check(code == 0 and "upstream other/newer: 2 new commits" in out and "dry-run merge: clean" in out,
           f"a ref with a slash is fetched from the remote named before the slash:\n{out}")
+
+    git(repo, "remote", "add", "broken", os.path.join(tmp, "nowhere"))
+    code, out = run_check(repo, "broken/dev", "ours", fetch=True)
+    said = out.strip()
+    check(code == 1 and len(said.splitlines()) == 1 and "could not fetch" in said,
+          f"a fetch that fails: one sentence and exit 1, got {code}:\n{said}")
 
     for option in ("--repo", "--upstream", "--ours"):
         code, out = run_script("--no-fetch", option)

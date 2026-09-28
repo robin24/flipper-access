@@ -10,8 +10,8 @@
 # check before merging a release). Prints the merge base, how many commits are new upstream, the
 # fork's footprint, the files changed on both sides since the base, and the conflicts of a
 # dry-run merge (git merge-tree --write-tree, git 2.38 or newer). Exit 0 when there is nothing to
-# merge or the dry run is clean, 2 on conflicts, 1 on an error, an option without its value
-# included. Tested by tests/fbt/test_upstream_check.py. After a real merge, run
+# merge or the dry run is clean, 2 on conflicts, 1 on an error, an option without its value, a
+# remote that is missing and a fetch that fails included, each said in one sentence. Tested by tests/fbt/test_upstream_check.py. After a real merge, run
 # tools/strip_js_symbols.py and tools/subghz_manifest.py --verify-upstream, then the host tests
 # and a build; docs/device-notes.md has the whole routine under Merging Momentum.
 set -euo pipefail
@@ -37,7 +37,14 @@ if [ "$FETCH" = 1 ]; then
     */*) REMOTE="${UPSTREAM%%/*}" ;;
     *) REMOTE=upstream ;;
   esac
-  git fetch --quiet --tags "$REMOTE"
+  if ! git remote get-url "$REMOTE" > /dev/null 2>&1; then
+    echo "no remote \"$REMOTE\" in $REPO; for Momentum's: git -C \"$REPO\" remote add upstream https://github.com/Next-Flip/Momentum-Firmware.git" >&2
+    exit 1
+  fi
+  if ! git fetch --quiet --tags "$REMOTE" 2> /dev/null; then
+    echo "could not fetch the remote \"$REMOTE\" ($(git remote get-url "$REMOTE")): is the network there?" >&2
+    exit 1
+  fi
 fi
 if ! BASE=$(git merge-base "$OURS" "$UPSTREAM" 2>/dev/null); then
   echo "no merge base between $OURS and $UPSTREAM" >&2

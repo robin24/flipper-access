@@ -184,9 +184,11 @@ further lists, and can be given more than once.
 The fork follows Momentum by merging its release tags into `screen-reader`, never by a rebase.
 Run the steps from the project folder; mntm-013 stands for the tag to merge.
 
-1. Fetch Momentum's branches and tags:
+1. Fetch Momentum's branches and tags. The first time, add Momentum as the remote `upstream`,
+   which a fresh clone of the project lacks:
 
    ```bash
+   git -C Momentum-Firmware remote add upstream https://github.com/Next-Flip/Momentum-Firmware.git
    git -C Momentum-Firmware fetch --tags upstream
    ```
 
