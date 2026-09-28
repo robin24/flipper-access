@@ -474,8 +474,10 @@ The missing-word command gives the words the device had to spell their own clips
 .venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync
 ```
 
-It fetches `missing.txt` from the card, makes clips for those words, sends them and removes the
-list. `--extract` is there because the spoken form of a word with an apostrophe comes from the
+It fetches `missing.txt` from the card, makes clips for those words and sends them. The words
+leave the card's list only once every clip was made and sent; until then they wait in the set's
+`pulled.txt` on the computer, so a run that fails or is stopped loses none of them, and the next
+run makes them again. `--extract` is there because the spoken form of a word with an apostrophe comes from the
 extraction, not from `missing.txt`, which has already lost the apostrophe. `--card-apps` adds the
 strings of the apps actually on the card, so a newly installed app's own words get clips too. For
 a few words it takes about 3 to 4 seconds.

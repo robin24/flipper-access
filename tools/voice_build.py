@@ -24,8 +24,10 @@ to its manifest.json, which remembers the set's name, its settings and the setti
 was made with, so a rerun makes only what is missing or changed, and its voice.txt, the settings
 line the device shows. --sync uploads new or changed clips to /ext/sr/voices/<set>/<hh>/<word>.raw
 on the card, hh being the word's FNV-1a hash modulo 64 as two hex digits, the same folder the
-firmware's speech_voice_path computes, and then the set's voice.txt; --pull-missing removes the
-pulled missing list. --migrate-sets moves the card's first layout, /ext/sr/voice and
+firmware's speech_voice_path computes, and then the set's voice.txt. --pull-missing keeps the
+words it pulls in the set's pulled.txt, which every run adds to its words, and leaves the card's
+list alone; a sync with nothing failed, made or sent, then removes those words from the card's
+list, and the file. --migrate-sets moves the card's first layout, /ext/sr/voice and
 /ext/sr/missing.txt, into /ext/sr/voices/samantha, and refuses when the new place is taken;
 until then --sync and --pull-missing refuse such a card, since a set folder they started there
 would stand in the migration's way. --mark-synced writes the set's synced.json from its manifest
@@ -752,9 +754,19 @@ def end_transfer(storage, port, was_on, clean):
             pass
 
 
+def write_list(path, words):
+    """One word per line, sorted, as load_list reads them; atomically, as save_manifest writes."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("".join(f"{w}\n" for w in sorted(words)))
+    os.replace(tmp, path)
+
+
 def pull_missing(port, set_name):
-    """The words the device found no clip for in the set: its missing.txt on the card, which is
-    removed once read. Refused, before anything else, on a card that still has the first layout."""
+    """The words the device found no clip for in the set: its missing.txt on the card, read and
+    left there; main() keeps them in the set's pulled.txt, and a sync that sends every clip takes
+    them off the card's list (clear_pulled). Refused, before anything else, on a card that still
+    has the first layout."""
     path = set_card_dir(set_name) + "/missing.txt"
     storage, _ = open_storage(port)
     words = set()
@@ -770,14 +782,32 @@ def pull_missing(port, set_name):
                 local = os.path.join(d, "missing.txt")
                 storage.receive_file(path, local)
                 words = load_list(local)
-            storage.remove(path)
-        log(f"pulled {len(words)} missing words from {path}")
+        log(f"pulled {len(words)} missing words from {path}, which stays on the card until they are synced")
     except BaseException:
         clean = False
         raise
     finally:
         end_transfer(storage, port, was_on, clean)
     return words
+
+
+def clear_pulled(storage, card, pulled):
+    """The card's missing.txt without the words pulled from it, now that their clips are on the
+    card: removed when it holds no others, else written back with the ones the device noted since
+    the pull. Runs in the sync's session, with the voice muted, so the device notes none
+    meanwhile. Returns how many words stay on the list."""
+    path = f"{card}/missing.txt"
+    if not storage.exist_file(path):
+        return 0
+    with tempfile.TemporaryDirectory() as d:
+        local = os.path.join(d, "missing.txt")
+        storage.receive_file(path, local)
+        left = load_list(local) - set(pulled)
+        storage.remove(path)
+        if left:
+            write_list(local, left)
+            send_to_card(storage, local, path)
+    return len(left)
 
 
 def card_lacks_synced(storage, card, synced, words):
@@ -791,7 +821,7 @@ def card_lacks_synced(storage, card, synced, words):
     return any(not storage.exist_file(f"{card}/{bucket(w)}/{w}.raw") for w in {sent[0], sent[len(sent) // 2], sent[-1]})
 
 
-def sync(port, out_dir, manifest, set_name, force_all=False):
+def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
     """Send the set's voice.txt and the clip files the device actually uses (not .build, not
     manifest.json) to the set's folder on the card, /ext/sr/voices/<set>. The set's synced.json
     remembers the settings hash uploaded for each word, so a rerun only sends what's missing or
@@ -799,7 +829,9 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
     not on the card, everything is sent, as --sync-all does (card_lacks_synced). A word whose
     local clip is missing or whose send fails is reported and left out of synced.json, so the
     next sync tries it again, and the other words still go. Returns the number of such words for
-    main()'s exit code. Refused, before anything is sent, on a card that still has the first
+    main()'s exit code. With pulled, the words --pull-missing took from the card's missing.txt,
+    and nothing missing or failed, those words then leave the card's list, and the set's
+    pulled.txt goes. Refused, before anything is sent, on a card that still has the first
     layout."""
     card = set_card_dir(set_name)
     storage, ops = open_storage(port)
@@ -865,6 +897,13 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
         ops.mkpath(card)
         send_to_card(storage, os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
         log(f"sync: {sent} sent, {skipped} skipped, {missing} missing, {failed} failed, {time.time() - t0:.0f} s")
+        if pulled and not (missing or failed):
+            left = clear_pulled(storage, card, pulled)
+            pulled_path = os.path.join(out_dir, "pulled.txt")
+            if os.path.exists(pulled_path):
+                os.remove(pulled_path)
+            log(f"sync: the {len(pulled)} pulled words are off the card's missing list"
+                + (f"; {left} noted since stay on it" if left else ""))
         return missing + failed
     except BaseException:
         clean = False
@@ -987,7 +1026,7 @@ def main():
     ap.add_argument("--extract", action="store_true", help="add the firmware's strings through the pronunciation layer")
     ap.add_argument("--extract-all", action="store_true", help="with --extract: also add every app under applications/external, not just the ones on the card")
     ap.add_argument("--card-apps", action="store_true", help="with --extract: also add the apps actually installed on the card (needs the device, read-only)")
-    ap.add_argument("--pull-missing", action="store_true", help="add and clear the set's missing.txt on the card")
+    ap.add_argument("--pull-missing", action="store_true", help="add the words of the set's missing.txt on the card, kept in its pulled.txt until a sync with nothing failed takes them off the card's list")
     ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the set's folder on the card")
     ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore the set's synced.json and resend everything (for a wiped card)")
     ap.add_argument("--migrate-sets", action="store_true", help="move the card's /ext/sr/voice and /ext/sr/missing.txt into /ext/sr/voices/samantha, once")
@@ -1074,11 +1113,18 @@ def main():
                 f"{added.get('card-apps', 0)} words added; unmatched: {skipped}")
     elif a.extract_all or a.card_apps:
         log("--extract-all and --card-apps only add to the word pipeline together with --extract; ignored")
+    # Words pulled before and not yet synced, from a run that failed or stopped: kept in the set's
+    # pulled.txt, since the card keeps its list until they are synced
+    pulled_path = os.path.join(out_dir, "pulled.txt")
+    pulled = load_list(pulled_path)
     if a.pull_missing:
         if a.dry:
             log("dry run: missing.txt not pulled")
         else:
-            words |= pull_missing(a.port, a.set)
+            pulled |= pull_missing(a.port, a.set)
+            os.makedirs(out_dir, exist_ok=True)
+            write_list(pulled_path, pulled)
+    words |= pulled
 
     if a.dry:
         log(f"dry run: {len(words)} words total, no clips made")
@@ -1126,7 +1172,8 @@ def main():
         f.write(settings_line(settings) + "\n")
     log(f"made {made} clips, {failed} failed, {time.time() - t0:.0f} s; vocabulary {len(manifest['words'])} words in {out_dir}")
     if a.sync:
-        failed += sync(a.port, out_dir, manifest, a.set, a.sync_all)
+        # The pulled words leave the card's list only when every clip was made
+        failed += sync(a.port, out_dir, manifest, a.set, a.sync_all, pulled if not failed else None)
     if failed:
         log(f"{failed} clip(s) failed to build or sync")
     return 1 if failed else 0

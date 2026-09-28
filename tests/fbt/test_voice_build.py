@@ -214,6 +214,8 @@ class FakeConsole:
         error = self.fail_send.get(len(self.sent))
         if error:
             raise error
+        self.written = getattr(self, "written", {})
+        self.written[remote] = open(local).read() if remote.endswith(".txt") else None
 
     def stop(self):
         self.stopped += 1
@@ -356,6 +358,18 @@ else:
               "words synced.json lists that the manifest no longer has are not looked up")
         check(not vb.card_lacks_synced(FakeConsole(), card, {}, words), "nothing synced, nothing to look up")
 
+        # A sync that sends every clip takes the pulled words off the card's list, and pulled.txt
+        # goes; one with a clip failed leaves both for the next (T6)
+        pulled_path = os.path.join(out_dir, "pulled.txt")
+        for fail, cleared in (({}, True), ({2: ValueError("a clip the protocol refused")}, False)):
+            vb.write_list(pulled_path, {"zulu"})
+            c = FakeConsole(missing="zulu\n", fail_send=fail)
+            result, opened, said = transfer([c], lambda: vb.sync("port", out_dir, manifest, "heart", True, {"zulu"}))
+            removed = f"remove {card}/missing.txt" in c.commands
+            check(result == (0 if cleared else 1) and removed == cleared and os.path.exists(pulled_path) != cleared,
+                  f"pulled words cleared only after a sync without failures ({cleared}): {result!r}, {c.commands}")
+        os.remove(pulled_path)
+
         # A voice that was off before the sync stays off, after a failure too: no fresh session
         c1 = FakeConsole(voice="off", fail_send={1: KeyboardInterrupt()})
         result, opened, said = transfer([c1], sync)
@@ -371,6 +385,27 @@ else:
     result, opened, said = transfer([c], lambda: vb.pull_missing("port", "heart"))
     check(result == {"zulu"} and c.commands[-1] == "sr voice on\r" and len(opened) == 1,
           f"a clean pull restores the voice in the same session: {result}, {c.commands}")
+    check(not any(cmd.startswith("remove") for cmd in c.commands), f"and leaves the card's list there (T6): {c.commands}")
+
+    # The card's list once the pulled words are synced (T6): gone when it held only those, written
+    # back with a word noted since, and left alone when there is none
+    missing_path = vb.set_card_dir("heart") + "/missing.txt"
+    c = FakeConsole(missing="zulu\n")
+    result, opened, said = transfer([c], lambda: vb.clear_pulled(c, vb.set_card_dir("heart"), {"zulu"}))
+    check(result == 0 and f"remove {missing_path}" in c.commands and c.sent == [], f"only pulled words: removed: {result}, {c.commands}")
+    c = FakeConsole(missing="zulu\nyankee\n")
+    result, opened, said = transfer([c], lambda: vb.clear_pulled(c, vb.set_card_dir("heart"), {"zulu"}))
+    check(result == 1 and f"remove {missing_path}" in c.commands and c.written.get(missing_path) == "yankee\n",
+          f"a word noted since the pull is written back: {result}, {c.commands}, {getattr(c, 'written', {})}")
+    c = FakeConsole()
+    result, opened, said = transfer([c], lambda: vb.clear_pulled(c, vb.set_card_dir("heart"), {"zulu"}))
+    check(result == 0 and c.commands == [] and c.sent == [], "no list on the card: nothing to do")
+
+    with tempfile.TemporaryDirectory() as d:
+        path = os.path.join(d, "pulled.txt")
+        vb.write_list(path, {"zulu", "alpha"})
+        check(open(path).read() == "alpha\nzulu\n" and vb.load_list(path) == {"alpha", "zulu"},
+              "pulled.txt: a word a line, sorted, read back as it was written")
 
 
 # send_to_card over the storage protocol: write_chunk, "Ready", the data, the prompt; no line of its
