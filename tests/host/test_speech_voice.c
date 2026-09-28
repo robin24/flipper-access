@@ -356,6 +356,27 @@ static void test_missing(void) {
     CHECK(speech_voice_missing(&s, "r66") == true);
 }
 
+// A timed mute, sr voice off with seconds, ends at its tick and only then; a plain off never ends
+// by itself, and the voice on is never "over"
+static void test_timed_mute(void) {
+    CHECK(!speech_voice_mute_over(false, true, 60000, 59999));
+    CHECK(speech_voice_mute_over(false, true, 60000, 60000));
+    CHECK(speech_voice_mute_over(false, true, 60000, 60001));
+    CHECK(speech_voice_mute_over(false, true, 60000, 1000000));
+    CHECK(!speech_voice_mute_over(false, false, 60000, 1000000));
+    CHECK(!speech_voice_mute_over(true, true, 60000, 1000000));
+    CHECK(!speech_voice_mute_over(true, false, 0, 0));
+    // Across the wrap of the 32-bit millisecond tick, after about 49.7 days: a mute set 10 s
+    // before the wrap for 60 s ends 50 s after it, not at once and not 49 days later
+    uint32_t set = 0xFFFFFFFFu - 10000u;
+    uint32_t on_at = set + 60000u;
+    CHECK(!speech_voice_mute_over(false, true, on_at, set));
+    CHECK(!speech_voice_mute_over(false, true, on_at, 0xFFFFFFFFu));
+    CHECK(!speech_voice_mute_over(false, true, on_at, 49998u));
+    CHECK(speech_voice_mute_over(false, true, on_at, 49999u));
+    CHECK(speech_voice_mute_over(false, true, on_at, 50000u));
+}
+
 int main(void) {
     test_words();
     test_paths();
@@ -363,6 +384,7 @@ int main(void) {
     test_set_choice();
     test_letters();
     test_missing();
+    test_timed_mute();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

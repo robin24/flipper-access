@@ -146,6 +146,190 @@ check(vb.mark_synced({"words": {"a": "x", "b": "y"}}) == {"a": "x", "b": "y"}, "
 check(vb.mark_synced({"words": {}}) == {}, "an empty manifest gives an empty dict")
 check(vb.mark_synced({}) == {}, "a manifest with no words key gives an empty dict too")
 
+# The voice's guard around a transfer, with a fake console. The mute is timed (sr voice off 60)
+# and renewed as the sync goes, so a tool that dies cannot leave the reader muted; the voice is
+# restored in the same session after a clean run, and through a fresh one after a failure, since
+# a Ctrl-C between a write_chunk and its data leaves the old session waiting for file bytes. A
+# second Ctrl-C during the restore, or a port that is gone, is reported, never raised, and the
+# session is always closed. A connection that fails stops the sync at once.
+class FakeRead:
+    stall = None
+
+
+class FakeConsole:
+    """What sync, pull_missing and end_transfer use of flipper.storage.FlipperStorage."""
+
+    def __init__(self, voice="on", fail_send=None, fail_command=None, missing=None):
+        self.commands = []
+        self.sent = []
+        self.stopped = 0
+        self.read = FakeRead()
+        self.voice = voice
+        self.fail_send = fail_send or {}  # the nth send_file (1-based): the exception it raises
+        self.fail_command = fail_command  # (command, exception)
+        self.missing = missing
+
+    def send_and_wait_prompt(self, line):
+        self.commands.append(line)
+        if self.fail_command and line == self.fail_command[0]:
+            raise self.fail_command[1]
+        return f"voice: {self.voice}, vocabulary yes set heart\r\n".encode() if line == "sr voice status\r" else b""
+
+    def exist(self, path):
+        return False
+
+    def exist_file(self, path):
+        return self.missing is not None and path.endswith("/missing.txt")
+
+    def receive_file(self, remote, local):
+        if isinstance(self.missing, BaseException):
+            raise self.missing
+        with open(local, "w") as f:
+            f.write(self.missing)
+
+    def remove(self, path):
+        self.commands.append(f"remove {path}")
+
+    def send_file(self, local, remote):
+        self.sent.append(remote)
+        error = self.fail_send.get(len(self.sent))
+        if error:
+            raise error
+
+    def stop(self):
+        self.stopped += 1
+
+
+class FakeOps:
+    def mkpath(self, path):
+        pass
+
+
+def transfer(consoles, run, renew_s=0):
+    """Runs run() with open_storage handing out the consoles in turn (an exception in the list is
+    raised instead), GUARD_RENEW_S at renew_s and the log collected. Returns (what run returned
+    or raised, the stall each open asked for, the log)."""
+    opened, said = [], []
+    queue = list(consoles)
+    saved = vb.open_storage, vb.log, vb.GUARD_RENEW_S
+
+    def fake_open(port, stall=None):
+        opened.append(stall)
+        c = queue.pop(0)
+        if isinstance(c, BaseException):
+            raise c
+        return c, FakeOps()
+
+    vb.open_storage, vb.log, vb.GUARD_RENEW_S = fake_open, said.append, renew_s
+    try:
+        try:
+            outcome = run()
+        except BaseException as e:  # noqa: B902 (a Ctrl-C is what these checks are about)
+            outcome = e
+    finally:
+        vb.open_storage, vb.log, vb.GUARD_RENEW_S = saved
+    return outcome, opened, said
+
+
+if importlib.util.find_spec("serial") is None:
+    print("skipped the guard checks: no pyserial")
+else:
+    import tempfile
+    with tempfile.TemporaryDirectory() as out_dir:
+        words = {"alpha": "h1", "bravo": "h2", "charlie": "h3"}
+        for word in words:
+            os.makedirs(os.path.join(out_dir, vb.initial(word)), exist_ok=True)
+            open(os.path.join(out_dir, vb.initial(word), word + ".raw"), "wb").close()
+        open(os.path.join(out_dir, "voice.txt"), "w").close()
+        manifest = {"words": words}
+
+        def sync():
+            return vb.sync("port", out_dir, manifest, "heart", force_all=True)
+
+        # A clean sync: the timed mute, renewed before each word here, and the voice back on in
+        # the same session, which waits less for it
+        c = FakeConsole()
+        result, opened, said = transfer([c], sync)
+        guard = f"sr voice off {vb.GUARD_S}\r"
+        check(result == 0 and len(c.sent) == 4, f"a clean sync sends the three clips and voice.txt: {result}, {c.sent}")
+        check(vb.GUARD_S == 60 and c.commands[:2] == ["sr voice status\r", guard],
+              f"the voice's mute is timed, a minute: {c.commands[:2]}")
+        check(c.commands.count(guard) == 4, f"the mute is renewed as the sync goes: {c.commands}")
+        check(c.commands[-1] == "sr voice on\r" and c.read.stall == vb.RESTORE_STALL_S and c.stopped >= 1 and len(opened) == 1,
+              f"the voice is restored in the same session, which is closed: {c.commands[-1:]}, {opened}")
+
+        # Ctrl-C during the second clip: the old session is closed and left alone, and the voice
+        # comes back through a fresh one
+        c1, c2 = FakeConsole(fail_send={2: KeyboardInterrupt()}), FakeConsole()
+        result, opened, said = transfer([c1, c2], sync)
+        check(isinstance(result, KeyboardInterrupt), f"the Ctrl-C still ends the run: {result!r}")
+        check(c1.stopped >= 1 and "sr voice on\r" not in c1.commands,
+              f"the interrupted session gets no more commands, it may be waiting for file bytes: {c1.commands}")
+        check(opened == [None, vb.RESTORE_STALL_S] and c2.commands == ["sr voice on\r"] and c2.stopped >= 1,
+              f"the voice comes back through a fresh session: {opened}, {c2.commands}")
+
+        # A second Ctrl-C during that restore: reported, never raised, both sessions closed
+        c1 = FakeConsole(fail_send={2: KeyboardInterrupt()})
+        c2 = FakeConsole(fail_command=("sr voice on\r", KeyboardInterrupt()))
+        result, opened, said = transfer([c1, c2], sync)
+        check(isinstance(result, KeyboardInterrupt) and c1.stopped >= 1 and c2.stopped >= 1,
+              f"a second Ctrl-C leaves both sessions closed: {result!r}, {c1.stopped}, {c2.stopped}")
+        check(any("comes back by itself" in line for line in said), f"and says the voice comes back by itself: {said[-1:]}")
+
+        # The port is gone when the voice is to be restored: reported, the first error kept
+        c1 = FakeConsole(fail_send={1: KeyboardInterrupt()})
+        result, opened, said = transfer([c1, OSError("no such port")], sync)
+        check(isinstance(result, KeyboardInterrupt) and any("not restored" in line and "no such port" in line for line in said),
+              f"a port that is gone is reported: {result!r}, {said[-1:]}")
+
+        # A connection that stops answering ends the sync at the first clip it fails, not once
+        # per word, and the voice is restored through a fresh session
+        c1, c2 = FakeConsole(fail_send={2: TimeoutError("the device sent nothing for 30 s")}), FakeConsole()
+        result, opened, said = transfer([c1, c2], sync)
+        check(isinstance(result, TimeoutError) and len(c1.sent) == 2,
+              f"a failed connection stops the sync: {result!r}, {c1.sent}")
+        check(sum("stopped at word 2 of 3" in line for line in said) == 1 and c2.commands == ["sr voice on\r"],
+              f"one line says where, and the voice is restored: {said}, {c2.commands}")
+
+        # A voice that was off before the sync stays off, after a failure too: no fresh session
+        c1 = FakeConsole(voice="off", fail_send={1: KeyboardInterrupt()})
+        result, opened, said = transfer([c1], sync)
+        check(len(opened) == 1 and "sr voice on\r" not in c1.commands and c1.stopped >= 1,
+              f"a voice that was off is not switched on: {opened}, {c1.commands}")
+
+    # pull_missing cut off by a Ctrl-C while it reads the list: restored through a fresh session
+    c1, c2 = FakeConsole(missing=KeyboardInterrupt()), FakeConsole()
+    result, opened, said = transfer([c1, c2], lambda: vb.pull_missing("port", "heart"))
+    check(isinstance(result, KeyboardInterrupt) and c2.commands == ["sr voice on\r"],
+          f"an interrupted pull restores the voice through a fresh session: {result!r}, {c2.commands}")
+    c = FakeConsole(missing="zulu\n")
+    result, opened, said = transfer([c], lambda: vb.pull_missing("port", "heart"))
+    check(result == {"zulu"} and c.commands[-1] == "sr voice on\r" and len(opened) == 1,
+          f"a clean pull restores the voice in the same session: {result}, {c.commands}")
+
+
+# StalledRead: the reply up to the prompt, or TimeoutError once the device has sent nothing for
+# the stall, where scripts/flipper/storage.py's BufferedRead would read forever
+class FakePort:
+    def __init__(self, data):
+        self.data = bytearray(data)
+        self.in_waiting = len(self.data)
+
+    def read(self, n):
+        chunk, self.data = bytes(self.data[:n]), self.data[n:]
+        self.in_waiting = len(self.data)
+        return chunk
+
+
+r = vb.StalledRead(FakePort(b"voice on\r\n>: "), 0.05)
+check(r.until(">: ") == b"voice on\r\n", "the reply up to the prompt")
+r = vb.StalledRead(FakePort(b"Ready\r\n"), 0.05)
+try:
+    r.until(">: ")
+    check(False, "a device that sends nothing more gives a TimeoutError")
+except TimeoutError as e:
+    check("nothing for 0.05 s" in str(e), f"a device that sends nothing more gives a TimeoutError: {e}")
+
 if all(importlib.util.find_spec(p) for p in ("numpy", "scipy", "kokoro_onnx")):
     problem = vb.engine_problem(vb.settings_for("kokoro", {"model": "/nonexistent/kokoro.onnx", "model_sha256": "x"}))
     check(problem is not None and "/nonexistent/kokoro.onnx" in problem, f"a missing model is named before the pool starts: {problem}")

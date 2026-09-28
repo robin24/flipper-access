@@ -94,6 +94,15 @@ APP_MANIFEST_DIRS = ("external", "main", "system", "settings", "debug")
 
 HZ = 16000
 SETS_DIR = "/ext/sr/voices"
+# The voice's guard around a transfer: a mute of GUARD_S seconds, renewed every GUARD_RENEW_S as
+# the transfer goes, so a tool that dies leaves the reader muted for a minute at most
+GUARD_S = 60
+GUARD_RENEW_S = 15
+# A read that gets no byte for READ_STALL_S raises TimeoutError instead of waiting forever: the
+# device answers every command of a transfer within a second or two. The restore at the end of a
+# transfer waits RESTORE_STALL_S, since the voice comes back by itself anyway
+READ_STALL_S = 30
+RESTORE_STALL_S = 5
 BACKENDS = {
     "say": dict(voice="Samantha", rate=175, highpass=500.0, gain=1.3, soft=True),
     "espeak": dict(voice="en-us+f3", rate=160, highpass=500.0, gain=1.3, soft=True),
@@ -553,10 +562,41 @@ def clip_pool(settings, jobs, count):
     return multiprocessing.Pool(size)
 
 
-def open_storage(port):
+class StalledRead:
+    """What scripts/flipper/storage.py's BufferedRead does, with a deadline: until() raises
+    TimeoutError once the device has sent nothing for `stall` seconds, where BufferedRead reads
+    forever (a device waiting for the data of a write_chunk that a Ctrl-C cut off never sends the
+    prompt). The port's own timeout, 2 s, bounds each read."""
+
+    def __init__(self, stream, stall):
+        self.buffer = bytearray()
+        self.stream = stream
+        self.stall = stall
+
+    def until(self, eol="\n", cut_eol=True):
+        eol = eol.encode("ascii")
+        last = time.monotonic()
+        while True:
+            i = self.buffer.find(eol)
+            if i >= 0:
+                read = self.buffer[:i] if cut_eol else self.buffer[: i + len(eol)]
+                self.buffer = self.buffer[i + len(eol):]
+                return read
+            data = self.stream.read(max(1, self.stream.in_waiting))
+            if data:
+                self.buffer.extend(data)
+                last = time.monotonic()
+            elif time.monotonic() - last >= self.stall:
+                raise TimeoutError(f"the device sent nothing for {self.stall:g} s")
+
+
+def open_storage(port, stall=None):
+    """A console session through the firmware's storage protocol, whose reads give up after
+    READ_STALL_S seconds without a byte (or `stall`)."""
     sys.path.insert(0, os.path.join(FW, "scripts"))
     from flipper.storage import FlipperStorage, FlipperStorageOperations  # noqa: E402
     storage = FlipperStorage(port)
+    storage.read = StalledRead(storage.port, READ_STALL_S if stall is None else stall)
     storage.start()
     return storage, FlipperStorageOperations(storage)
 
@@ -610,17 +650,50 @@ def voice_was_on(storage):
 
 def voice_off(storage):
     """Silence the recorded voice before a transfer: opening a file the worker has open for
-    playback would otherwise block and stall the speaker mid-buffer. Returns whether it was
-    on before, so the caller can decide whether to turn it back on."""
+    playback would otherwise block and stall the speaker mid-buffer. The mute is timed, GUARD_S
+    seconds, and the transfer renews it (voice_guard), so when this tool dies the voice comes back
+    by itself. Returns whether it was on before, so the caller can decide whether to turn it back
+    on."""
     was_on = voice_was_on(storage)
-    storage.send_and_wait_prompt("sr voice off\r")
-    log("voice: silenced for the transfer")
+    voice_guard(storage)
+    log(f"voice: silenced for the transfer; should the transfer die, it comes back by itself within {GUARD_S} s")
     return was_on
+
+
+def voice_guard(storage):
+    """The timed mute, set or renewed. A voice already off without an end stays so, and a
+    firmware from before the timed mute takes it as a plain off, until sr voice on."""
+    storage.send_and_wait_prompt(f"sr voice off {GUARD_S}\r")
 
 
 def voice_on(storage):
     storage.send_and_wait_prompt("sr voice on\r")
     log("voice: restored")
+
+
+def end_transfer(storage, port, was_on, clean):
+    """Close a transfer's console session, switching the voice back on first if it was on
+    before. After a failure the session may be in the middle of a command -- a Ctrl-C between a
+    write_chunk and its data leaves the device waiting for file bytes, and it would take the next
+    command as data -- so the voice is then restored through a fresh session; closing the old one
+    ends the stuck command on the device. Never raises, not even for a second Ctrl-C: when the
+    voice cannot be restored, it says so, and the timed mute lifts itself."""
+    try:
+        if not clean:
+            storage.stop()
+        if was_on:
+            if clean:
+                storage.read.stall = RESTORE_STALL_S
+            else:
+                storage, _ = open_storage(port, RESTORE_STALL_S)
+            voice_on(storage)
+    except BaseException as e:
+        log(f"voice: not restored ({type(e).__name__}: {e}); it comes back by itself within {GUARD_S} s, or with sr voice on")
+    finally:
+        try:
+            storage.stop()
+        except BaseException:
+            pass
 
 
 def pull_missing(port, set_name):
@@ -630,6 +703,7 @@ def pull_missing(port, set_name):
     storage, _ = open_storage(port)
     words = set()
     was_on = False
+    clean = True
     try:
         refusal = legacy_refusal(storage.exist)
         if refusal:
@@ -642,13 +716,11 @@ def pull_missing(port, set_name):
                 words = load_list(local)
             storage.remove(path)
         log(f"pulled {len(words)} missing words from {path}")
+    except BaseException:
+        clean = False
+        raise
     finally:
-        if was_on:
-            try:
-                voice_on(storage)
-            except Exception as e:
-                log(f"failed to restore voice: {e}")
-        storage.stop()
+        end_transfer(storage, port, was_on, clean)
     return words
 
 
@@ -662,12 +734,15 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
     code. Refused, before anything is sent, on a card that still has the first layout."""
     card = set_card_dir(set_name)
     storage, ops = open_storage(port)
+    import serial  # pyserial, which open_storage has loaded: its errors are the connection's
     was_on = False
+    clean = True
     try:
         refusal = legacy_refusal(storage.exist)
         if refusal:
             sys.exit(refusal)
         was_on = voice_off(storage)
+        renewed = time.monotonic()
         t0 = time.time()
         synced_path = os.path.join(out_dir, "synced.json")
         synced = {} if force_all else (json.load(open(synced_path)) if os.path.exists(synced_path) else {})
@@ -688,11 +763,18 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
                 missing += 1
                 continue
             folder = bucket(word)
+            if time.monotonic() - renewed >= GUARD_RENEW_S:
+                voice_guard(storage)
+                renewed = time.monotonic()
             try:
                 if folder not in made_dirs:
                     ops.mkpath(f"{card}/{folder}")
                     made_dirs.add(folder)
                 storage.send_file(local_path, f"{card}/{folder}/{word}.raw")
+            except (serial.SerialException, TimeoutError) as e:
+                # The connection, not the word: every word after it would fail the same way
+                log(f"sync: stopped at word {i} of {len(words)}, {word}: the connection failed: {e}")
+                raise
             except Exception as e:  # one bad word must not stop the sync
                 log(f"sync: failed: {word}: {type(e).__name__}: {e}")
                 failed += 1
@@ -707,13 +789,11 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
         storage.send_file(os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
         log(f"sync: {sent} sent, {skipped} skipped, {missing} missing, {failed} failed, {time.time() - t0:.0f} s")
         return missing + failed
+    except BaseException:
+        clean = False
+        raise
     finally:
-        if was_on:
-            try:
-                voice_on(storage)
-            except Exception as e:
-                log(f"failed to restore voice: {e}")
-        storage.stop()
+        end_transfer(storage, port, was_on, clean)
 
 
 def migration_plan(exists):
@@ -744,6 +824,7 @@ def migrate_sets(port):
     rename moves in place; nothing is copied or removed. Returns whether it succeeded."""
     storage, _ = open_storage(port)
     was_on = False
+    clean = True
     try:
         was_on = voice_off(storage)
         moves, refusal = migration_plan(storage.exist)
@@ -763,13 +844,11 @@ def migrate_sets(port):
         if not moves:
             log(f"migrate: nothing to move, the card has no {LEGACY_VOICE_DIR} or {LEGACY_MISSING}")
         return True
+    except BaseException:
+        clean = False
+        raise
     finally:
-        if was_on:
-            try:
-                voice_on(storage)
-            except Exception as e:
-                log(f"failed to restore voice: {e}")
-        storage.stop()
+        end_transfer(storage, port, was_on, clean)
 
 
 def check(settings, names, workdir, jobs):
@@ -974,4 +1053,8 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        log("stopped")
+        sys.exit(130)

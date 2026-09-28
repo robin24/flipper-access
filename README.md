@@ -339,6 +339,13 @@ This one unmutes it:
 .venv/bin/python tools/flipper_cli.py "sr voice on"
 ```
 
+With a number of seconds, up to 3600, the mute ends by itself after that time; this one mutes
+for a minute:
+
+```bash
+.venv/bin/python tools/flipper_cli.py "sr voice off 60"
+```
+
 The setting is not saved: the voice is on again after every reboot.
 
 `sr voice status` prints the first 63 characters of the settings line, and these counts since
@@ -411,9 +418,11 @@ The sync sends new or changed clips and `voice.txt` to the card:
 
 A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what changed,
 which takes seconds. The voice is switched off on the device during the transfer and switched back
-on afterwards. If a transfer dies hard, through power loss, a killed process or a dead port, the
-restore may not run. The device then stays muted until it reboots, or until this command switches
-the voice back on:
+on afterwards. The mute lasts a minute at a time and the generator renews it while the transfer
+goes, so if the transfer dies, through Ctrl-C, a killed process, a dead port or power loss, the
+voice comes back by itself within a minute. The generator's reads give up after 30 seconds
+without an answer, and a Ctrl-C during the restore at the end cannot hang it. This command
+switches the voice back on at once:
 
 ```bash
 .venv/bin/python tools/flipper_cli.py "sr voice on"

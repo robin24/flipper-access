@@ -200,9 +200,11 @@ Steps:
 3. Put the voice on the card: upload the pack as one file to `/ext`, unpack it with
    `storage extract /ext/<pack>.tar /ext`, and remove the tar (the archive lever below). These
    are commands the official firmware has, so the step works from 1.4.3, Momentum and Sonar
-   alike. When step 1 found Sonar running, `sr voice off` before the unpack and `sr voice on`
+   alike. When step 1 found Sonar running, a timed mute before the unpack and `sr voice on`
    after it keep the reader from holding open a clip that the unpack replaces, as the sync
-   guard does.
+   guard does: `sr voice off <seconds>`, with the unpack's time from the spike and a margin,
+   since the console is busy for the whole unpack and the mute cannot be renewed meanwhile; if
+   the script dies, the voice comes back by itself.
 4. Upload the update package folder to `/ext/update/<name>/`.
 5. `update install /ext/update/<name>/update.fuf`; the device reboots into the updater.
 6. Wait for the console to come back (the updater reboots twice), read `info device` again,

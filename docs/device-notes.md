@@ -348,7 +348,9 @@ Speech: announcements are spoken by the device itself.
 - `sr volume <0..100>` and `sr delay <500..10000>` are saved settings.
 - `sr chord up|down|ok|okhold|downhold|left|right` runs what Back and that key do, as the
   README's Back chords section describes; `downhold` works also while the reader is off.
-- `sr voice off` mutes until `sr voice on` or a reboot; the generator uses it around a sync.
+- `sr voice off` mutes until `sr voice on` or a reboot; `sr voice off 60` mutes for a minute,
+  which the generator sets around a transfer and renews as it goes, so a generator that dies
+  leaves the reader muted for a minute at most.
 
 Any button press silences speech. With animations on, the dolphin's speech bubbles on the home
 screen are not spoken unless a button was pressed in the last two seconds. `sr status` counts
