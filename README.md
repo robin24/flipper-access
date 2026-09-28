@@ -574,8 +574,9 @@ HEAD instead.
 fbt, the firmware's build tool, downloads its toolchain on first use. Only the Flipper Zero
 target, f7, is built. The release options, `COMPACT=1` and `DEBUG=0`, are the defaults, so the
 plain command builds a release. The headroom check compares the image with the flash that the
-Bluetooth radio stack leaves free, 880,640 bytes, since the device's updater refuses a larger
-image. The last command flashes the device over USB together with its resources, the apps and
+Bluetooth radio stack leaves free, since the device's updater refuses a larger image. It reads
+the stack's address from the update package, and with the current stack the limit is 880,640
+bytes. The last command flashes the device over USB together with its resources, the apps and
 files that go on the SD card. The device then takes about six minutes to update itself and
 reboot.
 

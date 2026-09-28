@@ -2,9 +2,10 @@
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
 # helpers, the chords and the throttle; and tests/host/tar_unpack.c, the firmware's tar reader
 # unpacking as the device does, for the voice pack check. Then the Python checks: the build's
-# exclusion filter, the built-in Sub-GHz app's source list, and the tests of seven tools:
-# tests/fbt/test_card_prune.py, test_momentum_base.py, test_strip_js_symbols.py,
-# test_subghz_manifest.py, test_upstream_check.py, test_voice_build.py and test_voice_pack.py.
+# exclusion filter, the built-in Sub-GHz app's source list, and the tests of eight tools:
+# tests/fbt/test_card_prune.py, test_flash_headroom.py, test_momentum_base.py,
+# test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py, test_voice_build.py
+# and test_voice_pack.py.
 # Each Python check prints its skip lines, then its summary, so a run shows what it left out, such
 # as the golden checks without the pinned base commit, or the voice generator's resampler checks
 # without numpy and scipy. With --no-skips, as the continuous build runs it with the packages of
@@ -128,6 +129,13 @@ if ! python3 "$ROOT/tests/fbt/test_card_prune.py" > "$OUT/card_prune.txt"; then
   exit 1
 fi
 summary "$OUT/card_prune.txt"
+
+if ! python3 "$ROOT/tests/fbt/test_flash_headroom.py" > "$OUT/flash_headroom.txt"; then
+  cat "$OUT/flash_headroom.txt"
+  echo "flash headroom checks failed"
+  exit 1
+fi
+summary "$OUT/flash_headroom.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_momentum_base.py" > "$OUT/momentum_base.txt"; then
   cat "$OUT/momentum_base.txt"

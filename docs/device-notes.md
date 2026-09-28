@@ -133,7 +133,8 @@ The flash routine, run from the project folder:
    (cd Momentum-Firmware && ./fbt updater_package)
    ```
 
-3. Check the image against the 880,640 bytes that the BLE stack leaves free:
+3. Check the image against the flash that the BLE stack leaves free, 880,640 bytes with the
+   current stack:
 
    ```bash
    tools/flash_headroom.sh
@@ -294,8 +295,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 Flash limit: the firmware may only use the flash below the BLE stack, which starts at SFSA 0xD7
 for ble_light 1.20.0: 880,640 bytes. fbt's `.free_flash` line is against the nominal 1024 KB
 linker region and does not know this, and the updater refuses a larger image before writing. Run
-the headroom check before every `./fbt flash_usb`. It prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes:
+the headroom check before every `./fbt flash_usb`. It reads the stack's address from the update
+package the build made, so a new radio stack from Momentum moves the limit with it, and prints
+the size of `build/f7-firmware-C/firmware.bin`, the limit and the spare bytes:
 
 ```bash
 tools/flash_headroom.sh
