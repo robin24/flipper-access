@@ -541,6 +541,72 @@ static void test_key_rows_are_never_typed(void) {
     CHECK_STR(out[0].text, "9");
 }
 
+/** The text input's keys in one case, the field as given (no row when empty, as an empty field
+ * draws only the cursor) and a focused key or note. */
+static SrFrame text_input_case_frame(const char* field, bool upper, const char* focus) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 2, 8, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Name the signal");
+    if(field[0]) add(&f, 4, 22, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, field);
+    const char* rows[3] = {"qwertyuiop", "sdfghjkl", "zxcvbnm"};
+    if(upper) {
+        rows[0] = "QWERTYUIOP";
+        rows[1] = "SDFGHJKL";
+        rows[2] = "ZXCVBNM";
+    }
+    for(int i = 0; i < 3; i++) {
+        add(&f, 1, 40 + 12 * i, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, rows[i]);
+    }
+    add(&f, 100, 64, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, focus);
+    return f;
+}
+
+// G4 of the review of 2026-09-28: deleting the last character was a new screen, "Backspace",
+// since an empty field turns the keys to upper case and most rows then differed, and so was the
+// first character typed; the cursor mode was silent
+static void test_text_input_edges(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f = text_input_case_frame("a", false, "Backspace");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    f = text_input_case_frame("", true, "Backspace");
+    size_t n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "deleted");
+
+    // The first character into the empty field: the keys go to lower case, the selected A too,
+    // and the character is said, not the key
+    sr_model_init(&m, 1);
+    f = text_input_case_frame("", true, "A");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    f = text_input_case_frame("A", false, "a");
+    n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "A");
+
+    // Up into the cursor mode: no key is selected, and the text input's note is the focus; Left
+    // moves it
+    f = text_input_case_frame("A", false, "Cursor after A, 1 of 1");
+    n = sr_model_process(&m, &f, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Cursor after A, 1 of 1");
+    f = text_input_case_frame("A", false, "Cursor at the start, 0 of 1");
+    n = sr_model_process(&m, &f, 1300, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Cursor at the start, 0 of 1");
+
+    // A name longer than the field: text_input draws "..." and the tail, and its full text hint
+    // makes the tail the whole name, so a character typed is said as one
+    sr_model_init(&m, 1);
+    f = text_input_case_frame("... RAW_433_long_name", false, "x");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    f = text_input_case_frame("... RAW_433_long_namex", false, "x");
+    n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "x");
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -1001,6 +1067,7 @@ int main(void) {
     test_keyboard_opens_with_prompt_and_value();
     test_byte_input_reads_its_value();
     test_key_rows_are_never_typed();
+    test_text_input_edges();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();
