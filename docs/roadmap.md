@@ -4,7 +4,8 @@ Date: 2026-09-24. Decision taken with Robin: ship a separate accessibility-focus
 
 Status on 2026-09-25: the recorded voice, phase 3 on-device control, the polish round, and the memory plan (steps 2 to 4: animations off by default, the JavaScript engine out, Sub-GHz back into flash, SAM out) are done. Next: the fork and release mechanics.
 
-Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, is written, and its plan A, `docs/superpowers/plans/2026-09-26-publishing-plan-a.md`, is done: the repositories, the cleanup, the continuous build and the upstream tooling. Its tools: `tools/card_prune.py` removes old update packages from the card; `tools/strip_js_symbols.py` and `tools/subghz_manifest.py` redo the fork's two mechanical changes after a Momentum merge, in the API table and in the built-in Sub-GHz app's source list; `tools/upstream_check.sh` shows from a dry run what a merge would meet; and the Build workflow, `.github/workflows/build.yml`, runs the host tests, the release build and the headroom check on every push. The device runs the clean Sonar build with plan A's fix wave, commit a5c2ed7d9, flashed complete on 2026-09-26. Plan B, the Piper voice, and plan C, the install path and the first release, follow. The names are decided: the repository is `flipper-access`, and the firmware is Sonar.
+Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, is written, and its plan A, `docs/superpowers/plans/2026-09-26-publishing-plan-a.md`, is done: the repositories, the cleanup, the continuous build and the upstream tooling. Its tools: `tools/card_prune.py` removes old update packages from the card; `tools/strip_js_symbols.py` and `tools/subghz_manifest.py` redo the fork's two mechanical changes after a Momentum merge, in the API table and in the built-in Sub-GHz app's source list; `tools/upstream_check.sh` shows from a dry run what a merge would meet; and the Build workflow, `.github/workflows/build.yml`, runs the host tests, the release build and the headroom check on every push. The device runs the clean Sonar build with plan A's fix wave, commit a5c2ed7d9, flashed complete on 2026-09-26. Plan B's code is in: the voice sets, the Kokoro and eSpeak voices and the pack tool. Plan C, the
+install path and the first release, follows. The names are decided: the repository is `flipper-access`, and the firmware is Sonar.
 
 ## Done so far
 
@@ -31,7 +32,7 @@ Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-gi
 
 - Intrusive hooks stay tiny and isolated: the canvas text tap in gui, the speaker mutex in the signal reader. Everything else is a service under `applications/services/screen_reader`.
 - Removals happen through build configuration and app manifests, not by deleting code, so merges from Momentum stay mechanical.
-- A CI build (GitHub Actions, Linux fbt) with the host tests runs on every push, so also on the submodule bump that follows each merge from Momentum; the flash boundary check (`tools/flash_headroom.sh`) is part of it.
+- A CI build (GitHub Actions, Linux fbt) with the host tests runs on every push, so also on the submodule bump that follows each merge from Momentum. Part of it are the flash boundary check (`tools/flash_headroom.sh`), against the radio stack's address in the build's update package; Momentum's lint; a check that the build changed no tracked file; and the golden checks against the Momentum commit pinned in `tools/momentum-base.txt`. Since pushes to the fork build nothing, it also builds the fork's `screen-reader` tip every Monday.
 - If Momentum ever wants the canvas hook behind a flag, that small change can be Robin's own contribution and shrinks the delta.
 
 ## Memory plan, in order
@@ -75,8 +76,8 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
 - Repository with Momentum as upstream remote; branch `screen-reader` becomes the main branch of the fork; tags per release.
 - Section 8 of the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, now defines the sync procedure for following Momentum.
 - Release artefacts: the update package (.tgz for qFlipper or the update CLI), the card payload (voice vocabulary made with a freely licensed voice, screen reader files), and an install script that flashes and copies with spoken progress on the host.
-- Licensing: the firmware is GPL-3 like Momentum and the official firmware; the shipped vocabulary must come from a redistributable voice (Piper models with permissive licences), Apple voices are for personal vocabularies only.
+- Licensing: the firmware is GPL-3 like Momentum and the official firmware; the shipped vocabulary must come from a redistributable voice (the release's sets are made with Kokoro, Apache 2.0, and eSpeak-NG, GPL-3), Apple voices are for personal vocabularies only.
 - Documentation for blind users first: install, first boot, the console commands, the voice generator, and the known limits:
   - NFC-V emulation silences the reader.
-  - The sync guard reads the voice flag once per item: an utterance already playing when `sr voice off` arrives keeps opening clips, and writes the missing list at its end, while the generator has already started the transfer.
+  - Fixed after the review of 2026-09-28 (S4): the sync guard read the voice flag once per item, so an utterance already playing when `sr voice off` arrived kept opening clips and wrote the missing list at its end, while the generator had already started the transfer. Now `sr voice off` stops that utterance and answers once it has ended, and the missing list waits for an utterance with the voice on.
   - `sr play` still plays a file with the voice off, by design.

@@ -207,6 +207,25 @@ static void test_text_limit(void) {
     CHECK(speech_queue_pop(&q, &item));
     CHECK(strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
     CHECK(strncmp(item.text, text, SPEECH_ITEM_TEXT_MAX - 1) == 0);
+
+    // S2 of the review of 2026-09-28: a text of words is cut after its last whole word, never
+    // inside one, which speech would spell and log as a missing word (sr say's text)
+    char words[400] = "";
+    while(strlen(words) < 300)
+        strcat(words, "seven thousand ");
+    speech_queue_push(&q, words, false, false);
+    CHECK(speech_queue_pop(&q, &item));
+    size_t n = strlen(item.text);
+    CHECK(n < SPEECH_ITEM_TEXT_MAX && strncmp(item.text, words, n) == 0);
+    CHECK(words[n] == ' ' && item.text[n - 1] != ' ');
+
+    // A file's path keeps the plain cut
+    memset(text, 'x', SPEECH_ITEM_TEXT_MAX);
+    memcpy(text, "/ext/a b/", 9);
+    text[SPEECH_ITEM_TEXT_MAX] = '\0';
+    speech_queue_push_file(&q, text, 16000);
+    CHECK(speech_queue_pop(&q, &item));
+    CHECK(strlen(item.text) == SPEECH_ITEM_TEXT_MAX - 1);
 }
 
 

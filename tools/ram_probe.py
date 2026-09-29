@@ -10,8 +10,11 @@ import glob, os, re, sys, time
 import serial
 sys.stdout.reconfigure(line_buffering=True)
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from flipper_cli import flipper_ports, open_port  # noqa: E402
+
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
-PORT = os.environ.get("FLIPPER_PORT") or (sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0]
+PORT = os.environ.get("FLIPPER_PORT") or (flipper_ports() + sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0]
 
 # name, loader argument, key presses after launch, seconds to dwell
 APPS = [
@@ -64,7 +67,7 @@ def wait_port(path, gone_first=True, limit=90):
     return False
 
 def connect():
-    ser = serial.Serial(PORT, 230400, timeout=0.1)
+    ser = open_port(PORT)
     ser.write(b"\r"); time.sleep(0.5); ser.read(ser.in_waiting)
     return ser
 

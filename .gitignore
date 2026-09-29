@@ -10,3 +10,5 @@ backups/
 voice-models/
 tools/voice_words.local.txt
 voice-samples/
+# The voice packs tools/voice_pack.py writes to the project root
+voice-*.tar

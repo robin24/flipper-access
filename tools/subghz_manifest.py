@@ -15,9 +15,11 @@ apptype=FlipperAppType.APP, whatever the file named, since Momentum loads the ap
 (MENUEXTERNAL). So taking upstream's file whole at a merge and running this script gives the
 fork's manifest, comments aside. Only lines that start with "apptype=" or "sources=[", after
 leading spaces, are taken, so a comment that mentions either is left alone. --check exits 1 if
-the manifest would change. --verify-upstream compares EXCLUDED with the "!" entries of the merge
-base's manifest and exits 1 on a difference, so a change in Momentum's list is noticed at the
-merge; without upstream/dev in the firmware checkout it says so in one sentence and exits 1.
+the manifest would change. --verify-upstream compares EXCLUDED with the "!" entries of the
+manifest at the Momentum commit the fork builds on, the one pinned in tools/momentum-base.txt,
+and exits 1 on a difference, so a change in Momentum's list is noticed at the merge once the
+merged tag is pinned; without that commit in the firmware checkout it says so in one sentence
+and exits 1.
 tests/fbt/test_subghz_manifest.py covers all of this.
 """
 import argparse
@@ -25,6 +27,8 @@ import os
 import re
 import subprocess
 import sys
+
+from momentum_base import base as momentum_base
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIRMWARE = os.path.join(ROOT, "Momentum-Firmware")
@@ -92,32 +96,31 @@ def git(*args):
 
 
 def upstream_excludes(manifest_path):
-    """The "!" entries of the merge base's manifest (upstream's version of the file). Exits with
-    one sentence when the firmware checkout has no upstream/dev or the base has no such file."""
-    try:
-        base = git("merge-base", "upstream/dev", "HEAD").strip()
-    except (subprocess.CalledProcessError, OSError):
-        sys.exit("no merge base with upstream/dev in the firmware checkout: fetch the upstream remote, then run --verify-upstream again")
+    """The "!" entries of the manifest at the pinned base commit (Momentum's version of the file).
+    Exits with one sentence when the firmware checkout lacks that commit or it has no such file."""
+    base = momentum_base(FIRMWARE)
+    if base is None:
+        sys.exit("the pinned base commit, from tools/momentum-base.txt, is not in the firmware checkout: pin the merged tag's commit, then run --verify-upstream again")
     rel = os.path.relpath(manifest_path, FIRMWARE).replace(os.sep, "/")
     try:
         text = git("show", f"{base}:{rel}")
     except (subprocess.CalledProcessError, OSError):
-        sys.exit(f"the merge base {base[:9]} has no {rel} to compare with")
-    _block, listed = parts(text, "the merge base's manifest")
+        sys.exit(f"the base commit {base[:9]} has no {rel} to compare with")
+    _block, listed = parts(text, "the base commit's manifest")
     return tuple(re.findall(r'"!([\w./-]+)"', listed.group(2)))
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--check", action="store_true", help="exit 1 if the manifest would change, write nothing")
-    ap.add_argument("--verify-upstream", action="store_true", help="compare EXCLUDED with the merge base's \"!\" entries")
+    ap.add_argument("--verify-upstream", action="store_true", help="compare EXCLUDED with the base commit's \"!\" entries")
     ap.add_argument("manifest", nargs="?", default=DEFAULT)
     args = ap.parse_args()
     if args.verify_upstream:
         theirs = set(upstream_excludes(args.manifest))
         if theirs != set(EXCLUDED):
             sys.exit(f"Momentum's exclude list differs: theirs only {sorted(theirs - set(EXCLUDED))}, ours only {sorted(set(EXCLUDED) - theirs)}")
-        print("the exclude list matches the merge base's manifest")
+        print("the exclude list matches the base commit's manifest")
     with open(args.manifest, encoding="utf-8") as f:
         text = f.read()
     files = sources(os.path.dirname(os.path.abspath(args.manifest)))

@@ -378,7 +378,8 @@ original text.
   loading placeholders and are dropped.
 - Focus hints exist in the submenu, settings list, file browser, Archive browser, button menu,
   text input keyboard and the List style of the main menu. Other main menu styles are read by
-  inversion where possible and get hints in a later phase.
+  inversion where possible and get hints in a later phase. Changed after the review of
+  2026-09-28 (G8): every main menu style hints its selected item with its position.
 - Latency: frames settle for 50 ms, with a 300 ms cap when frames keep coming.
 - Console: `sr watch` replaces the announcement ring of section 6 with a queue attached by the
   watching command; Tab prints the whole screen description; a bare Escape is ignored and
@@ -391,6 +392,15 @@ original text.
   change without a key press can be dropped; desktop layer popups whose only new text is a
   button label are silent; moving between keyboard rows is announced with kind "screen"
   instead of "focus" with identical text.
+- Changed after the review of 2026-09-28 (G1 to G5): a screen whose focus is in the keyboard
+  font is an on-screen keyboard. Without a title in the primary font, its top line (y 12 or
+  above) is the title; it opens with the title, the field and the other lines outside the
+  keyboard font, then the key; its key rows take no part in the typed rule, the change
+  announcements and the screen change rule, and its focus is compared ignoring case. A field
+  row missing on one side is empty text for the typed rule. The byte input hints its selected
+  key and byte, names Save and Backspace, and tells its value in a note; the number input names
+  its icon keys; the text input says its cursor in the cursor mode and hints its whole text.
+  The glyph tap skips control characters.
 
 ### Phase 2 as built
 
@@ -432,11 +442,12 @@ and 14, this list is what the code does.
   stop list of about a hundred common upper case words (ON, OFF, SAVE, READ, MENU and so on)
   keeps them as words. The console stream still receives the untouched text.
 - Output path: TIM16 is the 50 kHz PWM carrier (prescaler 4, autoreload 255) on the speaker pin
-  as in section 8, but the samples move by DMA2 channel 4 with the TIM16 update event as its
+  as in section 8, but the samples move by DMA1 channel 3 with the TIM16 update event as its
   DMAMUX request, not DMA1 channel 1, which every bundled audio app uses; there is no second
-  timer. The firmware's own drivers do not use DMA2 channel 4, but the external CC1101 radio
-  driver in the apps submodule uses it for its asynchronous transmit, so speech during a Sub-GHz
-  transmit with an external radio garbles both; it cannot hang or crash.
+  timer. Nothing else in the firmware or in the apps built with it uses DMA1 channel 3. Until
+  2026-09-28 speech used DMA2 channel 4, which the external CC1101 radio driver in the apps
+  submodule uses for its asynchronous transmit, so speech during a Sub-GHz transmit with an
+  external radio garbled both.
 - Ring buffer 4096 bytes, about 82 ms, in two halves. The DMA's half and complete interrupts set
   thread flags on the worker, which waits for the flag of the half it is about to fill (no
   semaphore); an underrun is counted when the DMA has already moved into the half being filled.
@@ -547,7 +558,7 @@ Settings. An "Accessibility" scene in the Momentum settings app (a variable item
 
 Icon-only screens get spoken hints through a new tap call, `canvas_tap_hint_note(canvas, text, focus)`: a synthetic text record on the current layer that the model treats as a row (a focus row when focus is true), so no module needs real text on screen. Internal users: the desktop's lock menu (the selected tile's name, "Brightness N", "Volume N"), the PIN entry ("N digits entered", never the digits), the lock screen ("Locked, press Back three times to unlock" or "Locked with PIN, press Up to enter it"), and the unlock ("Unlocked") through the desktop status pubsub. External users: `button_panel_item_set_name(panel, index, name)` stores a name for a button, the module hints the selected button's name; the infrared app names its universal remote buttons ("Power", "Mute", "Volume up", "Volume down", "Channel up", "Channel down", and the AC, audio, projector, fan, LED, monitor, Blu-ray and digital sign sets). `canvas_tap_hint_note` and `button_panel_item_set_name` are exported for external apps: API version 87.1 becomes 87.2 (additions only; existing apps keep loading), and the infrared and Momentum settings apps are rebuilt and copied to the card.
 
-NFC-V. The ISO15693 listener's signal reader waits 400 ms before its first speaker acquire after allocation, so the reader's "Emulating" announcement takes the speaker first and finishes; later acquires do not wait. During the emulation announcements are still dropped (section 16).
+NFC-V. The ISO15693 listener's signal reader waits 400 ms before its first speaker acquire after allocation, so the reader's "Emulating" announcement takes the speaker first and finishes; later acquires do not wait. During the emulation announcements are still dropped (section 16). Changed after the review of 2026-09-28 (S1): the signal reader takes the speaker at its first start and keeps it until it is freed at the listener's end, both on the NFC worker thread, and only resets the timer between frames; before, it released and retook the speaker around every frame, and speech could take it in that gap and stall the emulation until the utterance ended. The 400 ms wait now happens only with the reader on.
 
 Deviations from section 9: no rate chord (volume instead); OK Long spells; Long on release stays as designed. Out of scope: hotkeys for apps other than through their own text and hints, a repeat-last-announcement history beyond the current focus, and voice feedback for the lock menu sliders beyond their value.
 
@@ -576,7 +587,10 @@ docs/measurements/2026-09-24-phase-3.txt.
   passes and the chord state is reset. Publishers that bypass the filter: remote control
   (rpc_gui.c) and the keys of `sr watch` (sr_cli_press). Console keys (`input send`) pass it but
   have no press timer: a press followed by a release never makes a Long, and `input send back
-  long` sends Press, Long, Release.
+  long` sends Press, Long, Release. Changed after the review of 2026-09-28 (F3): the console
+  marks its events as made in software, as the remote control does, and the filter keeps their
+  chord state apart from the keys' (SrChordSources), so a console press whose release never
+  comes cannot swallow the keys.
 - sr_chords keeps no time of its own (now_ms is reserved; the input service's 300 ms threshold
   decides the Long). OK decides on its Short (repeat) or its Long (spell); a Short after a Long
   is ignored. 73 host checks, including Back held past 300 ms before the chord key.
@@ -915,7 +929,12 @@ app, on its release. The chord key stays swallowed across a change of mode, so t
 on or off in the middle of the chord drops the rest of it all the same. One timing differs by mode:
 with Back let go before Down's Long, Back's Short passes while the reader is off, since no chord
 has run yet, and the toggle still comes at Down's Long; with the reader on the chord began at
-Down's Press, and the Short is dropped. The reader runs the toggle on its service thread whether it
+Down's Press, and the Short is dropped. Changed after the review of 2026-09-28 (F8): Back's Long,
+held back to the release, is dropped when Back is let go while Down is held back, since Down may
+still make the chord, which drops it; before, it was delivered, opening the power-off dialog on
+the lock screen, and Down's Long turned the reader on as well. And a chord key held on past its
+Back hold (`key_orphaned`) still names its command, but no longer charges it to a new hold of Back
+begun meanwhile, whose own Short and Long stay Back's. The reader runs the toggle on its service thread whether it
 is on or off, and on every screen, the lock screen and the PIN entry included, where Back with Down
 means nothing else: after a reboot into a PIN lock with the reader off it is how speech comes back.
 (The first build ignored the toggle while the desktop was locked; the review found that this gate

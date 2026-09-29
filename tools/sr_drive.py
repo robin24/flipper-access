@@ -12,13 +12,13 @@ Start on the home screen. Needs the screen reader firmware. The port is auto-det
 with FLIPPER_PORT.
 """
 import glob, os, re, sys, time, termios, tty, select
-import serial
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from flipper_cli import flipper_ports, open_port  # noqa: E402
 from flipper_cli import run as cli  # noqa: E402  (one console command, its reply without the prompt)
 
 ANSI = re.compile(rb"\x1b\[[0-9;]*[A-Za-z]")
-PORT = os.environ.get("FLIPPER_PORT") or (sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0]
+PORT = os.environ.get("FLIPPER_PORT") or (flipper_ports() + sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0]
 
 KEYS = {"ok": b"\r", "up": b"\x1b[A", "down": b"\x1b[B", "right": b"\x1b[C", "left": b"\x1b[D", "back": b"\x7f", "tab": b"\t"}
 
@@ -44,7 +44,8 @@ SCRIPT = [
 KEYBOARD_APP = "/ext/apps/Media/text2sam.fap"
 
 # Third session: the Back chords of phase 3. They are sent with the console's input send, which
-# passes the input filter as the device's own keys do (sr watch's keys and remote control do not).
+# passes the input filter as the device's own keys do, with a chord state of its own (sr watch's
+# keys and remote control do not pass it).
 # input send ok short and ok long publish OK's Press, Short or Long and Release themselves; the
 # ok press before and ok release after them are the plan's sequence, and show that stray OK events
 # around a chord do not navigate either. Down, like OK, names its chord on its Short (the status
@@ -297,7 +298,7 @@ def interactive(ser):
 def main():
     if not PORT:
         sys.exit("no Flipper port found")
-    with serial.Serial(PORT, 230400, timeout=0.1) as ser:
+    with open_port(PORT) as ser:
         if "--interactive" in sys.argv:
             return interactive(ser)
         if "--chords" in sys.argv:

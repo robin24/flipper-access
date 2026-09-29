@@ -160,23 +160,23 @@ static void test_paths(void) {
 }
 
 static void test_sets(void) {
-    CHECK(speech_voice_set_valid("samantha"));
-    CHECK(speech_voice_set_valid("heart"));
-    CHECK(speech_voice_set_valid("en-us_f3"));
-    CHECK(speech_voice_set_valid("a"));
-    CHECK(speech_voice_set_valid("abcdefghijklmnopqrstuvwxyz01234"));
-    CHECK(!speech_voice_set_valid(""));
-    CHECK(!speech_voice_set_valid("abcdefghijklmnopqrstuvwxyz012345"));
-    CHECK(!speech_voice_set_valid("Heart"));
-    CHECK(!speech_voice_set_valid("two words"));
-    CHECK(!speech_voice_set_valid("a/b"));
-    CHECK(!speech_voice_set_valid("."));
-    CHECK(!speech_voice_set_valid(".."));
-    CHECK(!speech_voice_set_valid("héart"));
-    // Reserved for the first set found (sr voice use auto); only the whole name
-    CHECK(!speech_voice_set_valid("auto"));
-    CHECK(speech_voice_set_valid("autos"));
-    CHECK(speech_voice_set_valid("my-auto"));
+    // The names the engine lists, and so the ones sr voice use and the settings app take: the
+    // generator's own (lower case, digits, hyphen, underscore), and those of a folder made by hand
+    CHECK(speech_voice_set_listable("samantha"));
+    CHECK(speech_voice_set_listable("heart"));
+    CHECK(speech_voice_set_listable("en-us_f3"));
+    CHECK(speech_voice_set_listable("a"));
+    CHECK(speech_voice_set_listable("abcdefghijklmnopqrstuvwxyz01234"));
+    CHECK(speech_voice_set_listable("Heart"));
+    CHECK(speech_voice_set_listable("two words"));
+    CHECK(speech_voice_set_listable("héart"));
+    CHECK(speech_voice_set_listable("auto")); // a folder; sr voice use keeps the word for Auto
+    CHECK(!speech_voice_set_listable(""));
+    CHECK(!speech_voice_set_listable("abcdefghijklmnopqrstuvwxyz012345"));
+    CHECK(!speech_voice_set_listable("a/b"));
+    CHECK(!speech_voice_set_listable("."));
+    CHECK(!speech_voice_set_listable(".."));
+    CHECK(!speech_voice_set_listable(".hidden"));
     char out[SPEECH_VOICE_PATH_MAX];
     CHECK(speech_voice_set_file("heart", "voice.txt", out, sizeof(out)) == strlen("/ext/sr/voices/heart/voice.txt"));
     CHECK(strcmp(out, "/ext/sr/voices/heart/voice.txt") == 0);
@@ -356,6 +356,27 @@ static void test_missing(void) {
     CHECK(speech_voice_missing(&s, "r66") == true);
 }
 
+// A timed mute, sr voice off with seconds, ends at its tick and only then; a plain off never ends
+// by itself, and the voice on is never "over"
+static void test_timed_mute(void) {
+    CHECK(!speech_voice_mute_over(false, true, 60000, 59999));
+    CHECK(speech_voice_mute_over(false, true, 60000, 60000));
+    CHECK(speech_voice_mute_over(false, true, 60000, 60001));
+    CHECK(speech_voice_mute_over(false, true, 60000, 1000000));
+    CHECK(!speech_voice_mute_over(false, false, 60000, 1000000));
+    CHECK(!speech_voice_mute_over(true, true, 60000, 1000000));
+    CHECK(!speech_voice_mute_over(true, false, 0, 0));
+    // Across the wrap of the 32-bit millisecond tick, after about 49.7 days: a mute set 10 s
+    // before the wrap for 60 s ends 50 s after it, not at once and not 49 days later
+    uint32_t set = 0xFFFFFFFFu - 10000u;
+    uint32_t on_at = set + 60000u;
+    CHECK(!speech_voice_mute_over(false, true, on_at, set));
+    CHECK(!speech_voice_mute_over(false, true, on_at, 0xFFFFFFFFu));
+    CHECK(!speech_voice_mute_over(false, true, on_at, 49998u));
+    CHECK(speech_voice_mute_over(false, true, on_at, 49999u));
+    CHECK(speech_voice_mute_over(false, true, on_at, 50000u));
+}
+
 int main(void) {
     test_words();
     test_paths();
@@ -363,6 +384,7 @@ int main(void) {
     test_set_choice();
     test_letters();
     test_missing();
+    test_timed_mute();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

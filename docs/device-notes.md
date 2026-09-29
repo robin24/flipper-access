@@ -70,7 +70,11 @@ These are the working notes for the one device Sonar is developed on, and the de
   the main menu. `--chords` runs only the chords. Start it on the home screen.
 - `tools/run_host_tests.sh`: unit tests for the screen model, the speech text, queue, PCM and
   voice helpers, the chords and the change throttle. They run with clang on the Mac, and the
-  Python checks in `tests/fbt/` follow.
+  Python checks in `tests/fbt/` follow. The voice pack's check also unpacks a pack with the
+  firmware's own tar reader, `tests/host/tar_unpack.c` built from the firmware's `lib/microtar`,
+  following the device's rules; it is skipped until fbt has checked out that submodule. Some
+  Python checks need the packages of `requirements.txt` and are skipped without them. With
+  `--no-skips`, as the continuous build runs it on Python 3.10, a skipped check fails the run.
 - `tests/host/`: the unit tests.
 - `tests/fbt/test_exclusions.py`: a plain Python test of the build's app and category exclusions,
   `EXCLUDE_EXT_APPS` and `EXCLUDE_EXT_CATEGORIES` in `fbt_options.py`, over synthetic manifests.
@@ -84,6 +88,10 @@ These are the working notes for the one device Sonar is developed on, and the de
   rollback packages; `--dry` lists what would go.
 - `tools/flash_headroom.sh`: the image size against the flash the BLE stack leaves free; see
   Useful commands.
+- `tools/momentum-base.txt`: the Momentum commit the fork builds on, the merged release tag's.
+  The golden checks of the host tests compare the fork's API table and Sub-GHz manifest with
+  Momentum's at that commit, which the continuous build fetches alone. `tools/momentum_base.py`
+  reads it; see Merging Momentum.
 - `tools/ram_probe.py`: free heap while each core app runs; the logs are in `docs/measurements/`.
 - `tools/uart_log.py`: captures the debug console through the Wi-Fi dev board; see Crash
   diagnosis. `tools/flipper_log.py` captures the USB console's log stream instead, until the port
@@ -125,7 +133,8 @@ The flash routine, run from the project folder:
    (cd Momentum-Firmware && ./fbt updater_package)
    ```
 
-3. Check the image against the 880,640 bytes that the BLE stack leaves free:
+3. Check the image against the flash that the BLE stack leaves free, 880,640 bytes with the
+   current stack:
 
    ```bash
    tools/flash_headroom.sh
@@ -175,9 +184,11 @@ further lists, and can be given more than once.
 The fork follows Momentum by merging its release tags into `screen-reader`, never by a rebase.
 Run the steps from the project folder; mntm-013 stands for the tag to merge.
 
-1. Fetch Momentum's branches and tags:
+1. Fetch Momentum's branches and tags. The first time, add Momentum as the remote `upstream`,
+   which a fresh clone of the project lacks:
 
    ```bash
+   git -C Momentum-Firmware remote add upstream https://github.com/Next-Flip/Momentum-Firmware.git
    git -C Momentum-Firmware fetch --tags upstream
    ```
 
@@ -195,7 +206,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
    ```
 
 4. The API table: if it conflicts, take Momentum's side. Then run the script in any case, since
-   it also removes a JavaScript line that merged without a conflict.
+   it also removes a JavaScript line that merged without a conflict. It sets the version to the
+   merged table's own with the fork's step added, so a table that already has the fork's version
+   keeps it.
 
    ```bash
    git -C Momentum-Firmware checkout --theirs targets/f7/api_symbols.csv
@@ -215,16 +228,20 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
    git -C Momentum-Firmware add applications/main/subghz/application.fam
    ```
 
-6. Resolve any other conflict, and commit the merge. Then compare the script's exclude list with
-   Momentum's new manifest. On a difference, update `EXCLUDED` in the script, run it again and
-   commit the result.
+6. Resolve any other conflict, and commit the merge. Then pin the merged tag's commit as the
+   fork's base in `tools/momentum-base.txt`: the golden checks of the host tests, the next
+   command and the continuous build compare with Momentum's files at that commit. Then compare
+   the script's exclude list with Momentum's new manifest. On a difference, update `EXCLUDED` in
+   the script, run it again and commit the result.
 
    ```bash
    git -C Momentum-Firmware commit -m "Merge Momentum mntm-013"
+   git -C Momentum-Firmware rev-parse "mntm-013^{commit}" > tools/momentum-base.txt
    tools/subghz_manifest.py --verify-upstream
    ```
 
-7. Run the host tests:
+7. Run the host tests. They fail while the pin is older than the merge base with upstream/dev or
+   is one of the fork's own commits.
 
    ```bash
    tools/run_host_tests.sh
@@ -247,8 +264,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
    .venv/bin/python tools/sr_drive.py
    ```
 
-10. Push `screen-reader` and bump the submodule in the project. Then tag the release on both
-    repositories, as section 7 of the release spec describes.
+10. Push `screen-reader` and bump the submodule in the project, in one commit with the new pin,
+    since the continuous build compares the new firmware with the pinned commit. Then tag the
+    release on both repositories, as section 7 of the release spec describes.
 
 ## The voice on this card
 
@@ -281,8 +299,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 Flash limit: the firmware may only use the flash below the BLE stack, which starts at SFSA 0xD7
 for ble_light 1.20.0: 880,640 bytes. fbt's `.free_flash` line is against the nominal 1024 KB
 linker region and does not know this, and the updater refuses a larger image before writing. Run
-the headroom check before every `./fbt flash_usb`. It prints the size of
-`build/f7-firmware-C/firmware.bin` and the spare bytes:
+the headroom check before every `./fbt flash_usb`. It reads the stack's address from the update
+package the build made, so a new radio stack from Momentum moves the limit with it, and prints
+the size of `build/f7-firmware-C/firmware.bin`, the limit and the spare bytes:
 
 ```bash
 tools/flash_headroom.sh
@@ -346,7 +365,9 @@ Speech: announcements are spoken by the device itself.
 - `sr volume <0..100>` and `sr delay <500..10000>` are saved settings.
 - `sr chord up|down|ok|okhold|downhold|left|right` runs what Back and that key do, as the
   README's Back chords section describes; `downhold` works also while the reader is off.
-- `sr voice off` mutes until `sr voice on` or a reboot; the generator uses it around a sync.
+- `sr voice off` mutes until `sr voice on` or a reboot; `sr voice off 60` mutes for a minute,
+  which the generator sets around a transfer and renews as it goes, so a generator that dies
+  leaves the reader muted for a minute at most.
 
 Any button press silences speech. With animations on, the dolphin's speech bubbles on the home
 screen are not spoken unless a button was pressed in the last two seconds. `sr status` counts

@@ -15,17 +15,24 @@ works on, samantha by default.
 
 Words come from tools/voice_words.txt and, when it exists, tools/voice_words.local.txt (personal
 words such as a device name, not in git), from every string literal in the firmware's core apps
-and services and the dolphin's speech bubble texts, run through the real pronunciation layer
-(--extract), and from the set's missing.txt on the card (--pull-missing). A clip's name is the
-word in lower case without apostrophes ("don't" is dont, spoken as "don't"); a clip listed in
-tools/voice_names.txt is spoken as written there, which names the single letters that spell a
-word the device has no clip for. Clips land in the set's directory as <initial>/<word>.raw next
-to its manifest.json, which remembers the set's name, its settings and the settings each clip
-was made with, so a rerun makes only what is missing or changed, and its voice.txt, the settings
-line the device shows. --sync uploads new or changed clips to /ext/sr/voices/<set>/<hh>/<word>.raw
-on the card, hh being the word's FNV-1a hash modulo 64 as two hex digits, the same folder the
-firmware's speech_voice_path computes, and then the set's voice.txt; --pull-missing removes the
-pulled missing list. --migrate-sets moves the card's first layout, /ext/sr/voice and
+and services, the names and categories their menus show and the dolphin's speech bubble texts,
+run through the real pronunciation layer (--extract), and from the set's missing.txt on the card
+(--pull-missing). A clip's name is the word in lower case without apostrophes ("don't" is dont,
+spoken as "don't"), spoken as the texts write it most often when they write it both ways
+(spoken_forms); a clip listed in tools/voice_names.txt is spoken as written there, which names
+the single letters that spell a word the device has no clip for. Clips land in the set's
+directory as <initial>/<word>.raw next to its manifest.json, which remembers the set's name, its
+settings and the settings each clip was made with, so a rerun makes only what is missing or
+changed, and its voice.txt, the settings line the device shows. --sync uploads new or changed
+clips to /ext/sr/voices/<set>/<hh>/<word>.raw on the card, hh being the word's FNV-1a hash
+modulo 64 as two hex digits, the same folder the firmware's speech_voice_path computes, and then
+the set's voice.txt. The set's synced.json remembers what reached the card, so a rerun sends
+only what is new or changed; a code in the set's folder on the card, .sync-id, which synced.json
+keeps too, tells whether the card's copy is the one it describes, and when it is another, from
+another computer's sync, another card or an older copy, everything is sent. --pull-missing keeps
+the words it pulls in the set's pulled.txt, which every run adds to its words, and leaves the
+card's list alone; a sync with nothing failed, made or sent, then removes those words from the
+card's list, and the file. --migrate-sets moves the card's first layout, /ext/sr/voice and
 /ext/sr/missing.txt, into /ext/sr/voices/samantha, and refuses when the new place is taken;
 until then --sync and --pull-missing refuse such a card, since a set folder they started there
 would stand in the migration's way. --mark-synced writes the set's synced.json from its manifest
@@ -65,17 +72,19 @@ The routine, per set, with the device connected:
 The Python packages are in requirements.txt: pyserial for the firmware's
 scripts/flipper/storage.py, which --sync, --pull-missing, --card-apps and --migrate-sets import,
 numpy and scipy for the espeak and kokoro backends, kokoro-onnx for kokoro. Run the generator
-with the project virtualenv's Python (.venv/bin/python), not the system python3.
+with the project virtualenv's Python (.venv/bin/python), not the system python3. It needs Python
+3.10 or newer, since storage.py does, and says so when it starts on an older one.
 
---extract-all folds in every app under applications/external (hundreds of them); --card-apps
-folds in only the ones actually installed on the card, which is the routine choice, and needs
-the device but only to list it, never to write to it. Both need --extract to have an effect.
+--extract-all folds in every app under applications/external (hundreds of them), its strings,
+name and category; --card-apps folds in only the ones actually installed on the card, which is
+the routine choice, and needs the device but only to list it, never to write to it. Both need
+--extract to have an effect.
 --check makes ten clips into a temporary directory and verifies them, with the set's own backend
 and voice from its manifest unless the command line names them.
 --dry builds the word list and prints its counts without making clips, pulling missing.txt,
 migrating, marking synced or syncing.
 """
-import argparse, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, shutil, subprocess, sys, tempfile, time
+import argparse, ast, collections, glob, hashlib, importlib.util, json, math, multiprocessing, os, re, secrets, shutil, subprocess, sys, tempfile, time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
@@ -91,9 +100,20 @@ DIGIT_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "e
 FAM_APPID_RE = re.compile(r'appid\s*=\s*"([^"]+)"')
 FAM_FILENAME_RE = re.compile(r'fap_file_name\s*=\s*"([^"]+)"')
 APP_MANIFEST_DIRS = ("external", "main", "system", "settings", "debug")
+# The kinds of App(...) whose name a menu shows: the main menu's, the Apps menu's, Settings'
+MENU_APPTYPES = ("APP", "ARCHIVE", "EXTERNAL", "MENUEXTERNAL", "SETTINGS")
 
 HZ = 16000
 SETS_DIR = "/ext/sr/voices"
+# The voice's guard around a transfer: a mute of GUARD_S seconds, renewed every GUARD_RENEW_S as
+# the transfer goes, so a tool that dies leaves the reader muted for a minute at most
+GUARD_S = 60
+GUARD_RENEW_S = 15
+# A read that gets no byte for READ_STALL_S raises TimeoutError instead of waiting forever: the
+# device answers every command of a transfer within a second or two. The restore at the end of a
+# transfer waits RESTORE_STALL_S, since the voice comes back by itself anyway
+READ_STALL_S = 30
+RESTORE_STALL_S = 5
 BACKENDS = {
     "say": dict(voice="Samantha", rate=175, highpass=500.0, gain=1.3, soft=True),
     "espeak": dict(voice="en-us+f3", rate=160, highpass=500.0, gain=1.3, soft=True),
@@ -106,15 +126,38 @@ UNKEYED = ("model", "voices_file")
 # The card's first layout, one vocabulary and its missing list, which --migrate-sets moves
 LEGACY_VOICE_DIR = "/ext/sr/voice"
 LEGACY_MISSING = "/ext/sr/missing.txt"
+# The card's copy of a set carries a random code in its folder, which the sync renews whenever it
+# changes the copy and keeps in the set's synced.json under the same name, which no clip can have;
+# after --mark-synced, synced.json holds ANY_CARD instead, for whichever card comes next
+SYNC_ID = ".sync-id"
+ANY_CARD = "any"
 
 
 def log(msg):
     print(msg, flush=True)
 
 
+# The firmware's scripts/flipper/storage.py, which the steps on the device import, needs Python
+# 3.10 (an annotation str | bytes, evaluated when the module loads); the continuous build runs
+# the tools' tests on 3.10
+PYTHON_MIN = (3, 10)
+
+
+def python_too_old(version=None):
+    """One sentence for a Python older than PYTHON_MIN, None for one new enough."""
+    version = tuple((version or sys.version_info)[:2])
+    if version >= PYTHON_MIN:
+        return None
+    return (f"the voice generator needs Python {PYTHON_MIN[0]}.{PYTHON_MIN[1]} or newer, and this is "
+            f"Python {version[0]}.{version[1]}: make the project's .venv with a newer python3, as the "
+            "README's Building from source describes")
+
+
 def set_valid(name):
-    """A set name the card, the settings and the console accept: 1 to 31 characters of lower
-    case letters, digits, hyphen and underscore; "auto" is reserved for the first set found."""
+    """A set name the generator makes: 1 to 31 characters of lower case letters, digits, hyphen
+    and underscore; "auto" is reserved for the first set found. The engine, the console's
+    sr voice use and the settings app's Voice row take these and any other name of a folder that
+    is not hidden and has no slash."""
     return name != "auto" and re.fullmatch(r"[a-z0-9_-]{1,31}", name) is not None
 
 
@@ -238,13 +281,21 @@ def spoken_text(word, names):
     return word
 
 
+def c_compiler():
+    """The first of clang, cc and gcc on the PATH; None without any."""
+    return next((c for c in ("clang", "cc", "gcc") if shutil.which(c)), None)
+
+
 def build_expander(workdir):
     exe = os.path.join(workdir, "speech_expand")
     src = os.path.join(ROOT, "tests", "host", "speech_expand.c")
     layer = os.path.join(SRC, "speech_text.c")
     newest = max(os.path.getmtime(p) for p in (src, layer, os.path.join(SRC, "speech_text.h")))
     if not os.path.exists(exe) or os.path.getmtime(exe) < newest:
-        subprocess.run(["clang", "-std=c11", "-O1", "-I", SRC, "-o", exe, src, layer], check=True)
+        cc = c_compiler()
+        if cc is None:
+            sys.exit("--extract builds the firmware's speech expander, which needs a C compiler: clang, cc or gcc")
+        subprocess.run([cc, "-std=c11", "-O1", "-I", SRC, "-o", exe, src, layer], check=True)
     return exe
 
 
@@ -270,14 +321,44 @@ def strings_in(roots):
     return seen
 
 
-def firmware_strings():
-    """Every string literal in the firmware's core C sources, unescaped, printf fields removed."""
-    # The core apps and services only: applications/external holds hundreds of community apps
-    # whose strings would multiply the vocabulary and the upload time for nothing, unless asked
-    # for with --extract-all or --card-apps.
+def core_roots():
+    """The firmware's own sources: the core apps and services only. applications/external holds
+    hundreds of community apps whose strings would multiply the vocabulary and the upload time
+    for nothing, unless asked for with --extract-all or --card-apps."""
     roots = [os.path.join(FW, "applications", d) for d in ("main", "services", "settings", "system")]
     roots.append(os.path.join(FW, "lib", "toolbox"))
-    return sorted(strings_in(roots))
+    return roots
+
+
+def firmware_strings():
+    """Every string literal in the firmware's core C sources, unescaped, printf fields removed."""
+    return sorted(strings_in(core_roots()))
+
+
+def manifest_names(roots):
+    """What the menus show of the apps whose application.fam lies under the given directories:
+    the name of each App(...) of a kind a menu lists (MENU_APPTYPES), and each fap_category,
+    the folder the Apps menu files an app in. The manifests are read as Python, as fbt reads
+    them, but never run: an App's own name is one of its keywords, not a Lib's inside it, and a
+    commented-out App is no App. A manifest Python cannot read is left out."""
+    found = set()
+    for root in roots:
+        for path in glob.glob(os.path.join(root, "**", "application.fam"), recursive=True):
+            try:
+                tree = ast.parse(open(path, encoding="utf-8", errors="replace").read(), path)
+            except (OSError, SyntaxError, ValueError):
+                continue
+            for node in ast.walk(tree):
+                if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "App"):
+                    continue
+                fields = {k.arg: k.value.value for k in node.keywords
+                          if isinstance(k.value, ast.Constant) and isinstance(k.value.value, str)}
+                kind = next((k.value.attr for k in node.keywords if k.arg == "apptype" and isinstance(k.value, ast.Attribute)), None)
+                if kind in MENU_APPTYPES and fields.get("name"):
+                    found.add(fields["name"])
+                if fields.get("fap_category"):
+                    found.add(fields["fap_category"])
+    return found
 
 
 def external_app_dirs():
@@ -341,46 +422,96 @@ def bubble_texts():
     return sorted(seen)
 
 
+def expansion_words(line):
+    """The clip names in one line of the pronunciation layer's output, and how each token was
+    written: a Counter of (name, spelling) pairs, the spelling the token with its inner
+    apostrophe ("don't" for dont), or None for a token without one. tests/fbt/test_voice_parity.py
+    holds the names to the words the device looks up."""
+    words, spellings = set(), collections.Counter()
+    for token in line.split():
+        token = token.strip(".,?!;:")
+        n = clip_name(token)
+        if n:
+            words.add(n)
+            core = token.strip("'").lower()
+            spellings[n, core if "'" in core else None] += 1  # inside the word, not quotes around it
+    return words, spellings
+
+
 def _expand(exe, lines):
     """Run the pronunciation layer over a set of source strings, returning the clip-name words
-    it produces and, for each word an apostrophe was stripped from, the original token to speak
-    ("dont" is spoken as "don't")."""
+    it produces and how often each was written with and without an apostrophe
+    (expansion_words). The layer takes each line on its own."""
     out = subprocess.run([exe], input="\n".join(sorted(lines)) + "\n", capture_output=True, text=True, check=True).stdout
-    words, originals = set(), {}
+    words, spellings = set(), collections.Counter()
     for line in out.splitlines():
-        for token in line.split():
-            token = token.strip(".,?!;:")
-            n = clip_name(token)
-            if n:
-                words.add(n)
-                core = token.strip("'").lower()
-                if "'" in core:  # inside the word, not quotes around it
-                    originals[n] = min(originals.get(n, core), core)
-    return words, originals
+        line_words, line_spellings = expansion_words(line)
+        words |= line_words
+        spellings += line_spellings
+    return words, spellings
+
+
+def spoken_forms(own, apps):
+    """Which clips to speak with their apostrophe ("dont" as "don't"), from how often each was
+    written with and without one: own counts the firmware's own texts, apps the apps' texts
+    that are not also the firmware's (expansion_words' Counters). A word the firmware's texts
+    hold is decided by those alone, so an app never changes how it sounds, and the others by the
+    apps'. The spelling written most often wins, a tie going to the apostrophe; among several
+    apostrophe spellings the most frequent, then the first in order. Returns the spoken form of
+    each clip that takes an apostrophe, and each clip written both ways, anywhere, with the form
+    chosen, or None for the word as written."""
+    by_name = ({}, {})
+    for counts, names in zip((own, apps), by_name):
+        for (n, spelling), c in counts.items():
+            names.setdefault(n, collections.Counter())[spelling] += c
+    forms, both = {}, {}
+    for n in sorted(set(by_name[0]) | set(by_name[1])):
+        spellings = [names.get(n, collections.Counter()) for names in by_name]
+        if not any(s for written in spellings for s in written if s):
+            continue  # never written with an apostrophe
+        written = spellings[0] or spellings[1]
+        apostrophes = sorted((s for s in written if s), key=lambda s: (-written[s], s))
+        chosen = apostrophes[0] if apostrophes and sum(written[s] for s in apostrophes) >= written[None] else None
+        if chosen:
+            forms[n] = chosen
+        if any(written[None] for written in spellings):
+            both[n] = chosen
+    return forms, both
 
 
 def extract_words(workdir, extra=()):
-    """The words of the firmware's strings and the bubble texts, run through the pronunciation
-    layer. extra is a list of (label, directories) pairs -- --extract-all's app directories,
-    --card-apps's matched ones -- whose own .c and .h strings are folded into the same pipeline
-    on top of the firmware's own, each in turn. The third return value maps each label to how
-    many words it alone added on top of everything folded in before it, so the caller can report
-    an optional source's worth."""
+    """The words of the firmware's strings, its apps' names and categories as the menus show
+    them (manifest_names) and the bubble texts, run through the pronunciation layer. extra is a
+    list of (label, directories) pairs -- --extract-all's app directories, --card-apps's matched
+    ones -- whose own .c and .h strings, names and categories are folded into the same pipeline
+    on top of the firmware's own, each in turn. The second return value maps each clip spoken
+    with an apostrophe to that spelling (spoken_forms). The third maps each label to how many
+    words it alone added on top of everything folded in before it, so the caller can report an
+    optional source's worth."""
     exe = build_expander(workdir)
     strings = firmware_strings()
     bubbles = bubble_texts()
-    log(f"extract: {len(strings)} distinct strings from the firmware sources, {len(bubbles)} bubble texts")
-    lines = set(strings) | set(bubbles)
-    words, originals = _expand(exe, lines)
+    names = manifest_names(core_roots())
+    log(f"extract: {len(strings)} distinct strings from the firmware sources, {len(names)} app names and "
+        f"categories, {len(bubbles)} bubble texts")
+    lines = set(strings) | names | set(bubbles)
+    words, own = _expand(exe, lines)
+    apps = collections.Counter()
     added = {}
     for label, dirs in extra:
-        lines |= strings_in(dirs)
-        more_words, more_originals = _expand(exe, lines)
-        added[label] = len(more_words - words)
-        words, originals = more_words, more_originals
+        new = (strings_in(dirs) | manifest_names(dirs)) - lines
+        lines |= new
+        new_words, new_spellings = _expand(exe, new)
+        added[label] = len(new_words - words)
+        words |= new_words
+        apps += new_spellings
+    originals, both = spoken_forms(own, apps)
     longest = sorted(words, key=lambda w: (-len(w), w))[:10]
     log(f"extract: {len(words)} words; longest: {' '.join(longest)}")
     log(f"extract: {len(originals)} with an apostrophe: {' '.join(originals[n] for n in sorted(originals))}")
+    if both:
+        log(f"extract: {len(both)} written both with and without an apostrophe, spoken as written most often: "
+            + ", ".join(f"{n} as {both[n] or n}" for n in sorted(both)))
     return words, originals, added
 
 
@@ -529,6 +660,9 @@ def make_clip(job):
         x = highpass(x, hz, settings["highpass"])
         x = finish(x, settings["gain"], settings["soft"])
         x = trim(x, hz)
+        if not x:
+            # Written, it would be 30 ms of silence, played where the word should be spelled
+            return word, False, "the engine gave silence, so no clip is made and the device spells the word"
         x = pad(x, hz)
         os.makedirs(os.path.dirname(out_path), exist_ok=True)
         with open(out_path, "wb") as f:
@@ -553,12 +687,100 @@ def clip_pool(settings, jobs, count):
     return multiprocessing.Pool(size)
 
 
-def open_storage(port):
+class StalledRead:
+    """What scripts/flipper/storage.py's BufferedRead does, with a deadline: until() raises
+    TimeoutError once the device has sent nothing for `stall` seconds, where BufferedRead reads
+    forever (a device waiting for the data of a write_chunk that a Ctrl-C cut off never sends the
+    prompt). The port's own timeout, 2 s, bounds each read."""
+
+    def __init__(self, stream, stall):
+        self.buffer = bytearray()
+        self.stream = stream
+        self.stall = stall
+
+    def until(self, eol="\n", cut_eol=True):
+        eol = eol.encode("ascii")
+        last = time.monotonic()
+        while True:
+            i = self.buffer.find(eol)
+            if i >= 0:
+                read = self.buffer[:i] if cut_eol else self.buffer[: i + len(eol)]
+                self.buffer = self.buffer[i + len(eol):]
+                return read
+            data = self.stream.read(max(1, self.stream.in_waiting))
+            if data:
+                self.buffer.extend(data)
+                last = time.monotonic()
+            elif time.monotonic() - last >= self.stall:
+                raise TimeoutError(f"the device sent nothing for {self.stall:g} s")
+
+
+# The console's first prompt comes within a second of the port opening; much longer means another
+# program reads the port, or the device is not in its console
+STARTUP_STALL_S = 5
+
+
+def open_storage(port, stall=None):
+    """A console session through the firmware's storage protocol, on the port given or found by
+    the Flipper's USB id (flipper_cli.find_port), opened for this tool alone, so qFlipper or a
+    second tool on it is named at once; the console's first prompt is awaited STARTUP_STALL_S
+    seconds, and the reads after it give up after READ_STALL_S seconds without a byte (or
+    `stall`)."""
     sys.path.insert(0, os.path.join(FW, "scripts"))
+    import serial  # noqa: E402
     from flipper.storage import FlipperStorage, FlipperStorageOperations  # noqa: E402
+    from flipper_cli import find_port  # noqa: E402
+    port = find_port(port)
     storage = FlipperStorage(port)
-    storage.start()
+    storage.port.exclusive = True
+    storage.read = StalledRead(storage.port, STARTUP_STALL_S)
+    try:
+        storage.start()
+    except serial.SerialException as e:
+        raise OSError(f"cannot open {port}: {e}. Is qFlipper or another tool using it?") from e
+    except TimeoutError as e:
+        storage.stop()
+        raise TimeoutError(f"the device on {port} did not answer within {STARTUP_STALL_S} s: is qFlipper or another "
+                           "tool reading the port, or the device in the updater?") from e
+    storage.read.stall = READ_STALL_S if stall is None else stall
     return storage, FlipperStorageOperations(storage)
+
+
+class CardWriteError(Exception):
+    """The card answered a file's data with an error, a full card for one."""
+
+
+class SyncStopped(Exception):
+    """A sync that cannot go on: its connection failed, or the card refused a file's data, which
+    every file after it would meet as well. The sync has said where, in one line."""
+
+
+def send_to_card(storage, local_path, card_path):
+    """storage.send_file without its progress line, which a screen reader would read once per
+    clip, ten thousand times in a full sync, and with the device's answer to the data read too:
+    write_chunk stops reading at a write that fails, so an error there, a full card for one,
+    raises CardWriteError instead of the file counting as sent (and the rest of the chunk has
+    reached the console as input, so the session must end). An error before the data, a file the
+    card cannot open, raises the storage protocol's own exception."""
+    from flipper.storage import FlipperStorageException  # noqa: E402  (open_storage put it on the path)
+    if storage.exist_file(card_path):
+        storage.remove(card_path)
+    with open(local_path, "rb") as f:
+        while True:
+            data = f.read(storage.chunk_size)
+            if not data:
+                return
+            storage.send_and_wait_eol(f'storage write_chunk "{card_path}" {len(data)}\r')
+            answer = storage.read.until(storage.CLI_EOL)
+            if storage.has_error(answer):
+                error = storage.get_error(answer)
+                storage.read.until(storage.CLI_PROMPT)
+                raise FlipperStorageException.from_error_code(card_path, error)
+            storage.port.write(data)
+            answer = storage.read.until(storage.CLI_PROMPT)
+            if storage.has_error(answer):
+                said = bytes(answer).decode("ascii", "replace").strip()
+                raise CardWriteError(f"{card_path}: {said}")
 
 
 def list_card_apps(storage):
@@ -610,12 +832,20 @@ def voice_was_on(storage):
 
 def voice_off(storage):
     """Silence the recorded voice before a transfer: opening a file the worker has open for
-    playback would otherwise block and stall the speaker mid-buffer. Returns whether it was
-    on before, so the caller can decide whether to turn it back on."""
+    playback would otherwise block and stall the speaker mid-buffer. The mute is timed, GUARD_S
+    seconds, and the transfer renews it (voice_guard), so when this tool dies the voice comes back
+    by itself. Returns whether it was on before, so the caller can decide whether to turn it back
+    on."""
     was_on = voice_was_on(storage)
-    storage.send_and_wait_prompt("sr voice off\r")
-    log("voice: silenced for the transfer")
+    voice_guard(storage)
+    log(f"voice: silenced for the transfer; should the transfer die, it comes back by itself within {GUARD_S} s")
     return was_on
+
+
+def voice_guard(storage):
+    """The timed mute, set or renewed. A voice already off without an end stays so, and a
+    firmware from before the timed mute takes it as a plain off, until sr voice on."""
+    storage.send_and_wait_prompt(f"sr voice off {GUARD_S}\r")
 
 
 def voice_on(storage):
@@ -623,13 +853,49 @@ def voice_on(storage):
     log("voice: restored")
 
 
+def end_transfer(storage, port, was_on, clean):
+    """Close a transfer's console session, switching the voice back on first if it was on
+    before. After a failure the session may be in the middle of a command -- a Ctrl-C between a
+    write_chunk and its data leaves the device waiting for file bytes, and it would take the next
+    command as data -- so the voice is then restored through a fresh session; closing the old one
+    ends the stuck command on the device. Never raises, not even for a second Ctrl-C: when the
+    voice cannot be restored, it says so, and the timed mute lifts itself."""
+    try:
+        if not clean:
+            storage.stop()
+        if was_on:
+            if clean:
+                storage.read.stall = RESTORE_STALL_S
+            else:
+                storage, _ = open_storage(port, RESTORE_STALL_S)
+            voice_on(storage)
+    except BaseException as e:
+        log(f"voice: not restored ({type(e).__name__}: {e}); it comes back by itself within {GUARD_S} s, or with sr voice on")
+    finally:
+        try:
+            storage.stop()
+        except BaseException:
+            pass
+
+
+def write_list(path, words):
+    """One word per line, sorted, as load_list reads them; atomically, as save_manifest writes."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        f.write("".join(f"{w}\n" for w in sorted(words)))
+    os.replace(tmp, path)
+
+
 def pull_missing(port, set_name):
-    """The words the device found no clip for in the set: its missing.txt on the card, which is
-    removed once read. Refused, before anything else, on a card that still has the first layout."""
+    """The words the device found no clip for in the set: its missing.txt on the card, read and
+    left there; main() keeps them in the set's pulled.txt, and a sync that sends every clip takes
+    them off the card's list (clear_pulled). Refused, before anything else, on a card that still
+    has the first layout."""
     path = set_card_dir(set_name) + "/missing.txt"
     storage, _ = open_storage(port)
     words = set()
     was_on = False
+    clean = True
     try:
         refusal = legacy_refusal(storage.exist)
         if refusal:
@@ -640,39 +906,128 @@ def pull_missing(port, set_name):
                 local = os.path.join(d, "missing.txt")
                 storage.receive_file(path, local)
                 words = load_list(local)
-            storage.remove(path)
-        log(f"pulled {len(words)} missing words from {path}")
+        log(f"pulled {len(words)} missing words from {path}, which stays on the card until they are synced")
+    except BaseException:
+        clean = False
+        raise
     finally:
-        if was_on:
-            try:
-                voice_on(storage)
-            except Exception as e:
-                log(f"failed to restore voice: {e}")
-        storage.stop()
+        end_transfer(storage, port, was_on, clean)
     return words
 
 
-def sync(port, out_dir, manifest, set_name, force_all=False):
+def clear_pulled(storage, card, pulled):
+    """The card's missing.txt without the words pulled from it, now that their clips are on the
+    card: removed when it holds no others, else written back with the ones the device noted since
+    the pull. Runs in the sync's session, with the voice muted, so the device notes none
+    meanwhile. Returns how many words stay on the list."""
+    path = f"{card}/missing.txt"
+    if not storage.exist_file(path):
+        return 0
+    with tempfile.TemporaryDirectory() as d:
+        local = os.path.join(d, "missing.txt")
+        storage.receive_file(path, local)
+        left = load_list(local) - set(pulled)
+        storage.remove(path)
+        if left:
+            write_list(local, left)
+            send_to_card(storage, local, path)
+    return len(left)
+
+
+def card_lacks_synced(storage, card, synced, words):
+    """True when clips that synced.json says are on the card are not: a wiped card, or another
+    one, which would otherwise get nothing. The first, middle and last of those words still in
+    the manifest are looked up, three round trips. A card with an older copy of the set, from
+    another sync, is told apart by its code (card_copy_differs), not here."""
+    sent = sorted(w for w in synced if w in words)
+    if not sent:
+        return False
+    return any(not storage.exist_file(f"{card}/{bucket(w)}/{w}.raw") for w in {sent[0], sent[len(sent) // 2], sent[-1]})
+
+
+def card_copy_differs(ours, theirs):
+    """True when the card's copy of the set is another than the one synced.json describes: its
+    code (theirs) is not the one synced.json keeps (ours), so the copy is from another computer's
+    sync, or it is another card or an older copy of this one, which another sync has overtaken.
+    A card without a code (theirs None), from before the codes or copied through a card reader, is
+    taken at its word, as the three lookups of card_lacks_synced still guard it; so is any card
+    after --mark-synced (ours ANY_CARD)."""
+    return theirs is not None and ours != ANY_CARD and theirs != ours
+
+
+def read_card_code(storage, card):
+    """The code in the set's folder on the card, or None when there is none."""
+    path = f"{card}/{SYNC_ID}"
+    if not storage.exist_file(path):
+        return None
+    with tempfile.TemporaryDirectory() as d:
+        local = os.path.join(d, "code")
+        storage.receive_file(path, local)
+        return open(local, encoding="ascii", errors="replace").read().strip() or None
+
+
+def write_card_code(storage, ops, card, code):
+    """Put the code into the set's folder on the card, making the folder when it is new. A card
+    that refuses it, a full one, stops the sync with one line, as a refused clip does."""
+    ops.mkpath(card)
+    with tempfile.TemporaryDirectory() as d:
+        local = os.path.join(d, "code")
+        with open(local, "w", encoding="ascii") as f:
+            f.write(code + "\n")
+        try:
+            send_to_card(storage, local, f"{card}/{SYNC_ID}")
+        except CardWriteError as e:
+            log(f"sync: stopped before the first clip: the card did not take the set's code, is it full? {e}")
+            raise SyncStopped(str(e)) from e
+
+
+def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
     """Send the set's voice.txt and the clip files the device actually uses (not .build, not
     manifest.json) to the set's folder on the card, /ext/sr/voices/<set>. The set's synced.json
     remembers the settings hash uploaded for each word, so a rerun only sends what's missing or
-    changed instead of asking the device to md5 every file. A word whose local clip is missing
-    or whose send fails is reported and left out of synced.json, so the next sync tries it
-    again, and the other words still go. Returns the number of such words for main()'s exit
-    code. Refused, before anything is sent, on a card that still has the first layout."""
+    changed instead of asking the device to md5 every file. When the card's copy is another than
+    the one synced.json describes, by the code in the set's folder (card_copy_differs), or a few of
+    the clips it names are not on the card (card_lacks_synced), everything is sent, as --sync-all
+    does. Before the first clip of a sync that changes the card's copy, a new code goes into
+    synced.json and then onto the card, so a sync cut off leaves a card the next one continues,
+    and every other copy of the set differs from it; a card without a code gets one. A word whose
+    local clip is missing or whose send fails is reported and left out of synced.json, so the
+    next sync tries it again, and the other words still go. Returns the number of such words for
+    main()'s exit code. With pulled, the words --pull-missing took from the card's missing.txt,
+    and nothing missing or failed, those words then leave the card's list, and the set's
+    pulled.txt goes. Refused, before anything is sent, on a card that still has the first
+    layout."""
     card = set_card_dir(set_name)
     storage, ops = open_storage(port)
+    import serial  # pyserial, which open_storage has loaded: its errors are the connection's
     was_on = False
+    clean = True
+    synced = None  # what has reached the card, saved however the sync ends
+    synced_path = os.path.join(out_dir, "synced.json")
     try:
         refusal = legacy_refusal(storage.exist)
         if refusal:
             sys.exit(refusal)
         was_on = voice_off(storage)
+        renewed = time.monotonic()
         t0 = time.time()
-        synced_path = os.path.join(out_dir, "synced.json")
         synced = {} if force_all else (json.load(open(synced_path)) if os.path.exists(synced_path) else {})
-        made_dirs = set()
         words = manifest.get("words", {})
+        theirs = None if force_all else read_card_code(storage, card)
+        if card_copy_differs(synced.get(SYNC_ID), theirs):
+            log("sync: the card's copy of the set is from another sync, another computer's or an older one, so everything is sent, as --sync-all does")
+            synced = {}
+        elif card_lacks_synced(storage, card, synced, words):
+            log("sync: clips that synced.json lists are not on the card, a wiped card or another one, so everything is sent, as --sync-all does")
+            synced = {}
+        if theirs is None or theirs != synced.get(SYNC_ID) or any(synced.get(w) != h for w, h in words.items()):
+            # Before the first clip: from here on synced.json describes this card's copy, so a
+            # sync cut off leaves a card the next one continues, and any other copy, an older one
+            # of this card's included, differs from it
+            synced[SYNC_ID] = secrets.token_hex(8)
+            save_manifest(synced, synced_path)
+            write_card_code(storage, ops, card, synced[SYNC_ID])
+        made_dirs = set()
         sent = skipped = missing = failed = 0
         for i, word in enumerate(sorted(words), 1):
             h = words[word]
@@ -688,11 +1043,21 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
                 missing += 1
                 continue
             folder = bucket(word)
+            if time.monotonic() - renewed >= GUARD_RENEW_S:
+                voice_guard(storage)
+                renewed = time.monotonic()
             try:
                 if folder not in made_dirs:
                     ops.mkpath(f"{card}/{folder}")
                     made_dirs.add(folder)
-                storage.send_file(local_path, f"{card}/{folder}/{word}.raw")
+                send_to_card(storage, local_path, f"{card}/{folder}/{word}.raw")
+            except CardWriteError as e:
+                log(f"sync: stopped at word {i} of {len(words)}, {word}: the card did not take the data, is it full? {e}")
+                raise SyncStopped(str(e)) from e
+            except (serial.SerialException, TimeoutError, OSError) as e:
+                # The connection, not the word: every word after it would fail the same way
+                log(f"sync: stopped at word {i} of {len(words)}, {word}: the connection failed: {e}")
+                raise SyncStopped(str(e)) from e
             except Exception as e:  # one bad word must not stop the sync
                 log(f"sync: failed: {word}: {type(e).__name__}: {e}")
                 failed += 1
@@ -702,18 +1067,32 @@ def sync(port, out_dir, manifest, set_name, force_all=False):
             if i % 100 == 0:
                 log(f"sync: {i} of {len(words)}, {sent} sent, {skipped} skipped, {time.time() - t0:.0f} s")
                 save_manifest(synced, synced_path)
-        # Saved before voice.txt goes, so a failure there cannot lose the record of what was sent
+        # Saved before voice.txt goes, so a failure there cannot lose the record of what was sent;
+        # the set's folder made first, which a card without a single clip of the set lacks
         save_manifest(synced, synced_path)
-        storage.send_file(os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
+        ops.mkpath(card)
+        send_to_card(storage, os.path.join(out_dir, "voice.txt"), f"{card}/voice.txt")
         log(f"sync: {sent} sent, {skipped} skipped, {missing} missing, {failed} failed, {time.time() - t0:.0f} s")
+        if pulled and not (missing or failed):
+            left = clear_pulled(storage, card, pulled)
+            pulled_path = os.path.join(out_dir, "pulled.txt")
+            if os.path.exists(pulled_path):
+                os.remove(pulled_path)
+            log(f"sync: the {len(pulled)} pulled words are off the card's missing list"
+                + (f"; {left} noted since stay on it" if left else ""))
         return missing + failed
-    finally:
-        if was_on:
+    except BaseException:
+        clean = False
+        if synced is not None:
+            # A sync stopped or cut off keeps the record of what it sent, so the next one does
+            # not send it again
             try:
-                voice_on(storage)
-            except Exception as e:
-                log(f"failed to restore voice: {e}")
-        storage.stop()
+                save_manifest(synced, synced_path)
+            except BaseException:
+                pass
+        raise
+    finally:
+        end_transfer(storage, port, was_on, clean)
 
 
 def migration_plan(exists):
@@ -744,6 +1123,7 @@ def migrate_sets(port):
     rename moves in place; nothing is copied or removed. Returns whether it succeeded."""
     storage, _ = open_storage(port)
     was_on = False
+    clean = True
     try:
         was_on = voice_off(storage)
         moves, refusal = migration_plan(storage.exist)
@@ -763,13 +1143,11 @@ def migrate_sets(port):
         if not moves:
             log(f"migrate: nothing to move, the card has no {LEGACY_VOICE_DIR} or {LEGACY_MISSING}")
         return True
+    except BaseException:
+        clean = False
+        raise
     finally:
-        if was_on:
-            try:
-                voice_on(storage)
-            except Exception as e:
-                log(f"failed to restore voice: {e}")
-        storage.stop()
+        end_transfer(storage, port, was_on, clean)
 
 
 def check(settings, names, workdir, jobs):
@@ -800,9 +1178,10 @@ def mark_synced(manifest):
     """The synced.json for a set that reached the card by some other means than --sync, such as a
     copy through a card reader (voice_pack.py's tar, unpacked with tar -xf onto the card): every
     word's current hash, taken from the manifest, with nothing to verify it against since the
-    words were never actually sent by this tool. Without this the next --sync would see an empty
-    or stale synced.json and resend the whole set."""
-    return dict(manifest.get("words", {}))
+    words were never actually sent by this tool, and ANY_CARD for the code, so the next --sync
+    takes the card's copy at its word whatever code it holds, and gives it a new one. Without
+    this the next --sync would see an empty or stale synced.json and resend the whole set."""
+    return {**manifest.get("words", {}), SYNC_ID: ANY_CARD}
 
 
 def save_manifest(manifest, manifest_path):
@@ -814,6 +1193,9 @@ def save_manifest(manifest, manifest_path):
 
 
 def main():
+    too_old = python_too_old()
+    if too_old:
+        sys.exit(too_old)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--set", default="samantha", help="the voice set to work on (default samantha, the voice/ directory)")
     ap.add_argument("--backend", choices=sorted(BACKENDS), help="the speech engine (default say; --check takes the set's own)")
@@ -828,18 +1210,19 @@ def main():
     ap.add_argument("--extract", action="store_true", help="add the firmware's strings through the pronunciation layer")
     ap.add_argument("--extract-all", action="store_true", help="with --extract: also add every app under applications/external, not just the ones on the card")
     ap.add_argument("--card-apps", action="store_true", help="with --extract: also add the apps actually installed on the card (needs the device, read-only)")
-    ap.add_argument("--pull-missing", action="store_true", help="add and clear the set's missing.txt on the card")
+    ap.add_argument("--pull-missing", action="store_true", help="add the words of the set's missing.txt on the card, kept in its pulled.txt until a sync with nothing failed takes them off the card's list")
     ap.add_argument("--sync", action="store_true", help="upload new or changed clips to the set's folder on the card")
     ap.add_argument("--sync-all", action="store_true", help="with --sync: ignore the set's synced.json and resend everything (for a wiped card)")
     ap.add_argument("--migrate-sets", action="store_true", help="move the card's /ext/sr/voice and /ext/sr/missing.txt into /ext/sr/voices/samantha, once")
     ap.add_argument("--mark-synced", action="store_true", help="write the set's synced.json from its manifest (every word's current hash), for a set that reached the card by some other means than --sync, such as a card reader")
     ap.add_argument("--check", action="store_true", help="make ten clips into a temporary directory and verify them, with the set's own backend and voice unless named")
     ap.add_argument("--dry", action="store_true", help="build the word list and print the counts, without making clips, pulling missing.txt, migrating or syncing")
-    ap.add_argument("--port", default=(sorted(glob.glob("/dev/cu.usbmodemflip_*")) + [None])[0],
-                    help="serial port, default: the first /dev/cu.usbmodemflip_* (the device's name is part of it)")
+    ap.add_argument("--port", help="serial port, default: found by the Flipper's USB id, or FLIPPER_PORT")
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--limit", type=int, default=0, help="stop after this many new clips (for trials)")
     a = ap.parse_args()
+    if a.jobs < 1:
+        sys.exit(f"--jobs {a.jobs}: at least one job is needed")
     if not set_valid(a.set):
         sys.exit(f"{a.set!r} is not a set name: 1 to 31 lower case letters, digits, hyphens and underscores, and not auto")
     out_dir = set_local_dir(a.set)
@@ -886,7 +1269,7 @@ def main():
             synced_path = os.path.join(out_dir, "synced.json")
             synced = mark_synced(manifest)
             save_manifest(synced, synced_path)
-            log(f"mark-synced: {len(synced)} words written to {synced_path}")
+            log(f"mark-synced: {len(manifest.get('words', {}))} words written to {synced_path}")
         if mark_synced_only:
             return 0
 
@@ -915,11 +1298,18 @@ def main():
                 f"{added.get('card-apps', 0)} words added; unmatched: {skipped}")
     elif a.extract_all or a.card_apps:
         log("--extract-all and --card-apps only add to the word pipeline together with --extract; ignored")
+    # Words pulled before and not yet synced, from a run that failed or stopped: kept in the set's
+    # pulled.txt, since the card keeps its list until they are synced
+    pulled_path = os.path.join(out_dir, "pulled.txt")
+    pulled = load_list(pulled_path)
     if a.pull_missing:
         if a.dry:
             log("dry run: missing.txt not pulled")
         else:
-            words |= pull_missing(a.port, a.set)
+            pulled |= pull_missing(a.port, a.set)
+            os.makedirs(out_dir, exist_ok=True)
+            write_list(pulled_path, pulled)
+    words |= pulled
 
     if a.dry:
         log(f"dry run: {len(words)} words total, no clips made")
@@ -967,11 +1357,22 @@ def main():
         f.write(settings_line(settings) + "\n")
     log(f"made {made} clips, {failed} failed, {time.time() - t0:.0f} s; vocabulary {len(manifest['words'])} words in {out_dir}")
     if a.sync:
-        failed += sync(a.port, out_dir, manifest, a.set, a.sync_all)
+        # The pulled words leave the card's list only when every clip was made
+        failed += sync(a.port, out_dir, manifest, a.set, a.sync_all, pulled if not failed else None)
     if failed:
         log(f"{failed} clip(s) failed to build or sync")
     return 1 if failed else 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        log("stopped")
+        sys.exit(130)
+    except SyncStopped:
+        sys.exit(1)  # the sync has said where and why, in one line
+    except (OSError, TimeoutError) as e:
+        # The device's connection, or a file: one line, not a traceback for a screen reader
+        log(f"stopped: {type(e).__name__}: {e}")
+        sys.exit(1)

@@ -390,6 +390,307 @@ static void test_typing_announces_the_character(void) {
     CHECK_STR(out[0].text, "deleted");
 }
 
+/** A text input as text_input.c draws it with the fork's hints: the prompt at the top in the
+ * secondary font, the name in the field (drawn inverted while the default name is selected), the
+ * keys in the keyboard font, and the selected key with a focus hint; Save is an icon, named by a
+ * focus note in the keyboard font. */
+static SrFrame text_input_frame(const char* field, bool field_selected, const char* key) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 2, 8, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Name the signal");
+    add(&f, 4, 22, SrLayerFullscreen, SrFontSecondary, field_selected, false, 0, 0, field);
+    add(&f, 1, 40, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "qwertyuiop");
+    add(&f, 1, 52, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "asdfghjkl");
+    add(&f, 1, 64, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "zxcvbnm");
+    add(&f, 100, 64, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, key);
+    return f;
+}
+
+/** A number input as number_input.c draws it: the prompt at the top, the value in the field, the
+ * keys in the keyboard font, the selected one inverted. */
+static SrFrame number_input_frame(const char* prompt, const char* value, bool hints) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    if(prompt[0]) add(&f, 2, 9, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, prompt);
+    add(&f, 8, 25, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, value);
+    add(&f, 7, 41, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "01234");
+    add(&f, 7, 53, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "5678");
+    add(&f, 51, 53, SrLayerFullscreen, SrFontKeyboard, true, hints, 0, 0, "9");
+    return f;
+}
+
+// G2 of the review of 2026-09-28: a keyboard opened with only its key, "Save" or "9", since its
+// prompt is in the secondary font and the model read only the title and the focus
+static void test_keyboard_opens_with_prompt_and_value(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f = text_input_frame("RAW_433", true, "Save");
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Name the signal. RAW_433. Save");
+
+    sr_model_init(&m, 1);
+    f = number_input_frame("Frequency", "433", false);
+    n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Frequency. 433. 9");
+
+    // Without a prompt the field is read, but it is not the title: the title stays what the
+    // screen is, while the field changes with every key
+    SrScreen s;
+    f = number_input_frame("", "433", false);
+    sr_screen_build(&f, &s);
+    CHECK(s.on_keyboard && s.title_row < 0);
+    sr_model_init(&m, 1);
+    n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK_STR(out[0].text, "433. 9");
+
+    // Text in the keyboard font without a focus is no keyboard (a text box in hex, a terminal):
+    // its top line in the secondary font is no title
+    SrFrame t;
+    frame_init(&t, SrLayerWindow);
+    add(&t, 2, 8, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Received");
+    add(&t, 0, 20, SrLayerWindow, SrFontKeyboard, false, false, 0, 0, "00 11 22 33");
+    sr_screen_build(&t, &s);
+    CHECK(s.has_keyboard && !s.on_keyboard && s.title_row < 0);
+}
+
+/** A byte input as byte_input.c draws it with the fork's hints, while a key is selected: the
+ * prompt, the value as a plain note, the bytes drawn one digit at a time in the keyboard font
+ * with the digit being edited inverted, and the two rows of keys with the selected one hinted. */
+static SrFrame byte_input_frame(
+    const char* value_note,
+    const char* digits_before,
+    const char* edited,
+    char key) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 2, 9, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Enter the key");
+    add_note(&f, SrLayerFullscreen, false, value_note);
+    add(&f, 10, 25, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, digits_before);
+    add(&f, 24, 25, SrLayerFullscreen, SrFontKeyboard, true, false, 0, 0, edited);
+    add(&f, 30, 25, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "5678");
+    add(&f, 7, 43, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "01234567");
+    add(&f, 7, 57, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "89");
+    char k[2] = {key, '\0'};
+    add(&f, 29, 57, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, k);
+    add(&f, 40, 57, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "BCDEF");
+    return f;
+}
+
+// G1 of the review of 2026-09-28: the byte input opened as "3, 3", the digit being edited and the
+// key, both inverted; with the key hinted and the value in a note it says the prompt, the value
+// and the key, and a key press says the new value only, not the digits drawn one by one
+static void test_byte_input_reads_its_value(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f = byte_input_frame("12 34 56 78, byte 2 of 4", "124", "3", 'A');
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Enter the key. 12 34 56 78, byte 2 of 4. A");
+
+    // OK on A: the first digit of byte 2 is A, the second is next
+    f = byte_input_frame("12 A4 56 78, byte 2 of 4, digit 2", "12A", "4", 'A');
+    n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnChange);
+    CHECK_STR(out[0].text, "12 A4 56 78, byte 2 of 4, digit 2");
+}
+
+// G3 of the review of 2026-09-28: in the number input, moving from 9 onto the sign or Save key
+// was said, interrupting, as the typed character "9", since the key row "5678" became "56789"
+// once the 9 was no longer selected. Key rows take no part in the typed rule; with the keys named
+// the move says the key
+static void test_key_rows_are_never_typed(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    // A key row one character longer, the focus unchanged: no typed character, and on a keyboard
+    // the key rows are no news either
+    sr_model_init(&m, 1);
+    SrFrame f = text_input_frame("RAW_433", false, "Save");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    SrFrame g = text_input_frame("RAW_433", false, "Save");
+    snprintf(g.records[4].text, SR_TEXT_MAX, "zxcvbnm,");
+    size_t n = sr_model_process(&m, &g, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 0);
+
+    // The number input's move from the 9 onto the sign key, with the keys named as it now draws
+    // them: the 9 joins its row, and the move says the key
+    sr_model_init(&m, 1);
+    f = number_input_frame("Frequency", "433", true);
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    frame_init(&g, SrLayerFullscreen);
+    add(&g, 2, 9, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Frequency");
+    add(&g, 8, 25, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "433");
+    add(&g, 7, 41, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "01234");
+    add(&g, 7, 53, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, "56789");
+    add(&g, 62, 48, SrLayerFullscreen, SrFontKeyboard, false, true, 0, 0, "Change sign");
+    n = sr_model_process(&m, &g, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Change sign");
+
+    // Back onto the 9, and OK: a digit typed into the field is still a typed character
+    f = number_input_frame("Frequency", "433", true);
+    n = sr_model_process(&m, &f, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "9");
+    f = number_input_frame("Frequency", "4339", true);
+    n = sr_model_process(&m, &f, 1300, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "9");
+}
+
+/** The text input's keys in one case, the field as given (no row when empty, as an empty field
+ * draws only the cursor) and a focused key or note. */
+static SrFrame text_input_case_frame(const char* field, bool upper, const char* focus) {
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 2, 8, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Name the signal");
+    if(field[0]) add(&f, 4, 22, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, field);
+    const char* rows[3] = {"qwertyuiop", "sdfghjkl", "zxcvbnm"};
+    if(upper) {
+        rows[0] = "QWERTYUIOP";
+        rows[1] = "SDFGHJKL";
+        rows[2] = "ZXCVBNM";
+    }
+    for(int i = 0; i < 3; i++) {
+        add(&f, 1, 40 + 12 * i, SrLayerFullscreen, SrFontKeyboard, false, false, 0, 0, rows[i]);
+    }
+    add(&f, 100, 64, SrLayerFullscreen, SrFontKeyboard, true, true, 0, 0, focus);
+    return f;
+}
+
+// G4 of the review of 2026-09-28: deleting the last character was a new screen, "Backspace",
+// since an empty field turns the keys to upper case and most rows then differed, and so was the
+// first character typed; the cursor mode was silent
+static void test_text_input_edges(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f = text_input_case_frame("a", false, "Backspace");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    f = text_input_case_frame("", true, "Backspace");
+    size_t n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "deleted");
+
+    // The first character into the empty field: the keys go to lower case, the selected A too,
+    // and the character is said, not the key
+    sr_model_init(&m, 1);
+    f = text_input_case_frame("", true, "A");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    f = text_input_case_frame("A", false, "a");
+    n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "A");
+
+    // Up into the cursor mode: no key is selected, and the text input's note is the focus; Left
+    // moves it
+    f = text_input_case_frame("A", false, "Cursor after A, 1 of 1");
+    n = sr_model_process(&m, &f, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Cursor after A, 1 of 1");
+    f = text_input_case_frame("A", false, "Cursor at the start, 0 of 1");
+    n = sr_model_process(&m, &f, 1300, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "Cursor at the start, 0 of 1");
+
+    // A name longer than the field: text_input draws "..." and the tail, and its full text hint
+    // makes the tail the whole name, so a character typed is said as one
+    sr_model_init(&m, 1);
+    f = text_input_case_frame("... RAW_433_long_name", false, "x");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    f = text_input_case_frame("... RAW_433_long_namex", false, "x");
+    n = sr_model_process(&m, &f, 1100, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnTyped);
+    CHECK_STR(out[0].text, "x");
+}
+
+// S2 of the review of 2026-09-28: rows, announcements and the change said without a key press
+// were cut inside a word, whose fragment speech spelled and logged as a missing word. They end
+// after their last whole word
+static void test_cuts_end_at_a_word(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 36, 31, SrLayerFullscreen, SrFontPrimary, false, false, 0, 0, "Wrong PIN!");
+    add(&f, 64, 38, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Timeout: 1s");
+    sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    // Joined with ". ", the 80th character falls inside the second row's "foxtrot"
+    const char* words = "alpha bravo charlie delta echo foxtrot golf";
+    add(&f, 2, 46, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    add(&f, 2, 54, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    add(&f, 2, 60, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    size_t n = sr_model_process(&m, &f, 1100, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnChange);
+    size_t len = strlen(out[0].text);
+    CHECK(len > 60 && len <= 80);
+    CHECK_STR(out[0].text + len - 4, "echo");
+
+    // A row of more than 63 characters, two records on one baseline: the 64th character falls
+    // inside "julietts"
+    SrFrame r;
+    frame_init(&r, SrLayerFullscreen);
+    add(&r, 2, 30, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, words);
+    const char* more = "hotels indias julietts kilos";
+    add(&r, 90, 30, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, more);
+    SrScreen s;
+    sr_screen_build(&r, &s);
+    len = strlen(s.rows[0].text);
+    CHECK(len <= SR_ROW_TEXT_MAX - 1 && len > 40);
+    CHECK_STR(s.rows[0].text + len - 6, "indias");
+}
+
+// G7 of the review of 2026-09-28: a dialog with four lines of text lost its buttons, as the
+// announcement is cut at 159 characters and the buttons came last ("... buttons: l"). The text
+// is cut after a whole word instead and the buttons stay
+static void test_long_dialog_keeps_its_buttons(void) {
+    SrModel m;
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    sr_model_init(&m, 1);
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 64, 10, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Delete the file?");
+    const char* lines[4] = {
+        "Every signal saved in it goes with it, and",
+        "the favourites that name it are lost too, as",
+        "are the notes kept beside it on the card and",
+        "any copy that the archive made of it before"};
+    for(int i = 0; i < 4; i++) {
+        add(&f, 2, 22 + 10 * i, SrLayerWindow, SrFontSecondary, false, false, 0, 0, lines[i]);
+    }
+    add_button(&f, 2, 63, 1, "Cancel");
+    add_button(&f, 90, 63, 3, "Delete");
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    size_t len = strlen(out[0].text);
+    const char* buttons = "buttons: left Cancel, right Delete";
+    CHECK(len < SR_ANN_TEXT_MAX && len > strlen(buttons));
+    CHECK_STR(out[0].text + len - strlen(buttons), buttons);
+    CHECK(strncmp(out[0].text, "Delete the file?. Every signal", 30) == 0);
+}
+
+// G6 of the review of 2026-09-28: keys drawn one character at a time make runs such as
+// "qwertyuiop", which Back and Up read as words. On a keyboard the description leaves them out
+static void test_keyboard_description_leaves_out_the_keys(void) {
+    SrFrame f = text_input_frame("RAW_433", false, "Save");
+    SrScreen s;
+    sr_screen_build(&f, &s);
+    char text[SR_DESCRIBE_TEXT_MAX];
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Name the signal. RAW_433. Save");
+    // Text in the keyboard font on a screen that is no keyboard is still read
+    SrFrame t;
+    frame_init(&t, SrLayerWindow);
+    add(&t, 0, 20, SrLayerWindow, SrFontKeyboard, false, false, 0, 0, "00 11 22 33");
+    sr_screen_build(&t, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "00 11 22 33");
+}
+
 static void test_home_screen_and_loading(void) {
     SrModel m;
     sr_model_init(&m, 1);
@@ -847,6 +1148,13 @@ int main(void) {
     test_spontaneous_changes_are_all_reported();
     test_keyboard_focus_is_the_single_key();
     test_typing_announces_the_character();
+    test_keyboard_opens_with_prompt_and_value();
+    test_byte_input_reads_its_value();
+    test_key_rows_are_never_typed();
+    test_text_input_edges();
+    test_cuts_end_at_a_word();
+    test_long_dialog_keeps_its_buttons();
+    test_keyboard_description_leaves_out_the_keys();
     test_home_screen_and_loading();
     test_desktop_bubbles_do_not_reannounce_the_screen();
     test_last_list_row_is_not_a_button();

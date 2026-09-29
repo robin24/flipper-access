@@ -23,7 +23,8 @@ The designs, in `superpowers/specs/`:
 - `2026-09-25-firmware-stripdown-design.md`: steps 2 to 4 of the memory plan: animations off by
   default, the JavaScript engine out, Sub-GHz back into flash, and the games and SAM out.
 - `2026-09-26-github-release-design.md`: publishing: the two repositories, the first release, the
-  Piper voice, the install script, the continuous builds and the upstream merges.
+  voice sets made with Kokoro and eSpeak-NG, the install script, the continuous builds and the
+  upstream merges.
 
 ## Plans
 
@@ -41,6 +42,8 @@ The implementation plans, task by task, in `superpowers/plans/`:
 - `2026-09-25-firmware-stripdown.md`: the stripdown that made Sub-GHz work with the reader on.
 - `2026-09-26-publishing-plan-a.md`: publishing plan A, the repositories, the cleanup, the
   continuous build and the upstream tooling.
+- `2026-09-26-publishing-plan-b.md`: publishing plan B, the voice sets on the card, the Kokoro
+  and eSpeak voices, and the pack tool.
 
 ## Build logs
 

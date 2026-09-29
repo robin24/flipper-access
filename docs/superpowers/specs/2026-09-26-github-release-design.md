@@ -164,8 +164,9 @@ plan B; the trial files used the Samantha settings (high-pass 500, gain 1.3, sof
 The voice pack: `tools/voice_pack.py --set <name>` writes `voice-<name>-sonar-X.Y.Z.tar` with
 `sr/voices/<name>/...`, its `voice.txt` and a `LICENSE.txt` naming the engine, the model and
 its licence (Kokoro: Apache 2.0, with attribution; eSpeak-NG: GPL-3), and the pack's own terms,
-CC0 for what the fork adds. Plain tar, uncompressed (8-bit PCM compresses poorly, and the
-device's tar library can unpack it, section 6). A release ships the Kokoro set and the eSpeak
+CC0 for what the fork adds. Plain tar, uncompressed (8-bit PCM compresses poorly), in the USTAR
+format with an entry for every folder before the files in it, since the device's unpacker makes
+a folder only from its entry (section 6). A release ships the Kokoro set and the eSpeak
 set; the install script puts on the card the sets the user chooses, the Kokoro one by default.
 
 The generator remains a user tool: anyone can make a set in another Kokoro voice, with eSpeak,
@@ -178,7 +179,8 @@ or with `say` for personal use, and the README says how.
 (`tools/flipper_storage.py`, adapted from Momentum's `scripts/flipper/storage.py`, GPL-3 like
 the rest), so a user needs only the release assets and this script, not the firmware tree.
 Progress is plain lines, one per step, for the computer's own screen reader; errors are
-sentences; the exit code is non-zero on failure. The console protocol the script uses (each
+sentences; the exit code is non-zero on failure. The device says nothing until Sonar runs with
+the voice on the card, so the script narrates every step on the computer, to the last. The console protocol the script uses (each
 command, its reply, the chunked write, the wait for the reboot) is documented in
 `docs/install-protocol.md`, so the later desktop app can implement it without reading Python.
 Neither Python nor Node is preinstalled on Windows; the script is the interim path, and the
@@ -195,28 +197,55 @@ Steps:
    Momentum.
 2. `update backup /ext/backup-<date>.tar`: internal storage to the card, for a rollback with
    `update restore`.
-3. Put the voice on the card: file by file, or as one archive unpacked on the device, whichever
-   the time goal below settles on.
+3. Put the voice on the card. The script asks which way, through a card reader or over USB,
+   and the card reader is the default answer (Robin, 2026-09-28, the review's question 2):
+   - Through a card reader, about a minute for the voice: the script first writes a small
+     marker file to the card over USB, then asks the user to take the microSD card out of the
+     Flipper and put it into the computer's card reader. It finds the card among the mounted
+     volumes by that marker, unpacks the pack onto it with Python's own tar reader, which
+     writes no macOS metadata files, removes the marker, ejects the card, and asks the user to
+     put it back into the Flipper, then waits until the console sees the card again. When no
+     card with the marker appears within a few minutes, the script says so and offers USB.
+   - Over USB: upload the pack as one file to `/ext`, unpack it with
+     `storage extract /ext/<pack>.tar /ext`, and remove the tar (the archive lever below).
+     These are commands the official firmware has, so the step works from 1.4.3, Momentum and
+     Sonar alike. When step 1 found Sonar running, a timed mute before the unpack and
+     `sr voice on` after it keep the reader from holding open a clip that the unpack replaces,
+     as the sync guard does: `sr voice off <seconds>`, with the unpack's time from the spike and
+     a margin, since the console is busy for the whole unpack and the mute cannot be renewed
+     meanwhile; if the script dies, the voice comes back by itself.
 4. Upload the update package folder to `/ext/update/<name>/`.
 5. `update install /ext/update/<name>/update.fuf`; the device reboots into the updater.
 6. Wait for the console to come back (the updater reboots twice), read `info device` again,
    compare the hash with the package's, and say "done" or what differs.
 7. Prune older packages of ours with `card_prune.py`.
 
-Re-running is safe: on the file-by-file path, clips already on the card with the same size are
-skipped; on the archive path the unpack overwrites; the package folder is replaced.
+Re-running is safe: the unpack overwrites every clip and keeps the folders that are already
+there; the package folder is replaced.
 
-Time goal: a fresh install in under 15 minutes on a Mac, voice included. The measured baseline
-is 6.4 files per second over the console (2,828 clips in 442 s on 2026-09-24), which puts the
-current 10,789 clips at about 28 minutes. Two levers, measured in the spike, ship as needed:
+Time goal: a fresh install in under 15 minutes on a Mac, voice included. Through a card reader
+the voice takes about a minute. Over USB, the measured baseline is 6.4 files per second over the
+console (2,828 clips in 442 s on 2026-09-24), which puts the current 10,789 clips at about 28
+minutes. Two levers, measured in the spike, ship as needed:
 
 - Larger transfer chunks: `storage.py` sends 8 KB per round trip; the spike measures 8, 32 and
   64 KB on a 5 MB file and on a folder of small files.
-- One archive instead of 11,000 files: a new console command `sr voice unpack <tar>` in the
-  screen reader's CLI plugin calls the firmware's `tar_archive_unpack_to` into
-  `/ext/sr/voice`, with the voice muted during the unpack as the sync guard does, and removes
-  the archive afterwards. The script uploads the pack as one file and runs the command. The
-  device unpacks at card speed, which is much faster than the console's per-file overhead.
+- One archive instead of 11,000 files: the console's own `storage extract <archive>
+  <destination>`, in the official firmware since June 2024 and so in 1.4.3, Momentum and
+  Sonar, calls `tar_archive_unpack_to`, the unpacker the updater uses for the resources. The
+  script uploads the pack as one file to `/ext`, runs `storage extract` into `/ext`, reads the
+  line it prints for every entry without showing them, says the result, and removes the tar.
+  The unpacker makes a folder only from a folder entry and opens every file with create-always,
+  so the pack is USTAR with an entry for every folder first (`tools/voice_pack.py`, whose test
+  unpacks it with the firmware's own tar reader, `tests/host/tar_unpack.c`). The device unpacks
+  at card speed, without the console's per-file round trips; the spike measures a full pack.
+  This replaces the earlier plan of a new `sr voice unpack` command: it would have been Sonar's
+  own, so missing from the firmware the script starts from (review of 2026-09-28, R4).
+
+Held back: clips at 11,025 samples a second instead of 16,000, which would make the pack about a
+third smaller. It changes the sound, so it waits for a listening test through the piezo, and that
+test is made only if USB is still too slow once the spike has measured the two levers above
+(Robin, 2026-09-28, the review's question 3).
 
 Rejected: shipping the voice inside the update package's resources tarball. The updater would
 carry a manifest of 11,000 more entries and process it at every update, forever, and that path
@@ -227,11 +256,19 @@ is untested; the separate pack also lets the voice change without a firmware upd
 Workflows live in the project repository; the fork's stay disabled.
 
 `build.yml`, on every push and pull request: check out with submodules (shallow, with
-`FBT_GIT_SUBMODULE_SHALLOW=1` as Momentum's workflow does); run the host tests with clang on
-Ubuntu (`run_host_tests.sh` gets a bash-compatible form, and `flash_headroom.sh` a portable
-`stat`); run `tests/fbt`; build the firmware with `./fbt COMPACT=1 DEBUG=0 updater_package`
-(fbt downloads the toolchain itself); check the headroom against the 880,640-byte limit;
-upload the package as a workflow artifact. Expected time: fifteen to twenty minutes.
+`FBT_GIT_SUBMODULE_SHALLOW=1` as Momentum's workflow does), and fetch alone the Momentum commit
+the fork builds on, pinned in `tools/momentum-base.txt`, for the golden checks; run the host
+tests with clang on Ubuntu (`run_host_tests.sh` gets a bash-compatible form, and
+`flash_headroom.sh` a portable `stat`) and `tests/fbt` on Python 3.10, the oldest the tools
+support, with the packages of `requirements.txt`, and `--no-skips`, so that no check is left
+out; run Momentum's lint, `./fbt lint_all`; build the firmware with
+`./fbt COMPACT=1 DEBUG=0 updater_package` (fbt downloads the toolchain itself); check with
+`git diff --exit-code` that the build changed no tracked file, since fbt rewrites the API table
+when the API drifts; check the headroom against the radio stack's address in the package's
+`update.fuf`, 880,640 bytes with ble_light 1.20.0; upload the package as a workflow artifact.
+The fork's own workflows stay disabled, so the same workflow builds the fork's `screen-reader`
+tip every Monday, and by hand any branch, tag or commit of the fork. Expected time: fifteen to
+twenty minutes.
 
 `release.yml`, on a tag `sonar-X.Y.Z` in the project repository: the same build, and a GitHub
 Release with these assets: the update package `.tgz` from fbt, the voice packs
@@ -249,7 +286,9 @@ tag (`DIST_SUFFIX`) and `scripts/version.py` shows a tag as the firmware version
 device's About screen; and on the project repository, which triggers the release. The release
 job fetches the fork's tags for the submodule, checks that the submodule commit carries the
 same tag, fails otherwise, and also sets `DIST_SUFFIX` from the tag in the environment, which
-fbt honours over its own naming.
+fbt honours over its own naming. On such a build, the About screen's firmware page ends with
+"flipper-access", the project's name, where Momentum puts its website (review of 2026-09-28,
+R9); a build from a branch shows the branch's name there.
 `FIRMWARE_ORIGIN` in `fbt_options.py` changes from `Momentum` to `Sonar`, the firmware's name,
 which `info device` shows as `firmware.origin.fork`.
 
@@ -344,7 +383,7 @@ release.
 3. The voice sets in the firmware and the generator; the Kokoro and eSpeak backends; the
    Kokoro set tuned by ear on the piezo; both sets on Robin's card beside Samantha; the pack
    tool.
-4. The install script, the transfer measurements, the unpack command if needed.
+4. The install script, the transfer measurements, the unpack through `storage extract`.
 5. Continuous builds, then the release workflow and its rehearsal.
 6. The public documentation, reviewed by Robin.
 7. The round-trip install test from the official firmware.

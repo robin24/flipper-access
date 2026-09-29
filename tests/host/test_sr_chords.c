@@ -232,6 +232,74 @@ static void test_off_down_outlives_back(void) {
     CHECK(feed(InputKeyDown, InputTypePress, 700) == SrChordNone && !drop); // plain again
 }
 
+static void test_chord_key_across_two_back_holds(void) {
+    // OK, the chord key of one Back hold, still held into the next: its Long runs Spell, but the
+    // second hold is no chord of its, so its own Short passes, and its own Long is delivered
+    sr_chords_init(&s);
+    CHECK(feed(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop);
+    CHECK(feed(InputKeyOk, InputTypePress, 100) == SrChordNone && drop);
+    CHECK(feed(InputKeyBack, InputTypeShort, 150) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeRelease, 150) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypePress, 200) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyOk, InputTypeLong, 400) == SrChordSpell && drop);
+    CHECK(feed(InputKeyOk, InputTypeRelease, 450) == SrChordNone && drop);
+    CHECK(feed(InputKeyBack, InputTypeShort, 480) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeRelease, 480) == SrChordNone && !drop && !elong);
+
+    sr_chords_init(&s);
+    CHECK(feed(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop);
+    CHECK(feed(InputKeyOk, InputTypePress, 100) == SrChordNone && drop);
+    CHECK(feed(InputKeyBack, InputTypeShort, 150) == SrChordNone && drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeRelease, 150) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypePress, 200) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyOk, InputTypeLong, 400) == SrChordSpell && drop);
+    CHECK(feed(InputKeyBack, InputTypeLong, 500) == SrChordNone && drop && !elong); // held back
+    CHECK(feed(InputKeyOk, InputTypeRelease, 550) == SrChordNone && drop);
+    CHECK(feed(InputKeyBack, InputTypeRelease, 700) == SrChordNone && !drop && elong); // its own
+}
+
+static void test_off_back_long_then_down(void) {
+    // With the reader off, Back held long, then Down, then Back let go first: Down, held back,
+    // may still make the chord, so Back's Long waits no longer and is dropped with it. Before,
+    // it was delivered at the release, which on the lock screen opens the power-off dialog, and
+    // Down's Long turned the reader on as well
+    sr_chords_init(&s);
+    CHECK(feed_off(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyBack, InputTypeLong, 300) == SrChordNone && drop && !elong);
+    CHECK(feed_off(InputKeyDown, InputTypePress, 400) == SrChordNone && drop);
+    CHECK(feed_off(InputKeyBack, InputTypeRelease, 500) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyDown, InputTypeLong, 700) == SrChordToggleReader && drop);
+    CHECK(feed(InputKeyDown, InputTypeRelease, 800) == SrChordNone && drop);
+    CHECK(feed(InputKeyDown, InputTypePress, 900) == SrChordNone && !drop); // plain again
+
+    // Down let go without its Long: neither key did anything
+    sr_chords_init(&s);
+    CHECK(feed_off(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyBack, InputTypeLong, 300) == SrChordNone && drop && !elong);
+    CHECK(feed_off(InputKeyDown, InputTypePress, 400) == SrChordNone && drop);
+    CHECK(feed_off(InputKeyBack, InputTypeRelease, 500) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyDown, InputTypeShort, 550) == SrChordNone && drop);
+    CHECK(feed_off(InputKeyDown, InputTypeRelease, 550) == SrChordNone && drop);
+    CHECK(feed_off(InputKeyBack, InputTypePress, 600) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyBack, InputTypeShort, 650) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyBack, InputTypeRelease, 650) == SrChordNone && !drop && !elong);
+}
+
+static void test_off_down_across_two_back_holds(void) {
+    // With the reader off, Down held back from one Back hold into the next: its Long turns the
+    // reader on, and the second hold's own Short still passes
+    sr_chords_init(&s);
+    CHECK(feed_off(InputKeyBack, InputTypePress, 0) == SrChordNone && !drop);
+    CHECK(feed_off(InputKeyDown, InputTypePress, 100) == SrChordNone && drop);
+    CHECK(feed_off(InputKeyBack, InputTypeShort, 150) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyBack, InputTypeRelease, 150) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyBack, InputTypePress, 200) == SrChordNone && !drop && !elong);
+    CHECK(feed_off(InputKeyDown, InputTypeLong, 400) == SrChordToggleReader && drop);
+    CHECK(feed(InputKeyDown, InputTypeRelease, 450) == SrChordNone && drop);
+    CHECK(feed(InputKeyBack, InputTypeShort, 480) == SrChordNone && !drop && !elong);
+    CHECK(feed(InputKeyBack, InputTypeRelease, 480) == SrChordNone && !drop && !elong);
+}
+
 static void test_down_long_without_back(void) {
     // Down held long without Back is Down held long, with the reader on or off
     sr_chords_init(&s);
@@ -373,6 +441,58 @@ static void test_console_toggle_sequence(void) {
     CHECK(feed_off(InputKeyBack, InputTypeRelease, 40) == SrChordNone && !drop && !elong);
 }
 
+// The console's input send marks its events as made in software, and they keep a chord state
+// of their own: a console Back press whose release never comes (a scripted run cut off mid-chord)
+// leaves the keys alone, and a console key cannot join a chord of the keys
+#define KEYS    INPUT_SEQUENCE_SOURCE_HARDWARE
+#define CONSOLE INPUT_SEQUENCE_SOURCE_SOFTWARE
+static SrChordSources src;
+
+static SrChordCommand feed_src(uint8_t source, InputKey key, InputType type, uint32_t ms) {
+    drop = elong = true; // must be written by the call
+    return sr_chord_sources_feed(&src, source, true, key, type, ms, &drop, &elong);
+}
+
+static void test_console_back_left_held(void) {
+    sr_chord_sources_init(&src);
+    CHECK(feed_src(CONSOLE, InputKeyBack, InputTypePress, 0) == SrChordNone && !drop);
+    // No release follows. The keys pass as plain keys: no command, nothing swallowed; Left is
+    // not Volume down
+    CHECK(feed_src(KEYS, InputKeyUp, InputTypePress, 100) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyUp, InputTypeShort, 150) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyUp, InputTypeRelease, 150) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyLeft, InputTypePress, 200) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyLeft, InputTypeShort, 250) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyLeft, InputTypeRelease, 250) == SrChordNone && !drop);
+    // The keys' own chords still work
+    CHECK(feed_src(KEYS, InputKeyBack, InputTypePress, 300) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyUp, InputTypePress, 350) == SrChordReadAll && drop);
+    CHECK(feed_src(KEYS, InputKeyUp, InputTypeRelease, 400) == SrChordNone && drop);
+    CHECK(feed_src(KEYS, InputKeyBack, InputTypeShort, 450) == SrChordNone && drop);
+    CHECK(feed_src(KEYS, InputKeyBack, InputTypeRelease, 450) == SrChordNone && !drop && !elong);
+    // For the console its Back is still held: a console Up is a chord there, till the release
+    CHECK(feed_src(CONSOLE, InputKeyUp, InputTypePress, 500) == SrChordReadAll && drop);
+    CHECK(feed_src(CONSOLE, InputKeyUp, InputTypeRelease, 500) == SrChordNone && drop);
+    CHECK(feed_src(CONSOLE, InputKeyBack, InputTypeRelease, 600) == SrChordNone && !drop);
+    CHECK(feed_src(CONSOLE, InputKeyOk, InputTypePress, 700) == SrChordNone && !drop);
+}
+
+static void test_console_key_under_physical_back(void) {
+    // A console OK press while the device's Back is held once became the chord key, and its
+    // release never came, so the next OK of the device's own was swallowed
+    sr_chord_sources_init(&src);
+    CHECK(feed_src(KEYS, InputKeyBack, InputTypePress, 0) == SrChordNone && !drop);
+    CHECK(feed_src(CONSOLE, InputKeyOk, InputTypePress, 50) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyBack, InputTypeShort, 100) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyBack, InputTypeRelease, 100) == SrChordNone && !drop && !elong);
+    CHECK(feed_src(KEYS, InputKeyOk, InputTypePress, 200) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyOk, InputTypeShort, 250) == SrChordNone && !drop);
+    CHECK(feed_src(KEYS, InputKeyOk, InputTypeRelease, 250) == SrChordNone && !drop);
+    // Any source but the keys' counts as the console
+    CHECK(feed_src(3, InputKeyBack, InputTypePress, 300) == SrChordNone && !drop);
+    CHECK(src.console.back_down && !src.keys.back_down);
+}
+
 int main(void) {
     test_plain_keys_pass();
     test_back_alone_short();
@@ -390,6 +510,9 @@ int main(void) {
     test_chord_down_long_then_short();
     test_chord_down_outlives_back();
     test_off_down_outlives_back();
+    test_chord_key_across_two_back_holds();
+    test_off_back_long_then_down();
+    test_off_down_across_two_back_holds();
     test_down_long_without_back();
     test_off_back_up_passes();
     test_off_back_alone();
@@ -397,6 +520,8 @@ int main(void) {
     test_off_short_down_is_lost();
     test_toggle_changes_mode_mid_chord();
     test_console_toggle_sequence();
+    test_console_back_left_held();
+    test_console_key_under_physical_back();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
