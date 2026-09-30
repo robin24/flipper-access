@@ -24,11 +24,12 @@ These are the working notes for the one device Sonar is developed on, and the de
   is in the updater and comes back after the reboot. Without the card it is R0skie again, since
   Momentum keeps the name on the card.
 - Menu style List, set in `/int/.momentum_settings.txt`. `/int` is the folder `/ext/.int` on the
-  card: Momentum has no internal storage of its own, so without the card no setting is read or
-  saved. The reader marks the main menu's focus
+  card: Momentum has no internal storage of its own, so without the card the settings file is
+  neither read nor saved. The Debug flag and the log level are kept in the clock's registers
+  instead, and stay. The reader marks the main menu's focus
   only in the List style; the other styles are read by inversion where possible. Momentum's
   default style is DSi; Sonar's is List since a0dea0841. The same file has lock on boot off, dark
-  mode on, the reader's volume at 10 and the voice set samantha. The first update of 2026-09-26,
+  mode on, the reader's volume at 30 and the voice set samantha. The first update of 2026-09-26,
   to a0dea0841, left it at
   its defaults, the volume apart, because keys pressed during the update saved the settings in
   RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three values
@@ -87,7 +88,8 @@ These are the working notes for the one device Sonar is developed on, and the de
   has three sessions: the menus, an app's keyboard, and the Back chords on the home screen and in
   the main menu. `--chords` runs only the chords. Start it on the home screen.
 - `tools/run_host_tests.sh`: unit tests for the screen model, the speech text, queue, PCM and
-  voice helpers, the chords and the change throttle. They run with clang on the Mac, and the
+  voice helpers, the chords and the change throttle, and for Momentum's settings file, built
+  against stand-ins for the card in `tests/host/stubs`. They run with clang on the Mac, and the
   Python checks in `tests/fbt/` follow. The voice pack's check also unpacks a pack with the
   firmware's own tar reader, `tests/host/tar_unpack.c` built from the firmware's `lib/microtar`,
   following the device's rules; it is skipped until fbt has checked out that submodule. Some
@@ -496,10 +498,29 @@ holds a copy, and `backups/backup-stock-1.4.3.tar` is the one on the Mac again s
 update restore /ext/backup-stock-1.4.3.tar
 ```
 
-To go back to an earlier Sonar build, build its commit in a git worktree of the fork and flash it
-with steps 2 to 7 of the Routine: the fork's history keeps every build flashed here, and the
-package of the build before is removed by the prune. The build before the review fixes is
-86820a7db on `screen-reader`, and `backups/backup-2026-09-29.tar` holds its settings.
+To go back to an earlier Sonar build: the fork's history keeps every build flashed here. The build
+before the review fixes is 86820a7db on `screen-reader`, and `backups/backup-2026-09-29.tar` holds
+its settings. Check out its commit in the submodule, with the submodules it records, and wipe the
+build folder:
+
+```bash
+git -C Momentum-Firmware checkout 86820a7db
+```
+
+```bash
+git -C Momentum-Firmware submodule update --init --recursive
+```
+
+```bash
+rm -rf Momentum-Firmware/build
+```
+
+Then build, check the headroom and flash with steps 2 to 7 of the Routine, and afterwards check the
+branch out again the same way. The prune removes only the fork's own packages it knows by name:
+releases and continuous builds, and builds on `screen-reader` or a detached HEAD. The package of
+4b56919df, `f7-update-mntm-claude-device-checks-2026-09-30-4b56919d`,
+has a name it does not know and stays on the card: delete that folder in the file browser, whose
+Delete removes a folder with everything in it.
 
 ## Measurements
 
