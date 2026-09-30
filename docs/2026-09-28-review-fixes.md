@@ -310,3 +310,50 @@ Min, stays clear of zero:
 The continuous build, R12: on Monday, the Actions tab shows the weekly build of the fork's
 `screen-reader`. A run by hand, with Run workflow on the Build workflow there, builds any branch,
 tag or commit of the fork.
+
+## Results on the device, 2026-09-29 and 2026-09-30
+
+The build of the fork's b9c87352c was flashed on 2026-09-29, and the checks above went through
+with Robin: Claude ran the console, Robin did everything physical and listened. The settings
+check led to the correction of F2 above; its firmware, 4b56919df on the fork's branch
+claude/device-checks-2026-09-30, was flashed on 2026-09-30 and the settings check repeated. The
+console output and the figures are in `docs/measurements/2026-09-29-review-fixes.txt`.
+
+Passed:
+
+- F2: the settings stay yours without a card; the volume set without the card is not kept, and
+  cannot be. The repeat after the correction is under Section: The correction of F2 in the
+  measurements.
+- S1: the Emulating screen is read, a phone reads the SLIX2 card, the reader is silent during the
+  exchange, and speech is back after Back.
+- F3: the buttons' chord works while a console Back is held, and nothing sticks after its release.
+- G1 to G6: the text, number and byte keyboards, tried on a file's rename, a Sub-GHz frequency and
+  an NFC UID.
+- G5, G7, G8 and G9: the text boxes, the long delete dialog, the file browser's two menus, the
+  Loading screen, and all nine main menu styles, each saying "Apps, 1 of 11".
+- F1: a long read sounds as before, clean and at its usual speed, with no underrun.
+- S2 to S10: the cut after a whole word, sr voice off and sr voice off 10, the card leaving and
+  coming back during speech, a clean end, the speaker handed back 200 ms after speech, heard with
+  the Metronome, and the low-memory count at 0.
+- F4, F5, F8, R9 and F9, and T8, with a second program holding the port since qFlipper is not
+  installed on this Mac.
+- The stack watermarks, and the two regression tools: tools/sr_drive.py with 0 failures, and
+  tools/ram_probe.py without a crash, about 400 bytes lower everywhere than on 2026-09-25.
+
+Waiting for a sync of the voice, since Robin left the samantha set on the card as it was: T4 and T6
+for the sync, T7 for "were", T9 for the app names, and T5 for the card's code. T2 is met: the
+virtual environment has Python 3.13. R12's weekly build is due on Monday 5 October.
+
+Found on the way:
+
+- The espeak set plays with underruns on this card: a sentence of 24 common words gave 4 or 5,
+  and its clips took up to 77 ms to open, where samantha's took about 20. samantha and heart gave
+  none. Since S6 an underrun is a short silence, not a repeat.
+- Some common words have no clip in the samantha set, such as "noted" and "spoken"; the missing
+  list holds them for the next sync.
+- Switching the file browser's tabs says the first entry but not the tab's name. The DSi menu
+  style reads its START label as "S TAR T", and C64's items keep their numbers, such as "0.Apps".
+  A long file name is split where the screen wraps it, one of G9's open items.
+- Without a card the device takes back its factory name, R0skie here, since Momentum keeps the
+  name on the card too; the console lacks its power command, and Settings, Power is an app on the
+  card.
