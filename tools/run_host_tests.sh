@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
-# helpers, the chords and the throttle; tests/host/tar_unpack.c, the firmware's tar reader
+# helpers, the chords and the throttle; Momentum's settings file, which saves nothing before it
+# was loaded from the card; tests/host/tar_unpack.c, the firmware's tar reader
 # unpacking as the device does, for the voice pack check; and tests/host/voice_words.c, the words
 # the device looks up in a text, for the check of the generator's words against them,
 # tests/fbt/test_voice_parity.py. Then the Python checks: the build's
@@ -98,6 +99,20 @@ if ! "$OUT/test_sr_throttle" > "$OUT/sr_throttle.txt"; then
   exit 1
 fi
 echo "throttle: $(tail -n 1 "$OUT/sr_throttle.txt")"
+
+# Momentum's settings file, lib/momentum/settings.c, against the stand-ins in tests/host/stubs.
+# -fshort-enums as the firmware's arm-none-eabi compiler has it by default: a colour setting is
+# 4 bytes there, and saved as one uint32
+MOMENTUM="$ROOT/Momentum-Firmware/lib/momentum"
+clang "${CFLAGS[@]}" -fshort-enums -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$TESTS/stubs" -I "$MOMENTUM" -I "$ROOT/Momentum-Firmware/lib" -o "$OUT/test_momentum_settings" \
+  "$TESTS/test_momentum_settings.c" "$MOMENTUM/settings.c"
+if ! "$OUT/test_momentum_settings" > "$OUT/momentum_settings.txt"; then
+  cat "$OUT/momentum_settings.txt"
+  echo "Momentum settings checks failed"
+  exit 1
+fi
+echo "Momentum settings: $(tail -n 1 "$OUT/momentum_settings.txt")"
 
 # The firmware's own tar reader walked as the device unpacks, for test_voice_pack.py. lib/microtar
 # is one of the firmware's submodules, which fbt checks out on its first run; without it the

@@ -9,20 +9,28 @@ These are the working notes for the one device Sonar is developed on, and the de
 - Firmware: Momentum mntm-012, built 31 December 2025, installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
   here: phase 3 and the polish round on 2026-09-24, the firmware stripdown and the features after
-  it on 2026-09-25. Since 2026-09-26 it runs commit a5c2ed7d9, the clean Sonar build of the
-  publishing plan A with its fix wave, which saves no settings in an update boot. It was flashed
-  complete with `./fbt flash_usb_full` from a wiped build folder. It reports itself as Sonar and
-  clean, with API version 87.3: `firmware.origin.fork : Sonar` and
-  `firmware.commit.dirty : false`. firmware.bin is 864,652 bytes, 15,988 spare below the BLE
-  stack. The apps on the card, the Passport among them, came with it. The earlier images are
-  listed under Useful commands.
+  it on 2026-09-25, the publishing plan A's a5c2ed7d9 and then plan B's 86820a7db, with the voice
+  sets, on 2026-09-26. On 2026-09-29 it got b9c87352c, the merge of the fixes after the review of
+  2026-09-28, the first build on the new MacBook. Since 2026-09-30 it runs 4b56919df, on the
+  fork's branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings
+  are saved only once they were read from the card. It was flashed complete with
+  `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
+  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 869,212
+  bytes, 11,428 spare below the BLE stack. The apps on the card, the Passport among them, came
+  with it. The earlier images are listed under Useful commands. The checks on the device after
+  the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1`, which was
   `/dev/cu.usbmodemflip_R0skie1` before the rename, at 230400 baud. It disappears while the device
-  is in the updater and comes back after the reboot.
-- Menu style List, set in `/int/.momentum_settings.txt`. The reader marks the main menu's focus
+  is in the updater and comes back after the reboot. Without the card it is R0skie again, since
+  Momentum keeps the name on the card.
+- Menu style List, set in `/int/.momentum_settings.txt`. `/int` is the folder `/ext/.int` on the
+  card: Momentum has no internal storage of its own, so without the card the settings file is
+  neither read nor saved. The Debug flag and the log level are kept in the clock's registers
+  instead, and stay. The reader marks the main menu's focus
   only in the List style; the other styles are read by inversion where possible. Momentum's
   default style is DSi; Sonar's is List since a0dea0841. The same file has lock on boot off, dark
-  mode on and the reader's volume at 40. The first update of 2026-09-26, to a0dea0841, left it at
+  mode on, the reader's volume at 30 and the voice set samantha. The first update of 2026-09-26,
+  to a0dea0841, left it at
   its defaults, the volume apart, because keys pressed during the update saved the settings in
   RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three values
   were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
@@ -40,7 +48,14 @@ These are the working notes for the one device Sonar is developed on, and the de
 - The Wi-Fi dev board sits on the GPIO header, with its own USB-C cable in the Mac, as the crash
   catcher. The Debug flag is on and the log level is debug, both kept across reboots, and
   `tools/uart_log.py` captures the debug console in the background. An update to a release build
-  turns both off, so step 6 of the Routine sets them again. See Crash diagnosis.
+  turns both off, so step 6 of the Routine sets them again. See Crash diagnosis. The board was not
+  at hand for the checks of 2026-09-29 and 2026-09-30, so no UART capture ran then.
+- The old project folder is gone, and with it `voice/`, `voices/`, `voice-models/`, `backups/`,
+  `firmware-packages/` and `tools/voice_words.local.txt`. The project was cloned again on the
+  MacBook on 2026-09-29, and the local word list made again with `delphi`. The samantha set was not
+  made again there: the card's clips are the old Mac's, so a sync from this Mac sends every clip.
+  The card still holds the two rollback packages in `/ext/update` and the 1.4.3 backup at its
+  root; the backups are on the Mac again, see The folders and tools.
 
 ## The folders and tools
 
@@ -51,25 +66,30 @@ These are the working notes for the one device Sonar is developed on, and the de
   .venv/bin/python tools/flipper_cli.py "info device" "loader list"
   ```
 
-- `.venv/`: Python virtual environment with pyserial and colorlog, used by the helper scripts. Not
-  in git.
+- `.venv/`: Python virtual environment with the packages of `requirements.txt`, used by the
+  helper scripts; on the MacBook since 2026-09-29 with Homebrew's Python 3.13. Not in git.
 - `Momentum-Firmware/`: the firmware, a git submodule on the fork's branch `screen-reader`, with
   the ARM toolchain that fbt downloaded. API version 87.3 since 2026-09-25, which exported
   `canvas_tap_hint_note_at` for words placed among the drawn text; 87.2, since phase 3, exported
   two calls for the screen reader's spoken names of icons. Apps built here run on the device, and
   apps built for 87.1 and 87.2 still load.
 - `firmware-packages/`: Momentum mntm-012 and official 1.4.3 update packages, both also unpacked.
-  Not in git.
+  Not in git. Gone with the old project folder; the card keeps both packages in `/ext/update`,
+  and both can be downloaded again.
+- `backups/backup-2026-09-29.tar`: internal storage backup taken with `update backup` before the
+  flash of 2026-09-29, on 86820a7db: the ten files of `/int`, the settings among them. Its copy is
+  `/ext/backup-2026-09-29.tar` on the card. Not in git.
 - `backups/backup-stock-1.4.3.tar`: internal storage backup taken on official 1.4.3 before the
   Momentum install, with the settings, the dolphin state and the region data. Not in git since
-  2026-09-26.
+  2026-09-26. Copied back from the card's root on 2026-09-29, after the old folder was gone.
 - `tools/sr_drive.py`: scripted check of the screen reader console stream, and with
   `--interactive` a tethered screen reader. In that mode arrows, Enter and Backspace drive the
   device, Tab reads the screen, letters type into text fields, and Ctrl-C ends. The scripted check
   has three sessions: the menus, an app's keyboard, and the Back chords on the home screen and in
   the main menu. `--chords` runs only the chords. Start it on the home screen.
 - `tools/run_host_tests.sh`: unit tests for the screen model, the speech text, queue, PCM and
-  voice helpers, the chords and the change throttle. They run with clang on the Mac, and the
+  voice helpers, the chords and the change throttle, and for Momentum's settings file, built
+  against stand-ins for the card in `tests/host/stubs`. They run with clang on the Mac, and the
   Python checks in `tests/fbt/` follow. The voice pack's check also unpacks a pack with the
   firmware's own tar reader, `tests/host/tar_unpack.c` built from the firmware's `lib/microtar`,
   following the device's rules; it is skipped until fbt has checked out that submodule. Some
@@ -275,6 +295,13 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 - On 2026-09-26 the vocabulary held 10,789 clips. Most of them come from the apps on the card,
   which `--card-apps` adds to the 2,900 words of `--extract`. `sr voice status` then showed a
   longest clip open of 66 ms since boot.
+- On 2026-09-29 the extraction with `--card-apps` gave 10,535 words. The set was not made again on
+  the new MacBook, so `voice/` is missing there: the generator has no record of the card, and a
+  sync would make and send every clip. Until then words without a clip are spelled and noted, such
+  as "noted" and "spoken", and the set names on the Voice row.
+- The card also holds the sets heart and espeak. espeak's clips open slowly on this card, up to
+  77 ms, and a sentence of 24 words played with 4 or 5 underruns; samantha and heart played the
+  same sentence with none. See `docs/measurements/2026-09-29-review-fixes.txt`.
 - The figures behind the hashed folders: finding a file on this exFAT card reads the folder's
   entries one by one, about 0.17 ms per entry. At the rollout on 2026-09-24, with about 2,900
   clips, no folder held more than about 65, and a clip opened in under 40 ms.
@@ -309,6 +336,14 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- 4b56919df, F2 corrected, on the branch `claude/device-checks-2026-09-30`, on 2026-09-30:
+  869,212 bytes, 11,428 spare. 102 bytes of code over b9c87352c, and 18 of the longer branch
+  name, which the image holds.
+- b9c87352c, the merge of the fixes after the review of 2026-09-28, on 2026-09-29, the first
+  build on the new MacBook: 869,092 bytes, 11,548 spare. The review branch's last build,
+  c71bd08a6, was 869,120: its branch name, `claude/flipper-access-review-fixes-ssg5yj`, has 28
+  characters more than `screen-reader`.
+- 86820a7db, plan B's voice sets and the Voice row, on 2026-09-26: 866,300 bytes, 14,340 spare.
 - a5c2ed7d9, plan A's fix wave: no settings saved in an update boot, on 2026-09-26, built from a
   wiped build folder: 864,652 bytes, 15,988 spare. The continuous build's image of the same commit
   is 864,648 bytes.
@@ -448,20 +483,44 @@ ScreenReaderSrv 1,932 of 3,068, SpeechWorker 2,484 of 3,068, and InputSrv 456 of
 
 ## Rolling back to official firmware
 
-The official 1.4.3 package is unpacked from `firmware-packages/flipper-z-f7-update-1.4.3.tgz`
-into `firmware-packages/official-1.4.3/`. To flash it:
+The official 1.4.3 package is on the card, in `/ext/update/f7-update-1.4.3`, which
+`tools/card_prune.py` never removes; the Mac's copy went with the old project folder, and the
+package can be downloaded again. To install the card's copy:
 
 ```bash
-.venv/bin/python Momentum-Firmware/scripts/selfupdate.py -p /dev/cu.usbmodemflip_Delphi1 firmware-packages/official-1.4.3/f7-update-1.4.3/update.fuf
+.venv/bin/python tools/flipper_cli.py "update install /ext/update/f7-update-1.4.3/update.fuf"
 ```
 
-Then restore the settings from the stock backup, with this command on the CLI, after sending the
-backup file to the card. The card's root holds a copy as of 2026-09-26, and
-`backups/backup-stock-1.4.3.tar` is the one on the Mac.
+Then restore the settings from the stock backup, with this command on the CLI. The card's root
+holds a copy, and `backups/backup-stock-1.4.3.tar` is the one on the Mac again since 2026-09-29.
 
 ```text
 update restore /ext/backup-stock-1.4.3.tar
 ```
+
+To go back to an earlier Sonar build: the fork's history keeps every build flashed here. The build
+before the review fixes is 86820a7db on `screen-reader`, and `backups/backup-2026-09-29.tar` holds
+its settings. Check out its commit in the submodule, with the submodules it records, and wipe the
+build folder:
+
+```bash
+git -C Momentum-Firmware checkout 86820a7db
+```
+
+```bash
+git -C Momentum-Firmware submodule update --init --recursive
+```
+
+```bash
+rm -rf Momentum-Firmware/build
+```
+
+Then build, check the headroom and flash with steps 2 to 7 of the Routine, and afterwards check the
+branch out again the same way. The prune removes only the fork's own packages it knows by name:
+releases and continuous builds, and builds on `screen-reader` or a detached HEAD. The package of
+4b56919df, `f7-update-mntm-claude-device-checks-2026-09-30-4b56919d`,
+has a name it does not know and stays on the card: delete that folder in the file browser, whose
+Delete removes a folder with everything in it.
 
 ## Measurements
 
@@ -483,5 +542,11 @@ The files in `docs/measurements/`, all plain text:
   flash, what the device reported after it, the Debug flag and the settings that the update reset,
   the card before and after the prune, and the chord session. Under After the fix wave, the same
   for a5c2ed7d9, with the settings file compared across the flash.
+- `2026-09-26-plan-b.txt`: plan B on the device, the voice sets and the Voice row, with Samantha
+  moved into the set layout and the Kokoro tuning clips.
+- `2026-09-29-review-fixes.txt`: the fixes after the review of 2026-09-28 on the device: the new
+  MacBook's setup and first build, the backup and the flash, the regression tools, every check
+  of the fixes record with its console output, the underruns of the espeak set, and the
+  correction of F2 with its flash and repeated check.
 
 `docs/measurements/logs/` holds the raw session logs and the UART capture. It is not in git.
