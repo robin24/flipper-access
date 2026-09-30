@@ -244,7 +244,7 @@ bool flipper_format_write_bool(
  *  chord, must not write them over the settings on the card. */
 static void test_card_inserted_after_boot(void) {
     card_mounted = false;
-    momentum_settings_load(); // the boot: no card, nothing to read
+    momentum_settings_load(); // any load without a card: it reads nothing and must not count
     CHECK(momentum_settings.sr_volume == 80);
     momentum_settings.sr_volume = 90; // Back and Right, silent without the card
     momentum_settings_save(); // nowhere to write

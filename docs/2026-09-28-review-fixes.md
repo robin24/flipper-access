@@ -29,7 +29,11 @@ Firmware:
   first fix added at boot without a card found no file. Without a card nothing can be saved
   either. The gap was the moment a card goes in after a boot without one, before the settings are
   read from it: a chord then wrote the defaults over them. A host test holds the new rule, and
-  failed against the first fix.
+  failed against the first fix. Two cases stay open, and the README's Known limits name them:
+  after a change to another card while the device runs, Momentum does not read the new card's
+  settings, since skip_double_mount in furi/flipper.c swallows that mount, so a save writes the
+  old card's settings onto it; and after formatting the card on the device, nothing is saved
+  until a restart, since no mount follows the format.
 - S1: the NFC-V listener keeps the speaker from its first exchange until it ends.
 - F3: the console's `input send` has its own chord state, apart from the keys'.
 - G1 to G8: the keyboards read their prompt, field and keys, name their special keys, and never
