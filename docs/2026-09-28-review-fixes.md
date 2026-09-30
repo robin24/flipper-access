@@ -23,8 +23,13 @@ Firmware:
 - F1, as you chose in question 1: speech moves its samples through DMA1 channel 3, which nothing
   else in the firmware or its apps uses, off DMA2 channel 4, which the external CC1101 radio's
   driver transmits through. The README says external modules are untried with the reader on.
-- F2: the settings are loaded at boot without a card too, so a chord before the card mounts no
-  longer saves the defaults over them.
+- F2, corrected after the device check of 2026-09-30: the settings are saved only once they were
+  read with a card mounted. Momentum keeps /int on the card, as the folder /ext/.int, so the
+  settings file is not on internal storage as the review took it to be, and the load that the
+  first fix added at boot without a card found no file. Without a card nothing can be saved
+  either. The gap was the moment a card goes in after a boot without one, before the settings are
+  read from it: a chord then wrote the defaults over them. A host test holds the new rule, and
+  failed against the first fix.
 - S1: the NFC-V listener keeps the speaker from its first exchange until it ends.
 - F3: the console's `input send` has its own chord state, apart from the keys'.
 - G1 to G8: the keyboards read their prompt, field and keys, name their special keys, and never
@@ -158,8 +163,10 @@ Flash the build first, with steps 4 to 7 of the Routine in `docs/device-notes.md
 commands below run from the project folder.
 
 Settings without a card, F2: remove the card, reboot, and change the volume with Back and Right.
-Put the card back and reboot. The volume is the one you set, and your other settings, such as the
-verbosity and the menu style, are still yours, not the defaults.
+Put the card back and reboot. The volume change is not kept, since nothing can be saved without
+the card, and your settings, such as the verbosity and the menu style, are still yours, not the
+defaults. Without the card the console lacks its power command, so reboot with Left and Back
+held for five seconds, Left pressed first, so that Back and Left is no volume chord.
 
 NFC-V, S1: emulate a saved ISO15693 card with the reader on and hold a phone with an NFC reader
 app to the Flipper. The "Emulating" screen is read, the phone reads the card, the reader is silent

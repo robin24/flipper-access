@@ -573,6 +573,10 @@ resends everything.
 - Without the SD card, or without a voice set under `/ext/sr/voices` on it, the reader is silent,
   since SAM is gone.
   Without a card most main apps are missing too, since they load from the card, as in Momentum.
+- Momentum keeps its settings and the device's name on the card, in `/ext/.int`, where `/int`
+  leads. Without a card the device starts with the default settings, the reader at volume 80,
+  and a change made then is not kept. When the card goes back in, your settings return at once,
+  and a chord in the moment before that saves nothing.
 - The screen shown after a firmware update is not read. Back closes it.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
 - Twice, after a long idle, the first OK that the scripted driver `tools/sr_drive.py` sent on the
