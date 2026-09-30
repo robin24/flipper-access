@@ -9,12 +9,14 @@ How it was checked, for every fix below:
 - The host tests, with clang's address and undefined behaviour checks, after every change. Where a
   fix came with new tests, the tests were also run against the code before the fix, or against a
   deliberately broken copy, and failed there.
-- A release build after every firmware change, with the headroom check. The last build, commit
-  c71bd08 of the fork, is 869,120 bytes, 11,520 below the limit of 880,640.
+- A release build after every firmware change, with the headroom check. The last build before
+  the device checks, commit c71bd08 of the fork, is 869,120 bytes, 11,520 below the limit of
+  880,640; the builds since are under Results on the device.
 - The continuous build, green on every push. Since R12 it installs `requirements.txt` on Python
   3.10 and runs the host tests with `--no-skips`, so no check is left out there.
 
-Nothing was tried on the device; the checks for it are at the end.
+Nothing was tried on the device before 2026-09-29; the checks for it, and their results, are at
+the end.
 
 ## Fixed
 
