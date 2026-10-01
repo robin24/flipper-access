@@ -1131,6 +1131,131 @@ static void test_overflow_is_mentioned(void) {
     CHECK_STR(out[0].text, "125 kHz RFID, and more");
 }
 
+/** A string marked as the screen's title, as canvas_tap_hint_title marks the next drawn one. */
+static void add_title(SrFrame* f, int x, int y, uint8_t layer, uint8_t font, const char* text) {
+    add(f, x, y, layer, font, false, false, 0, 0, text);
+    f->records[f->count - 1].title = true;
+}
+
+/** The file browser's tab name, drawn small at the top and marked as the title: a new tab is a
+ *  new screen, said with its name before the focus, and read first. */
+static void test_title_hint_names_the_screen(void) {
+    SrModel m;
+    sr_model_init(&m, 1);
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame f;
+    frame_init(&f, SrLayerFullscreen);
+    add_title(&f, 17, 9, SrLayerFullscreen, SrFontSecondary, "NFC");
+    add(&f, 15, 24, SrLayerFullscreen, SrFontSecondary, true, true, 1, 3, "Fun_Files");
+    add(&f, 15, 36, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "RickRoll");
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "NFC. Fun_Files");
+
+    // The next tab draws its rows in the same places: its title tells it apart
+    frame_init(&f, SrLayerFullscreen);
+    add_title(&f, 17, 9, SrLayerFullscreen, SrFontSecondary, "Infrared");
+    add(&f, 15, 24, SrLayerFullscreen, SrFontSecondary, true, true, 1, 2, "remote");
+    add(&f, 15, 36, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "Samsung");
+    n = sr_model_process(&m, &f, 1500, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Infrared. remote");
+
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+    sr_screen_build(&f, &s);
+    CHECK(s.title_row == 0);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Infrared. Samsung. remote, 1 of 2");
+}
+
+/** The file browser draws no folder name, so it gives it as a note marked as the title: entering
+ *  a folder is a new screen said with the folder's name, and the parent folder entry, which has
+ *  no position, is read without one even when verbose. */
+static void test_title_note_names_the_folder(void) {
+    SrModel m;
+    sr_model_init(&m, 2);
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add_note(&f, SrLayerWindow, false, "apps");
+    f.records[f.count - 1].title = true;
+    add(&f, 15, 9, SrLayerWindow, SrFontSecondary, true, true, 0, 0, ". .");
+    add(&f, 15, 21, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "GPIO");
+    add(&f, 15, 33, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Infrared");
+    size_t n = sr_model_process(&m, &f, 1000, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "apps. Parent folder");
+
+    frame_init(&f, SrLayerWindow);
+    add_note(&f, SrLayerWindow, false, "Sub-GHz");
+    f.records[f.count - 1].title = true;
+    add(&f, 15, 9, SrLayerWindow, SrFontSecondary, false, false, 0, 0, ". .");
+    add(&f, 15, 21, SrLayerWindow, SrFontSecondary, true, true, 1, 2, "bruteforcer");
+    add(&f, 15, 33, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "chief_cooker");
+    n = sr_model_process(&m, &f, 1500, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1 && out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "Sub-GHz. bruteforcer, 1 of 2");
+}
+
+/** A word that is drawn in pieces is read whole: a line the text box broke inside a word, a line
+ *  the multiline wrapper broke with its dash at the break, and a word drawn letter-spaced. */
+static void test_joined_pieces_read_as_one_word(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+
+    // The file browser's delete dialog, its name broken by the text box
+    frame_init(&f, SrLayerWindow);
+    add(&f, 4, 12, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Delete SLIX2_2026-09-2");
+    add(&f, 4, 24, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "7_18,44,2.nfc?");
+    f.records[f.count - 1].join = SrJoinDirect;
+    add_button(&f, 2, 63, 1, "Cancel");
+    add_button(&f, 90, 63, 3, "Delete");
+    sr_screen_build(&f, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Delete SLIX2_2026-09-27_18,44,2.nfc?. buttons: left Cancel, right Delete");
+
+    // The multiline wrapper's dash goes, and a dash the text has stays
+    frame_init(&f, SrLayerWindow);
+    add(&f, 2, 30, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Saved to the favour-");
+    add(&f, 2, 40, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "ites, a well-");
+    f.records[f.count - 1].join = SrJoinDropDash;
+    add(&f, 2, 50, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "known list");
+    f.records[f.count - 1].join = SrJoinDirect;
+    sr_screen_build(&f, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Saved to the favourites, a well-known list");
+
+    // The DSi menu style's START, drawn as S, TAR and T on one baseline
+    frame_init(&f, SrLayerFullscreen);
+    add(&f, 55, 44, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "S");
+    add(&f, 64, 44, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "TAR");
+    f.records[f.count - 1].join = SrJoinDirect;
+    add(&f, 73, 44, SrLayerFullscreen, SrFontSecondary, false, false, 0, 0, "T");
+    f.records[f.count - 1].join = SrJoinDirect;
+    add(&f, 64, 20, SrLayerFullscreen, SrFontSecondary, true, true, 1, 11, "Apps");
+    sr_screen_build(&f, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "START. Apps, 1 of 11");
+}
+
+/** elements_button_up and elements_button_down draw their labels inverted at the top: marked as
+ *  buttons, up and down, they are read as such and never as the focus. */
+static void test_up_and_down_buttons(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+    frame_init(&f, SrLayerWindow);
+    add_button(&f, 3, 9, 4, "Next");
+    add_button(&f, 100, 9, 5, "Prev");
+    add(&f, 64, 40, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "433.92 MHz");
+    sr_screen_build(&f, &s);
+    CHECK(sr_screen_focus_text(&s, text, sizeof(text)) == 0);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "433.92 MHz. buttons: up Next, down Prev");
+}
+
 int main(void) {
     test_normalize();
     test_rows_join_and_sort();
@@ -1168,6 +1293,10 @@ int main(void) {
     test_desktop_text_gone_says_home();
     test_note_only_screen_is_read();
     test_positioned_note();
+    test_title_hint_names_the_screen();
+    test_title_note_names_the_folder();
+    test_joined_pieces_read_as_one_word();
+    test_up_and_down_buttons();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
