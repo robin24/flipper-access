@@ -11,14 +11,17 @@ These are the working notes for the one device Sonar is developed on, and the de
   here: phase 3 and the polish round on 2026-09-24, the firmware stripdown and the features after
   it on 2026-09-25, the publishing plan A's a5c2ed7d9 and then plan B's 86820a7db, with the voice
   sets, on 2026-09-26. On 2026-09-29 it got b9c87352c, the merge of the fixes after the review of
-  2026-09-28, the first build on the new MacBook. Since 2026-09-30 it runs 4b56919df, on the
-  fork's branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings
-  are saved only once they were read from the card. It was flashed complete with
-  `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
-  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 869,212
-  bytes, 11,428 spare below the BLE stack. The apps on the card, the Passport among them, came
-  with it. The earlier images are listed under Useful commands. The checks on the device after
-  the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`.
+  2026-09-28, the first build on the new MacBook. On 2026-09-30 it got 4b56919df, on the fork's
+  branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings are
+  saved only once they were read from the card. Since 2026-10-01 it runs 0294fe871, on the fork's
+  branch `claude/reading-fixes-2026-10-01`: that day's screen-reading fixes and the crash address
+  of hardware faults, flashed after f37f06887, which had the reading fixes alone. It was flashed
+  complete with `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version
+  87.3: `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is
+  869,876 bytes, 10,764 spare below the BLE stack. The apps on the card, the Passport among them,
+  came with it. The earlier images are listed under Useful commands. The checks on the device
+  after the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`, and those of
+  2026-10-01 in `docs/measurements/2026-10-01-remaining-items.txt`.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1`, which was
   `/dev/cu.usbmodemflip_R0skie1` before the rename, at 230400 baud. It disappears while the device
   is in the updater and comes back after the reboot. Without the card it is R0skie again, since
@@ -26,14 +29,13 @@ These are the working notes for the one device Sonar is developed on, and the de
 - Menu style List, set in `/int/.momentum_settings.txt`. `/int` is the folder `/ext/.int` on the
   card: Momentum has no internal storage of its own, so without the card the settings file is
   neither read nor saved. The Debug flag and the log level are kept in the clock's registers
-  instead, and stay. The reader marks the main menu's focus
-  only in the List style; the other styles are read by inversion where possible. Momentum's
-  default style is DSi; Sonar's is List since a0dea0841. The same file has lock on boot off, dark
-  mode on, the reader's volume at 30 and the voice set samantha. The first update of 2026-09-26,
-  to a0dea0841, left it at
-  its defaults, the volume apart, because keys pressed during the update saved the settings in
-  RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three values
-  were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
+  instead, and stay. The reader marks the main menu's focus only in the List style; the other styles
+  are read by inversion where possible. Momentum's default style is DSi; Sonar's is List since
+  a0dea0841. The same file has lock on boot off, dark mode on, the reader's volume at 20, Robin's
+  level on 2026-10-01, and the voice set samantha. The first update of 2026-09-26, to a0dea0841,
+  left it at its defaults, the volume apart, because keys pressed during the update saved the
+  settings in RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three
+  values were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
   firmware saves no settings in an update boot, so a key pressed during an update no longer
   overwrites the file. Lock on boot acts only when a PIN is set, and none is.
 - The Text to SAM app on the card is Momentum's stock build again since 2026-09-26; the patched
@@ -52,8 +54,8 @@ These are the working notes for the one device Sonar is developed on, and the de
   at hand for the checks of 2026-09-29 and 2026-09-30, so no UART capture ran then.
 - The old project folder is gone, and with it `voice/`, `voices/`, `voice-models/`, `backups/`,
   `firmware-packages/` and `tools/voice_words.local.txt`. The project was cloned again on the
-  MacBook on 2026-09-29, and the local word list made again with `delphi`. The samantha set was not
-  made again there: the card's clips are the old Mac's, so a sync from this Mac sends every clip.
+  MacBook on 2026-09-29, and the local word list made again with `delphi`. The samantha set was
+  made again there on 2026-10-01: see The voice on this card.
   The card still holds the two rollback packages in `/ext/update` and the 1.4.3 backup at its
   root; the backups are on the Mac again, see The folders and tools.
 
@@ -295,13 +297,17 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 - On 2026-09-26 the vocabulary held 10,789 clips. Most of them come from the apps on the card,
   which `--card-apps` adds to the 2,900 words of `--extract`. `sr voice status` then showed a
   longest clip open of 66 ms since boot.
-- On 2026-09-29 the extraction with `--card-apps` gave 10,535 words. The set was not made again on
-  the new MacBook, so `voice/` is missing there: the generator has no record of the card, and a
-  sync would make and send every clip. Until then words without a clip are spelled and noted, such
-  as "noted" and "spoken", and the set names on the Voice row.
-- The card also holds the sets heart and espeak. espeak's clips open slowly on this card, up to
-  77 ms, and a sentence of 24 words played with 4 or 5 underruns; samantha and heart played the
-  same sentence with none. See `docs/measurements/2026-09-29-review-fixes.txt`.
+- On 2026-10-01 the set was made again on this MacBook, after Robin heard four of its words sound
+  the same as the old Mac's: 10,539 clips, about 74 minutes to make and 39 to send, over the old
+  clips. `voice/` holds the record of the card again, whose `.sync-id` is b1c1f2d07f7e630b. The
+  words the device had spelled, "noted", "spoken", "samantha" and "espeak", have clips since.
+- The card also holds the sets heart and espeak. espeak's clips open slowly on this card: over
+  25 words a median of 51 ms and up to 84, longer than the 82 ms half of the speech ring, so a
+  sentence of 24 words played with 4 or 5 underruns. samantha's open in a median of 23 ms, up to
+  46, and heart's in 59, up to 76, both without underruns. Looking a file up in espeak's and
+  heart's folders is slower too: the sets' history on this card, not the firmware. Writing their
+  folders fresh would likely cure it. See `docs/measurements/2026-09-29-review-fixes.txt` and
+  `docs/measurements/2026-10-01-remaining-items.txt`.
 - The figures behind the hashed folders: finding a file on this exFAT card reads the folder's
   entries one by one, about 0.17 ms per entry. At the rollout on 2026-09-24, with about 2,900
   clips, no folder held more than about 65, and a clip opened in under 40 ms.
@@ -336,6 +342,12 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- 0294fe871, the crash address of hardware faults, on the branch
+  `claude/reading-fixes-2026-10-01`, on 2026-10-01: 869,876 bytes, 10,764 spare, 160 bytes over
+  95c956f89.
+- 95c956f89, `sr screen` naming the up and down buttons: 869,716 bytes, 10,924 spare.
+- f37f06887, the screen-reading fixes, on 2026-10-01: 869,708 bytes, 10,932 spare, 496 bytes over
+  4b56919df.
 - 4b56919df, F2 corrected, on the branch `claude/device-checks-2026-09-30`, on 2026-09-30:
   869,212 bytes, 11,428 spare. 102 bytes of code over b9c87352c, and 18 of the longer branch
   name, which the image holds.
