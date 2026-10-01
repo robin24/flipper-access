@@ -53,6 +53,15 @@ Firmware:
   the console pipe, at about 1.3 KB, and about 1.6 KB with an interrupt's frame.
 - F5: the volume chord and the reader-on chord speak before they save.
 - F6: a frame the reader could not take is asked for again.
+- F7, on 2026-10-01: after a hardware fault, HardFault, MemManage, BusFault or UsageFault, the
+  crash address is the instruction that faulted, which the handler takes from the frame the core
+  pushed, instead of an address inside the handler. Such an address is even and a failed check's
+  return address odd, so the address says which it is. A frame the core could not push or pop,
+  as after a stack overflow, is not trusted, and the address stays in the handler as before. The
+  review's second idea, part of the thread's name after a stack overflow, is left out: the second
+  register holds the build now, and the debug log names the thread. Checked on the device with a
+  bus fault the Crash Test app gained, strlen reading an address no memory answers: before the
+  change the address was in BusFault_Handler, after it on the load in strlen that faulted.
 - F8: a chord key held into a second Back hold no longer takes that hold's keys, and with the
   reader off, Back held long and let go before Down's long press no longer opens the power-off
   dialog beside the toggle.
@@ -111,11 +120,6 @@ roadmap, the docs index and the merge routine where the code changed.
 
 ## Not done
 
-- F7, the program counter for fault crashes: it means naked fault handlers in an upstream file,
-  checked only by crashing the device on purpose, and the idle crashes seen so far are failed
-  checks, whose address is already right. The design: read the stacked PC in HardFault, MemManage,
-  BusFault and UsageFault, but not after a stacking error, and store it in place of the return
-  address.
 - G9's other three items: the file browser's position counts the parent folder entry and never
   says the folder's name; `elements_button_up` and `elements_button_down` have no button hint; and
   hyphenated or wrapped text splits words.

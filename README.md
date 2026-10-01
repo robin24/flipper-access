@@ -30,8 +30,8 @@ Added:
   remotes, have spoken names.
 - The dolphin's level and mood are said in words: the status chord, Back with a short press of
   Down, says them, and a new level is announced.
-- The crash popup ends with an address that locates the failed check in the code, and the reader
-  speaks it.
+- The crash popup ends with an address that locates the crash in the code, the failed check or,
+  after a hardware fault, the instruction that faulted, and the reader speaks it.
 - The reader speaks in a recorded voice, one clip per word from the SD card, made with a generator
   in this repository.
 
@@ -603,8 +603,10 @@ resends everything.
 ## When it crashes
 
 When the device crashes, it reboots and shows a popup, and the reader reads it: "Flipper crashed
-and was rebooted", then the message, most often "furi_check failed". The last line is "at" and an
-address of eight hexadecimal digits, such as "at 0803ABCD". Back closes the popup. The address
+and was rebooted", then the message, most often "furi_check failed", or after a hardware fault its
+name, such as "BusFault" or "NULL pointer dereference". The last line is "at" and an address of
+eight hexadecimal digits, such as "at 0803ABCD": where the failed check is, or the instruction
+that faulted. Back closes the popup. The address
 stays, across reboots and firmware updates, until the next crash. It is kept in two of the clock's
 backup registers, which the official firmware and Momentum leave unused; after another firmware
 that uses them, the last crash shown may be wrong until the next one.

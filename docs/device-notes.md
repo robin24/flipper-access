@@ -417,8 +417,11 @@ What the crash popup says, how the reader speaks the address, and what `sr statu
 When it crashes in the README. This section is the decoding and the capture.
 
 To find the line of code on the Mac for an address starting with 08, which is in the firmware's
-flash, subtract 2. Give the result to addr2line with the `firmware.elf` of the build that
-`sr status` names, from the project folder. For "at 0803ABCD":
+flash, look at its last digit. An even address, ending in 0, 2, 4, 6, 8, A, C or E, is the
+instruction that faulted, which a hardware fault leaves: take it as it is. An odd address is
+where a failed check would have returned to: subtract 2. Give the result to addr2line with the
+`firmware.elf` of the build that `sr status` names, from the project folder. For "at 0803ABCD",
+odd:
 
 ```bash
 Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -i -C -a 0x0803ABCB
@@ -431,16 +434,29 @@ commit on this Mac have given the same image, so the addresses match. The contin
 image of the same commit differs by a few bytes, though: 12 more for a0dea0841, 4 fewer for
 a5c2ed7d9. So a release's own `firmware.elf` must be kept to decode its addresses.
 
-The caveats. The address is where the failed check would have returned to. Without the 2
-subtracted, addr2line names the instruction after the check's call: often a later line, and
-sometimes another function, since that call never returns. Even with it, the line is not always
-the failed check's own. The compiler often lets several checks of one function share a single call
-to the crash routine. The line named is then one of those checks, in that function or in one
-inlined into it. In `ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one
-call and addr2line always names the last. An address starting with 20, from 2000 to 2003, is in
-RAM, inside an app loaded from the card. The firmware's elf cannot name it, and the app's own elf
-would need the address the app was loaded at, which is not kept. For any message other than
-"furi_check failed" or "Check serial logs", the address is in the routine that reported the crash.
+The caveats for an odd address. Without the 2 subtracted, addr2line names the instruction after
+the check's call: often a later line, and sometimes another function, since that call never
+returns. Even with it, the line is not always the failed check's own. The compiler often lets
+several checks of one function share a single call to the crash routine. The line named is then
+one of those checks, in that function or in one inlined into it. In
+`ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one call and addr2line
+always names the last.
+
+An even address comes with the hardware faults: "HardFault", "NULL pointer dereference", "MPU
+fault, possibly stack overflow", "MemManage", "BusFault" and "UsageFault". The fault handler takes
+it from the frame the core pushed when the fault hit. It names the instruction itself, which is
+often inside a library function such as strlen or memcpy; who called that function is not kept.
+For a function of the C library addr2line prints the name alone, with "??:?" for the file and
+line, since the library carries no line information.
+After an imprecise bus fault, a write the core reports late, the instruction is a few past the
+write. When the handler cannot trust the frame, because pushing it failed as after a stack
+overflow ("MemManage fault, possibly stack overflow"), the address is odd and in the handler. So
+is the address for "StackOverflow", found by FreeRTOS, and for any other message from a crash call
+in the code.
+
+An address starting with 20, from 2000 to 2003, is in RAM, inside an app loaded from the card. The
+firmware's elf cannot name it, and the app's own elf would need the address the app was loaded at,
+which is not kept.
 
 The Wi-Fi dev board brings the crash handler's full dump to the Mac. It sits on the GPIO header
 with its own USB-C cable in the Mac, and its factory firmware is the Black Magic Probe. The board
