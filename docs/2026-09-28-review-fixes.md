@@ -3,6 +3,8 @@
 The review report is `docs/2026-09-28-review.md` on the branch `claude/flipper-access-review-m87rn7`.
 The fixes are on the branch `claude/flipper-access-review-fixes-ssg5yj`, in this repository and in
 the fork, one finding per commit, each firmware change followed by its own submodule bump here.
+That branch was merged on 2026-09-30 and deleted on 2026-10-01. What was finished on 2026-10-01
+is on the branch `claude/reading-fixes-2026-10-01`, in both, the same way.
 
 How it was checked, for every fix below:
 
@@ -127,8 +129,17 @@ roadmap, the docs index and the merge routine where the code changed.
 
 ## Not done
 
-- T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
-  that wants a measurement on the device first.
+- T11's second note, listing the 64 folders instead of looking up each clip: measured on
+  2026-10-01, and the sync left as it is. The sync looks up every clip it sends, about 51 ms when
+  the clip is not on the card and 29 ms when it is, and listing a folder costs 134 ms. Listing
+  would save about 9 minutes of a full sync into an empty set, and about 5 of the 39 minutes the
+  full sync of 2026-10-01 took over the old clips; an everyday sync of a few new words would gain
+  nothing. Offered for later.
+- The espeak set's gaps on this card, found on 2026-09-29: lookups in its folders are slow, and in
+  heart's too, from their history on this card; the firmware is not the cause. Writing both sets'
+  folders fresh would likely cure it. Offered for later.
+- F2's two open cases, a card changed while the device runs and a card formatted on it, stay as
+  the README's Known limits describe them.
 - R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
   plan C.
   Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
@@ -356,7 +367,8 @@ Passed:
 
 Waiting for a sync of the voice, since Robin left the samantha set on the card as it was: T4 and T6
 for the sync, T7 for "were", T9 for the app names, and T5 for the card's code. T2 is met: the
-virtual environment has Python 3.13. R12's weekly build is due on Monday 5 October.
+virtual environment has Python 3.13. R12's weekly build is due on Monday 5 October. The five
+voice checks passed on 2026-10-01, below.
 
 Found on the way:
 
@@ -367,7 +379,31 @@ Found on the way:
   list holds them for the next sync.
 - Switching the file browser's tabs says the first entry but not the tab's name. The DSi menu
   style reads its START label as "S TAR T", and C64's items keep their numbers, such as "0.Apps".
-  A long file name is split where the screen wraps it, one of G9's open items.
+  A long file name is split where the screen wraps it, one of G9's open items. All but C64's
+  numbers are fixed since 2026-10-01, below.
 - Without a card the device takes back its factory name, R0skie here, since Momentum keeps the
   name on the card too; the console lacks its power command, and Settings, Power is an app on the
   card.
+
+## Results on the device, 2026-10-01
+
+Claude ran the console and Robin listened. The samantha set was made again on this Mac, and the
+device got two builds of the fork's branch `claude/reading-fixes-2026-10-01`: f37f06887, with the
+screen-reading fixes, and 0294fe871, with the crash address as well. The console output and the
+figures are in `docs/measurements/2026-10-01-remaining-items.txt`.
+
+Passed:
+
+- T4, T5 and T6, in the sync of the samantha set made again from this Mac, after Robin heard four
+  of its words sound as before; T7, "were" heard as were; and T9, "Chief Cooker" heard as two
+  words and "Notifications" as one.
+- G9 and the two found on the device: the file browser's tab names said first, its folder names
+  and positions, the long file name read whole in the delete dialog and on the NFC emulation
+  screen, START in the DSi style, and the FM Radio app's up and down buttons. tools/sr_drive.py:
+  0 failures.
+- F7: the Crash Test app's bus fault, before the change at 08007F9F, in BusFault_Handler, and
+  after it at 0807337E, the load in strlen that faulted.
+
+Measured: T11's second note, and the cause of the espeak set's gaps; both are under Not done.
+
+Left: R12's weekly build, due on Monday 5 October.
