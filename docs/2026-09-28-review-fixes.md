@@ -42,8 +42,15 @@ Firmware:
   take a row of keys for typing; the cursor mode speaks; text boxes lose their question marks; a
   keyboard's description leaves out the key rows; long dialogs keep their buttons; every main menu
   style names its selected app with its position.
-- G9, three of its six items: the file browser's menu no longer carries the list's focus, a
-  button menu says positions, and the Loading screen says "Loading".
+- G9: the file browser's menu no longer carries the list's focus, a button menu says positions,
+  and the Loading screen says "Loading". The other three items followed on 2026-10-01: the file
+  browser counts its entries from 1 below the parent folder's entry, which has no position, and
+  says the name of the folder it opens; `elements_button_up` and `elements_button_down` are read
+  as the up and down buttons; and a word the screen shows in pieces, hyphenated by the wrapper or
+  broken by the text box, is read whole. With them came two found on the device: a new tab of
+  the file browser says its name first, and the DSi menu style's letter-spaced START is one
+  word. The screen model's host tests hold the titles, the joined words and the up and down
+  buttons, and failed against the model before; the positions were checked on the device.
 - S2 to S10: text is cut after a whole word; speech stays silent with less than 4 KB of heap in one
   block; `sr voice off` stops the utterance and takes a time limit; a card or set that goes away
   ends the item; the ring plays silence after an underrun; a burst of wake-ups no longer ends a
@@ -120,9 +127,6 @@ roadmap, the docs index and the merge routine where the code changed.
 
 ## Not done
 
-- G9's other three items: the file browser's position counts the parent folder entry and never
-  says the folder's name; `elements_button_up` and `elements_button_down` have no button hint; and
-  hyphenated or wrapped text splits words.
 - T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
   that wants a measurement on the device first.
 - R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
