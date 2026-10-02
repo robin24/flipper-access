@@ -1,8 +1,8 @@
-The items left after the merge of the review fixes, on the device: the sync speed, the espeak set's gaps, the samantha set made again on this Mac with its waiting checks, the screen-reading fixes, and the crash address, 2026-10-01
+The items left after the merge of the review fixes, on the device: the sync speed, the espeak set's gaps, the samantha set made again on this Mac with its waiting checks, the screen-reading fixes, and the crash address, 2026-10-01, with the fixes after the day's review on 2026-10-02
 
 Claude ran the console; Robin listened and answered, one step at a time.
 
-Firmware: before this day, 4b56919df, the correction of F2, flashed on 2026-09-30. Then f37f06887 and last 0294fe871, both on the fork's branch claude/reading-fixes-2026-10-01. Release configuration, fbt's defaults (COMPACT=1, DEBUG=0).
+Firmware: before this day, 4b56919df, the correction of F2, flashed on 2026-09-30. Then f37f06887, 0294fe871 and, on 2026-10-02, ea05c6d94, all on the fork's branch claude/reading-fixes-2026-10-01. Release configuration, fbt's defaults (COMPACT=1, DEBUG=0).
 Device: Delphi on /dev/cu.usbmodemflip_Delphi1, with the samantha voice set made on the old Mac until the rebuild below.
 Console replies are verbatim from the console tools; a time in brackets is the shell's.
 
@@ -162,3 +162,56 @@ The C library carries no line information, so addr2line names the function alone
 That is the load that read 0x60000000. The address is even, the instruction itself, so it was given to addr2line as it is.
 
 Back closed the popup. The Crash Test app and the folder /ext/apps/Debug were removed from the card.
+
+Section: After the review, 2026-10-02
+
+An independent review of the day's work, read-only, on the evening of 2026-10-01 found: the crash address trusted a frame only in SRAM1, while the services' threads, the GUI's among them, keep their stacks in SRAM2, from furi_thread_alloc_service's pool (top shows GuiSrv at 0x20038c00, LoaderSrv at 0x200398d8, CliVcpSrv at 0x20033624); a call through a null function pointer kept the handler's address; a text box line starting right after a bold or monospace marker that follows a space was joined to the word before; a line too narrow for a letter and the wrapper's dash made the join check read before the text; the file browser kept its folder's name across a stop and a start; its comments said the starting folder where the code means a storage's root; the README's new paragraph gave the Archive the Apps menu's parent folder entry; and the espeak explanation did not fit its own figures. All were fixed; Robin chose the null call fallback too.
+
+The Crash Test app gained two entries, in aec25e4dc: "Bus fault while drawing", the same strlen fault from a view's draw callback, which runs on the GUI service's thread; and "Null call in firmware", furi_hal_info_get with a null output callback, which property_value_out calls without a check.
+
+Before the fixes, on 0294fe87, [11:14:30]:
+screen: Heap overflow. Bus fault in firmware. Null call in firmware. Bus fault while drawing, 10 of 11
+sr status: last crash: at 08008007 in build 0294fe87
+sr screen: reads as: Flipper crashed. and was rebooted. BusFault. at 08008007
+arm-none-eabi-addr2line -f -i -e flipper-z-f7-firmware-mntm-claude-reading-fixes-2026-10-01-0294fe87.elf 0x08008005:
+furi_hal_interrupt_bus_fault
+targets/f7/furi_hal/furi_hal_interrupt.c:396
+
+[11:15:19]:
+screen: Heap overflow. Bus fault in firmware. Bus fault while drawing. Null call in firmware, 11 of 11
+sr status: last crash: at 08007F23 in build 0294fe87
+sr screen: reads as: Flipper crashed. and was rebooted. MemManage. at 08007F23
+arm-none-eabi-addr2line -f -i -e flipper-z-f7-firmware-mntm-claude-reading-fixes-2026-10-01-0294fe87.elf 0x08007F21:
+furi_hal_interrupt_mem_manage
+targets/f7/furi_hal/furi_hal_interrupt.c:339
+
+The jump to address 0 hits the memory guard there, so the null call is a MemManage fault, not a UsageFault.
+
+The fixes, each built with the headroom check and the host tests:
+3d008835e, frames in SRAM2 trusted: 869,876 bytes, 10,764 spare.
+46510651b, the null call's return address: 869,972 bytes, 10,668 spare.
+216a46891, one check for a break inside a word: 870,012 bytes, 10,628 spare. The screen model's run: 258 checks, 0 failures. Against the old logic, taken out unchanged into the shared check, the new checks gave 2 failures: the bold marker after a space, and a marker at the start of the text.
+ea05c6d94, the file browser: 870,012 bytes, 10,628 spare, md5 68329404aa6de15f845b59dffed2aae5, built from a clean tree after wiping the resources and apps. lint_all clean.
+
+The flash: the upload ran from 11:34:15 to 11:36:55; the port went away at 11:36:55 and was back at 11:44:26. sr screen: records 0, no crash. sysctl debug 1 and sysctl log_level debug were set again. info device: ea05c6d9, dirty false, branch claude/reading-fixes-2026-10-01, 02-10-2026, API 87.3, Sonar. The prune kept all 4 packages again; the package of 0294fe87 was removed by hand, leaving f7-update-1.4.3, f7-update-mntm-012 and the package of ea05c6d9. The Crash Test app was copied again from its committed source.
+
+After the fixes, [11:45:44]:
+screen: Heap overflow. Bus fault in firmware. Null call in firmware. Bus fault while drawing, 10 of 11
+sr status: last crash: at 080733DE in build ea05c6d9
+sr screen: reads as: Flipper crashed. and was rebooted. BusFault. at 080733DE
+arm-none-eabi-addr2line -f -i -e flipper-z-f7-firmware-mntm-claude-reading-fixes-2026-10-01-ea05c6d9.elf 0x080733DE:
+strlen
+??:?
+080733dc <strlen>:
+ 80733de:	f813 2b01 	ldrb.w	r2, [r3], #1
+
+[11:46:34]:
+screen: Heap overflow. Bus fault in firmware. Bus fault while drawing. Null call in firmware, 11 of 11
+sr status: last crash: at 08040937 in build ea05c6d9
+sr screen: reads as: Flipper crashed. and was rebooted. MemManage. at 08040937
+arm-none-eabi-addr2line -f -i -e flipper-z-f7-firmware-mntm-claude-reading-fixes-2026-10-01-ea05c6d9.elf 0x08040935:
+property_value_out
+lib/toolbox/property.c:32
+ 8040934:	47b0      	blx	r6
+
+The address is odd, so 2 was taken off; the line is property_value_out's call of its output callback. Back closed each popup. The Crash Test app and the folder /ext/apps/Debug were removed from the card.

@@ -401,7 +401,8 @@ Found on the way:
 
 Claude ran the console and Robin listened. The samantha set was made again on this Mac, and the
 device got two builds of the fork's branch `claude/reading-fixes-2026-10-01`: f37f06887, with the
-screen-reading fixes, and 0294fe871, with the crash address as well. The console output and the
+screen-reading fixes, and 0294fe871, with the crash address as well. On 2026-10-02 it got
+ea05c6d94, with the fixes after the day's independent review. The console output and the
 figures are in `docs/measurements/2026-10-01-remaining-items.txt`.
 
 Passed:
