@@ -13,12 +13,13 @@ These are the working notes for the one device Sonar is developed on, and the de
   sets, on 2026-09-26. On 2026-09-29 it got b9c87352c, the merge of the fixes after the review of
   2026-09-28, the first build on the new MacBook. On 2026-09-30 it got 4b56919df, on the fork's
   branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings are
-  saved only once they were read from the card. Since 2026-10-01 it runs 0294fe871, on the fork's
-  branch `claude/reading-fixes-2026-10-01`: that day's screen-reading fixes and the crash address
-  of hardware faults, flashed after f37f06887, which had the reading fixes alone. It was flashed
-  complete with `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version
-  87.3: `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is
-  869,876 bytes, 10,764 spare below the BLE stack. The apps on the card, the Passport among them,
+  saved only once they were read from the card. On 2026-10-01 it got f37f06887 and then
+  0294fe871, on the fork's branch `claude/reading-fixes-2026-10-01`: that day's screen-reading
+  fixes, then the crash address of hardware faults. Since 2026-10-02 it runs ea05c6d94 on the same
+  branch, with the fixes after that day's review. It was flashed complete with
+  `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
+  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,012
+  bytes, 10,628 spare below the BLE stack. The apps on the card, the Passport among them,
   came with it. The earlier images are listed under Useful commands. The checks on the device
   after the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`, and those of
   2026-10-01 in `docs/measurements/2026-10-01-remaining-items.txt`.
@@ -31,8 +32,8 @@ These are the working notes for the one device Sonar is developed on, and the de
   neither read nor saved. The Debug flag and the log level are kept in the clock's registers
   instead, and stay. The reader marks the main menu's focus only in the List style; the other styles
   are read by inversion where possible. Momentum's default style is DSi; Sonar's is List since
-  a0dea0841. The same file has lock on boot off, dark mode on, the reader's volume at 20, Robin's
-  level on 2026-10-01, and the voice set samantha. The first update of 2026-09-26, to a0dea0841,
+  a0dea0841. The same file has lock on boot off, dark mode on, the reader's volume at 30, Robin's
+  level on 2026-10-02, and the voice set samantha. The first update of 2026-09-26, to a0dea0841,
   left it at its defaults, the volume apart, because keys pressed during the update saved the
   settings in RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three
   values were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
@@ -343,6 +344,8 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- ea05c6d94, the fixes after the review of 2026-10-01 to the crash address, the line breaks and
+  the file browser, on 2026-10-02: 870,012 bytes, 10,628 spare, 136 bytes over 0294fe871.
 - 0294fe871, the crash address of hardware faults, on the branch
   `claude/reading-fixes-2026-10-01`, on 2026-10-01: 869,876 bytes, 10,764 spare, 160 bytes over
   95c956f89.
