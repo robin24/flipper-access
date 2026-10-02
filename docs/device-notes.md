@@ -304,9 +304,10 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 - The card also holds the sets heart and espeak. espeak's clips open slowly on this card: over
   25 words a median of 51 ms and up to 84, longer than the 82 ms half of the speech ring, so a
   sentence of 24 words played with 4 or 5 underruns. samantha's open in a median of 23 ms, up to
-  46, and heart's in 59, up to 76, both without underruns. Looking a file up in espeak's and
-  heart's folders is slower too: the sets' history on this card, not the firmware. Writing their
-  folders fresh would likely cure it. See `docs/measurements/2026-09-29-review-fixes.txt` and
+  46, and heart's in 59, up to 76, both without underruns. The cause lies in espeak's files on
+  this card, not in the firmware, and it is not the lookup: a clip that is there is found in
+  espeak's folders as fast as in samantha's. Where the time goes is not pinned down; writing the
+  set's folders fresh might cure it. See `docs/measurements/2026-09-29-review-fixes.txt` and
   `docs/measurements/2026-10-01-remaining-items.txt`.
 - The figures behind the hashed folders: finding a file on this exFAT card reads the folder's
   entries one by one, about 0.17 ms per entry. At the rollout on 2026-09-24, with about 2,900

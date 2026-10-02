@@ -135,9 +135,10 @@ roadmap, the docs index and the merge routine where the code changed.
   would save about 9 minutes of a full sync into an empty set, and about 5 of the 39 minutes the
   full sync of 2026-10-01 took over the old clips; an everyday sync of a few new words would gain
   nothing. Offered for later.
-- The espeak set's gaps on this card, found on 2026-09-29: lookups in its folders are slow, and in
-  heart's too, from their history on this card; the firmware is not the cause. Writing both sets'
-  folders fresh would likely cure it. Offered for later.
+- The espeak set's gaps on this card, found on 2026-09-29: its clips take twice as long to open as
+  samantha's, though finding them is not slower. The cause lies in the set's files on this card,
+  not in the firmware, and is not pinned down; writing its folders fresh might cure it. Offered
+  for later.
 - F2's two open cases, a card changed while the device runs and a card formatted on it, stay as
   the README's Known limits describe them.
 - R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
@@ -404,6 +405,7 @@ Passed:
 - F7: the Crash Test app's bus fault, before the change at 08007F9F, in BusFault_Handler, and
   after it at 0807337E, the load in strlen that faulted.
 
-Measured: T11's second note, and the cause of the espeak set's gaps; both are under Not done.
+Measured: T11's second note, and the espeak set's gaps, whose cause is narrowed down but not
+found; both are under Not done.
 
 Left: R12's weekly build, due on Monday 5 October.

@@ -41,7 +41,7 @@ Section: The espeak set's gaps
 - The time to open each clip, over 25 words: samantha median 23 ms, mean 26, slowest 46; heart median 59, mean 55, slowest 76; espeak median 51, mean 53, slowest 84. espeak's slowest open takes longer than the 82 ms that one half of the speech ring plays, and that is an underrun.
 - After the samantha set's rebuild and full sync below: median 23 ms, slowest 43, as before. A sync does not slow the folders down.
 
-The gaps come from slow lookups in the espeak and heart folders on this card, from their own history there, not from the firmware. Writing those folders fresh would likely cure them. Not done.
+The cause lies in the espeak set's files on this card, not in the firmware, which opens samantha's clips in half the time. It is not the lookup: a clip that is there is found as fast in espeak's folders as in samantha's, 25 against 29 ms; only a lookup of a clip that is not there, and a listing, take longer. Where the rest of the time goes is not pinned down. Writing the set's folders fresh might cure it. Not done.
 
 Section: The samantha set, made again on this Mac
 
