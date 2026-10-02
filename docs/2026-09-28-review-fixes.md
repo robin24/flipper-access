@@ -52,7 +52,12 @@ Firmware:
   broken by the text box, is read whole. With them came two found on the device: a new tab of
   the file browser says its name first, and the DSi menu style's letter-spaced START is one
   word. The screen model's host tests hold the titles, the joined words and the up and down
-  buttons, and failed against the model before; the positions were checked on the device.
+  buttons, and failed against the model before; the positions were checked on the device. The
+  review of 2026-10-01 found three edge cases, fixed on 2026-10-02: a text box line that starts
+  after a bold or monospace marker following a space is a new word, not the end of the one
+  before; a line too narrow for a letter and the wrapper's dash no longer reads before the text;
+  and the file browser forgets its folder's name when it stops. A host test holds where a line
+  break falls inside a word, and failed against the old logic.
 - S2 to S10: text is cut after a whole word; speech stays silent with less than 4 KB of heap in one
   block; `sr voice off` stops the utterance and takes a time limit; a card or set that goes away
   ends the item; the ring plays silence after an underrun; a burst of wake-ups no longer ends a
