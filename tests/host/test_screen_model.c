@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "screen_model.h"
+#include "elements_join_i.h"
 
 static int failures = 0;
 static int checks = 0;
@@ -1242,6 +1243,29 @@ static void test_joined_pieces_read_as_one_word(void) {
 
 /** elements_button_up and elements_button_down draw their labels inverted at the top: marked as
  *  buttons, up and down, they are read as such and never as the focus. */
+// Where the drawing helpers' line breaks fall inside a word, so the next piece is marked to join
+// the one before: the text box's format markers, an escape and its letter, are no letters
+static void test_break_inside_word(void) {
+    const char* word = "abcdef";
+    CHECK(elements_break_inside_word(word, word + 3));
+    CHECK(!elements_break_inside_word(word, word));
+    const char* two = "abc def";
+    CHECK(!elements_break_inside_word(two, two + 3));
+    CHECK(!elements_break_inside_word(two, two + 4));
+    const char* lines = "abc\ndef";
+    CHECK(!elements_break_inside_word(lines, lines + 4));
+    // A bold word after a space, broken right after its marker: two words still
+    const char* bold = "abcdefg \e#bold";
+    CHECK(!elements_break_inside_word(bold, bold + 10));
+    // A marker inside a word keeps it one
+    const char* inside = "abc\e#def";
+    CHECK(elements_break_inside_word(inside, inside + 5));
+    CHECK(!elements_break_inside_word(inside, inside + 3));
+    // Only a marker before the break: nothing to join
+    const char* start = "\e#bold";
+    CHECK(!elements_break_inside_word(start, start + 2));
+}
+
 static void test_up_and_down_buttons(void) {
     SrFrame f;
     SrScreen s;
@@ -1297,6 +1321,7 @@ int main(void) {
     test_title_note_names_the_folder();
     test_joined_pieces_read_as_one_word();
     test_up_and_down_buttons();
+    test_break_inside_word();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
