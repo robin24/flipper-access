@@ -291,6 +291,32 @@ static void test_card_without_settings(void) {
     CHECK_STR(card_get("dark_mode"), "false");
 }
 
+/** The card taken out while the device runs, and a card put in, here one with its own volume.
+ *  Until flipper_mount_callback has loaded that card's settings, a save in that moment, a screen
+ *  reader chord, must not write the settings of the card before, still in RAM, over them. */
+static void test_card_changed_while_running(void) {
+    card_insert_with_own_settings();
+    momentum_settings_load(); // the boot
+    CHECK(momentum_settings.sr_volume == 10);
+
+    card_mounted = false;
+    momentum_settings_card_removed(); // flipper_mount_callback, on the unmount
+    momentum_settings_save(); // nowhere to write
+
+    card_insert_with_own_settings();
+    card_set("sr_volume", "50");
+    momentum_settings.sr_volume = 20; // Back and Left as the card goes in
+    momentum_settings_save();
+    CHECK_STR(card_get("sr_volume"), "50");
+    CHECK_STR(card_get("dark_mode"), "true");
+
+    momentum_settings_load(); // flipper_mount_callback, on the mount
+    CHECK(momentum_settings.sr_volume == 50);
+    momentum_settings.sr_volume = 60;
+    momentum_settings_save();
+    CHECK_STR(card_get("sr_volume"), "60");
+}
+
 /** Runs one scenario in a child process, which starts from the compiled defaults, and adds its
  *  counts, which the child writes to a pipe, to this process's. */
 static void run(void (*test)(void)) {
@@ -333,6 +359,7 @@ int main(void) {
     run(test_card_inserted_after_boot);
     run(test_boot_with_card);
     run(test_card_without_settings);
+    run(test_card_changed_while_running);
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
