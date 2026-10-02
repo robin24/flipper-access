@@ -3,6 +3,8 @@
 The review report is `docs/2026-09-28-review.md` on the branch `claude/flipper-access-review-m87rn7`.
 The fixes are on the branch `claude/flipper-access-review-fixes-ssg5yj`, in this repository and in
 the fork, one finding per commit, each firmware change followed by its own submodule bump here.
+That branch was merged on 2026-09-30 and deleted on 2026-10-01. What was finished on 2026-10-01
+is on the branch `claude/reading-fixes-2026-10-01`, in both, the same way.
 
 How it was checked, for every fix below:
 
@@ -42,8 +44,20 @@ Firmware:
   take a row of keys for typing; the cursor mode speaks; text boxes lose their question marks; a
   keyboard's description leaves out the key rows; long dialogs keep their buttons; every main menu
   style names its selected app with its position.
-- G9, three of its six items: the file browser's menu no longer carries the list's focus, a
-  button menu says positions, and the Loading screen says "Loading".
+- G9: the file browser's menu no longer carries the list's focus, a button menu says positions,
+  and the Loading screen says "Loading". The other three items followed on 2026-10-01: the file
+  browser counts its entries from 1 below the parent folder's entry, which has no position, and
+  says the name of the folder it opens; `elements_button_up` and `elements_button_down` are read
+  as the up and down buttons; and a word the screen shows in pieces, hyphenated by the wrapper or
+  broken by the text box, is read whole. With them came two found on the device: a new tab of
+  the file browser says its name first, and the DSi menu style's letter-spaced START is one
+  word. The screen model's host tests hold the titles, the joined words and the up and down
+  buttons, and failed against the model before; the positions were checked on the device. The
+  review of 2026-10-01 found three edge cases, fixed on 2026-10-02: a text box line that starts
+  after a bold or monospace marker following a space is a new word, not the end of the one
+  before; a line too narrow for a letter and the wrapper's dash no longer reads before the text;
+  and the file browser forgets its folder's name when it stops. A host test holds where a line
+  break falls inside a word, and failed against the old logic.
 - S2 to S10: text is cut after a whole word; speech stays silent with less than 4 KB of heap in one
   block; `sr voice off` stops the utterance and takes a time limit; a card or set that goes away
   ends the item; the ring plays silence after an underrun; a burst of wake-ups no longer ends a
@@ -53,6 +67,21 @@ Firmware:
   the console pipe, at about 1.3 KB, and about 1.6 KB with an interrupt's frame.
 - F5: the volume chord and the reader-on chord speak before they save.
 - F6: a frame the reader could not take is asked for again.
+- F7, on 2026-10-01 and 2026-10-02: after a hardware fault, HardFault, MemManage, BusFault or
+  UsageFault, the crash address is the instruction that faulted, which the handler takes from the
+  frame the core pushed, instead of an address inside the handler. Such an address is even. After
+  a call through a null function pointer, whose target is no code, it is the return address of
+  that call, from the same frame, and odd like a failed check's. A frame the core could not push
+  or pop, as after a stack overflow, is not trusted, and the address stays in the handler as
+  before. The first version, of 2026-10-01, trusted a frame only in SRAM1, which left out the
+  services' threads, the GUI's among them, whose stacks lie in SRAM2; an independent review found
+  that, and it is fixed. The review's second idea, part of the thread's name after a stack
+  overflow, is left out: the second register holds the build now, and the debug log names the
+  thread. Checked on the device with three faults the Crash Test app gained, each before and after
+  its change: strlen reading an address no memory answers, from BusFault_Handler to the load in
+  strlen that faulted; the same while the GUI draws, from the bus fault handler to that load; and
+  a null call inside furi_hal_info_get, from the MemManage handler to the call in
+  property_value_out.
 - F8: a chord key held into a second Back hold no longer takes that hold's keys, and with the
   reader off, Back held long and let go before Down's long press no longer opens the power-off
   dialog beside the toggle.
@@ -111,16 +140,18 @@ roadmap, the docs index and the merge routine where the code changed.
 
 ## Not done
 
-- F7, the program counter for fault crashes: it means naked fault handlers in an upstream file,
-  checked only by crashing the device on purpose, and the idle crashes seen so far are failed
-  checks, whose address is already right. The design: read the stacked PC in HardFault, MemManage,
-  BusFault and UsageFault, but not after a stacking error, and store it in place of the return
-  address.
-- G9's other three items: the file browser's position counts the parent folder entry and never
-  says the folder's name; `elements_button_up` and `elements_button_down` have no button hint; and
-  hyphenated or wrapped text splits words.
-- T11's second note, listing the 64 folders instead of looking up each clip, is a speed estimate
-  that wants a measurement on the device first.
+- T11's second note, listing the 64 folders instead of looking up each clip: measured on
+  2026-10-01, and the sync left as it is. The sync looks up every clip it sends, about 51 ms when
+  the clip is not on the card and 29 ms when it is, and listing a folder costs 134 ms. Listing
+  would save about 9 minutes of a full sync into an empty set, and about 5 of the 39 minutes the
+  full sync of 2026-10-01 took over the old clips; an everyday sync of a few new words would gain
+  nothing. Offered for later.
+- The espeak set's gaps on this card, found on 2026-09-29: its clips take twice as long to open as
+  samantha's, though finding them is not slower. The cause lies in the set's files on this card,
+  not in the firmware, and is not pinned down; writing its folders fresh might cure it. Offered
+  for later.
+- F2's two open cases, a card changed while the device runs and a card formatted on it, stay as
+  the README's Known limits describe them.
 - R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
   plan C.
   Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
@@ -348,7 +379,8 @@ Passed:
 
 Waiting for a sync of the voice, since Robin left the samantha set on the card as it was: T4 and T6
 for the sync, T7 for "were", T9 for the app names, and T5 for the card's code. T2 is met: the
-virtual environment has Python 3.13. R12's weekly build is due on Monday 5 October.
+virtual environment has Python 3.13. R12's weekly build is due on Monday 5 October. The five
+voice checks passed on 2026-10-01, below.
 
 Found on the way:
 
@@ -359,7 +391,36 @@ Found on the way:
   list holds them for the next sync.
 - Switching the file browser's tabs says the first entry but not the tab's name. The DSi menu
   style reads its START label as "S TAR T", and C64's items keep their numbers, such as "0.Apps".
-  A long file name is split where the screen wraps it, one of G9's open items.
+  A long file name is split where the screen wraps it, one of G9's open items. All but C64's
+  numbers are fixed since 2026-10-01, below.
 - Without a card the device takes back its factory name, R0skie here, since Momentum keeps the
   name on the card too; the console lacks its power command, and Settings, Power is an app on the
   card.
+
+## Results on the device, 2026-10-01
+
+Claude ran the console and Robin listened. The samantha set was made again on this Mac, and the
+device got two builds of the fork's branch `claude/reading-fixes-2026-10-01`: f37f06887, with the
+screen-reading fixes, and 0294fe871, with the crash address as well. On 2026-10-02 it got
+ea05c6d94, with the fixes after the day's independent review. The console output and the
+figures are in `docs/measurements/2026-10-01-remaining-items.txt`.
+
+Passed:
+
+- T4, T5 and T6, in the sync of the samantha set made again from this Mac, after Robin heard four
+  of its words sound as before; T7, "were" heard as were; and T9, "Chief Cooker" heard as two
+  words and "Notifications" as one.
+- G9 and the two found on the device: the file browser's tab names said first, its folder names
+  and positions, the long file name read whole in the delete dialog and on the NFC emulation
+  screen, START in the DSi style, and the FM Radio app's up and down buttons. tools/sr_drive.py:
+  0 failures.
+- F7: the Crash Test app's bus fault, before the change at 08007F9F, in BusFault_Handler, and
+  after it at 0807337E, the load in strlen that faulted. On 2026-10-02, after the review's fixes,
+  in ea05c6d94: the bus fault while the GUI draws, before at 08008007 in the bus fault handler,
+  after at 080733DE in strlen; and the null call, before at 08007F23 in the MemManage handler,
+  after at 08040937, the call in property_value_out.
+
+Measured: T11's second note, and the espeak set's gaps, whose cause is narrowed down but not
+found; both are under Not done.
+
+Left: R12's weekly build, due on Monday 5 October.

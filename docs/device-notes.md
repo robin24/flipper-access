@@ -11,14 +11,18 @@ These are the working notes for the one device Sonar is developed on, and the de
   here: phase 3 and the polish round on 2026-09-24, the firmware stripdown and the features after
   it on 2026-09-25, the publishing plan A's a5c2ed7d9 and then plan B's 86820a7db, with the voice
   sets, on 2026-09-26. On 2026-09-29 it got b9c87352c, the merge of the fixes after the review of
-  2026-09-28, the first build on the new MacBook. Since 2026-09-30 it runs 4b56919df, on the
-  fork's branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings
-  are saved only once they were read from the card. It was flashed complete with
+  2026-09-28, the first build on the new MacBook. On 2026-09-30 it got 4b56919df, on the fork's
+  branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings are
+  saved only once they were read from the card. On 2026-10-01 it got f37f06887 and then
+  0294fe871, on the fork's branch `claude/reading-fixes-2026-10-01`: that day's screen-reading
+  fixes, then the crash address of hardware faults. Since 2026-10-02 it runs ea05c6d94 on the same
+  branch, with the fixes after that day's review. It was flashed complete with
   `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
-  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 869,212
-  bytes, 11,428 spare below the BLE stack. The apps on the card, the Passport among them, came
-  with it. The earlier images are listed under Useful commands. The checks on the device after
-  the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`.
+  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,012
+  bytes, 10,628 spare below the BLE stack. The apps on the card, the Passport among them,
+  came with it. The earlier images are listed under Useful commands. The checks on the device
+  after the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`, and those of
+  2026-10-01 in `docs/measurements/2026-10-01-remaining-items.txt`.
 - Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1`, which was
   `/dev/cu.usbmodemflip_R0skie1` before the rename, at 230400 baud. It disappears while the device
   is in the updater and comes back after the reboot. Without the card it is R0skie again, since
@@ -26,14 +30,13 @@ These are the working notes for the one device Sonar is developed on, and the de
 - Menu style List, set in `/int/.momentum_settings.txt`. `/int` is the folder `/ext/.int` on the
   card: Momentum has no internal storage of its own, so without the card the settings file is
   neither read nor saved. The Debug flag and the log level are kept in the clock's registers
-  instead, and stay. The reader marks the main menu's focus
-  only in the List style; the other styles are read by inversion where possible. Momentum's
-  default style is DSi; Sonar's is List since a0dea0841. The same file has lock on boot off, dark
-  mode on, the reader's volume at 30 and the voice set samantha. The first update of 2026-09-26,
-  to a0dea0841, left it at
-  its defaults, the volume apart, because keys pressed during the update saved the settings in
-  RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three values
-  were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
+  instead, and stay. The reader marks the main menu's focus only in the List style; the other styles
+  are read by inversion where possible. Momentum's default style is DSi; Sonar's is List since
+  a0dea0841. The same file has lock on boot off, dark mode on, the reader's volume at 30, Robin's
+  level on 2026-10-02, and the voice set samantha. The first update of 2026-09-26, to a0dea0841,
+  left it at its defaults, the volume apart, because keys pressed during the update saved the
+  settings in RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three
+  values were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
   firmware saves no settings in an update boot, so a key pressed during an update no longer
   overwrites the file. Lock on boot acts only when a PIN is set, and none is.
 - The Text to SAM app on the card is Momentum's stock build again since 2026-09-26; the patched
@@ -52,8 +55,8 @@ These are the working notes for the one device Sonar is developed on, and the de
   at hand for the checks of 2026-09-29 and 2026-09-30, so no UART capture ran then.
 - The old project folder is gone, and with it `voice/`, `voices/`, `voice-models/`, `backups/`,
   `firmware-packages/` and `tools/voice_words.local.txt`. The project was cloned again on the
-  MacBook on 2026-09-29, and the local word list made again with `delphi`. The samantha set was not
-  made again there: the card's clips are the old Mac's, so a sync from this Mac sends every clip.
+  MacBook on 2026-09-29, and the local word list made again with `delphi`. The samantha set was
+  made again there on 2026-10-01: see The voice on this card.
   The card still holds the two rollback packages in `/ext/update` and the 1.4.3 backup at its
   root; the backups are on the Mac again, see The folders and tools.
 
@@ -295,13 +298,18 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 - On 2026-09-26 the vocabulary held 10,789 clips. Most of them come from the apps on the card,
   which `--card-apps` adds to the 2,900 words of `--extract`. `sr voice status` then showed a
   longest clip open of 66 ms since boot.
-- On 2026-09-29 the extraction with `--card-apps` gave 10,535 words. The set was not made again on
-  the new MacBook, so `voice/` is missing there: the generator has no record of the card, and a
-  sync would make and send every clip. Until then words without a clip are spelled and noted, such
-  as "noted" and "spoken", and the set names on the Voice row.
-- The card also holds the sets heart and espeak. espeak's clips open slowly on this card, up to
-  77 ms, and a sentence of 24 words played with 4 or 5 underruns; samantha and heart played the
-  same sentence with none. See `docs/measurements/2026-09-29-review-fixes.txt`.
+- On 2026-10-01 the set was made again on this MacBook, after Robin heard four of its words sound
+  the same as the old Mac's: 10,539 clips, about 74 minutes to make and 39 to send, over the old
+  clips. `voice/` holds the record of the card again, whose `.sync-id` is b1c1f2d07f7e630b. The
+  words the device had spelled, "noted", "spoken", "samantha" and "espeak", have clips since.
+- The card also holds the sets heart and espeak. espeak's clips open slowly on this card: over
+  25 words a median of 51 ms and up to 84, longer than the 82 ms half of the speech ring, so a
+  sentence of 24 words played with 4 or 5 underruns. samantha's open in a median of 23 ms, up to
+  46, and heart's in 59, up to 76, both without underruns. The cause lies in espeak's files on
+  this card, not in the firmware, and it is not the lookup: a clip that is there is found in
+  espeak's folders as fast as in samantha's. Where the time goes is not pinned down; writing the
+  set's folders fresh might cure it. See `docs/measurements/2026-09-29-review-fixes.txt` and
+  `docs/measurements/2026-10-01-remaining-items.txt`.
 - The figures behind the hashed folders: finding a file on this exFAT card reads the folder's
   entries one by one, about 0.17 ms per entry. At the rollout on 2026-09-24, with about 2,900
   clips, no folder held more than about 65, and a clip opened in under 40 ms.
@@ -336,6 +344,14 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- ea05c6d94, the fixes after the review of 2026-10-01 to the crash address, the line breaks and
+  the file browser, on 2026-10-02: 870,012 bytes, 10,628 spare, 136 bytes over 0294fe871.
+- 0294fe871, the crash address of hardware faults, on the branch
+  `claude/reading-fixes-2026-10-01`, on 2026-10-01: 869,876 bytes, 10,764 spare, 160 bytes over
+  95c956f89.
+- 95c956f89, `sr screen` naming the up and down buttons: 869,716 bytes, 10,924 spare.
+- f37f06887, the screen-reading fixes, on 2026-10-01: 869,708 bytes, 10,932 spare, 496 bytes over
+  4b56919df.
 - 4b56919df, F2 corrected, on the branch `claude/device-checks-2026-09-30`, on 2026-09-30:
   869,212 bytes, 11,428 spare. 102 bytes of code over b9c87352c, and 18 of the longer branch
   name, which the image holds.
@@ -417,8 +433,11 @@ What the crash popup says, how the reader speaks the address, and what `sr statu
 When it crashes in the README. This section is the decoding and the capture.
 
 To find the line of code on the Mac for an address starting with 08, which is in the firmware's
-flash, subtract 2. Give the result to addr2line with the `firmware.elf` of the build that
-`sr status` names, from the project folder. For "at 0803ABCD":
+flash, look at its last digit. An even address, ending in 0, 2, 4, 6, 8, A, C or E, is the
+instruction that faulted, which a hardware fault leaves: take it as it is. An odd address is
+where a call would have returned to, the call of a failed check, or a call through a null
+function pointer: subtract 2. Give the result to addr2line with the `firmware.elf` of the build
+that `sr status` names, from the project folder. For "at 0803ABCD", odd:
 
 ```bash
 Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -i -C -a 0x0803ABCB
@@ -431,16 +450,34 @@ commit on this Mac have given the same image, so the addresses match. The contin
 image of the same commit differs by a few bytes, though: 12 more for a0dea0841, 4 fewer for
 a5c2ed7d9. So a release's own `firmware.elf` must be kept to decode its addresses.
 
-The caveats. The address is where the failed check would have returned to. Without the 2
-subtracted, addr2line names the instruction after the check's call: often a later line, and
-sometimes another function, since that call never returns. Even with it, the line is not always
-the failed check's own. The compiler often lets several checks of one function share a single call
-to the crash routine. The line named is then one of those checks, in that function or in one
-inlined into it. In `ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one
-call and addr2line always names the last. An address starting with 20, from 2000 to 2003, is in
-RAM, inside an app loaded from the card. The firmware's elf cannot name it, and the app's own elf
-would need the address the app was loaded at, which is not kept. For any message other than
-"furi_check failed" or "Check serial logs", the address is in the routine that reported the crash.
+The caveats for an odd address. Without the 2 subtracted, addr2line names the instruction after
+the check's call: often a later line, and sometimes another function, since that call never
+returns. Even with it, the line is not always the failed check's own. The compiler often lets
+several checks of one function share a single call to the crash routine. The line named is then
+one of those checks, in that function or in one inlined into it. In
+`ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one call and addr2line
+always names the last.
+
+An even address comes with the hardware faults, "HardFault", "NULL pointer dereference",
+"MemManage", "BusFault" and "UsageFault", on any thread. The fault handler takes it from the frame
+the core pushed when the fault hit. It names the instruction itself, which is often inside a
+library function such as strlen or memcpy; who called that function is not kept. For a function
+of the C library addr2line prints the name alone, with "??:?" for the file and line, since the
+library carries no line information. After an imprecise bus fault, a write the core reports late,
+the instruction is a few past the write.
+
+When the address that faulted is no code, as after a call through a null function pointer, the
+handler takes the return address of that call from the frame instead: odd, and less 2 it names
+the call. The popup then says "MemManage", since the jump to address 0 hits the memory guard there.
+A stack overflow usually leaves an odd address in the handler: the frame the core pushes after
+the overflow lands in the stack's guard too, so the handler cannot trust it. That is the usual
+case for "MPU fault, possibly stack overflow" and "MemManage fault, possibly stack overflow".
+"StackOverflow", found by FreeRTOS, and any other message from a crash call in the code give an
+odd address as well.
+
+An address starting with 20, from 2000 to 2003, is in RAM, inside an app loaded from the card. The
+firmware's elf cannot name it, and the app's own elf would need the address the app was loaded at,
+which is not kept.
 
 The Wi-Fi dev board brings the crash handler's full dump to the Mac. It sits on the GPIO header
 with its own USB-C cable in the Mac, and its factory firmware is the Black Magic Probe. The board

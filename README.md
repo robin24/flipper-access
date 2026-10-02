@@ -30,8 +30,8 @@ Added:
   remotes, have spoken names.
 - The dolphin's level and mood are said in words: the status chord, Back with a short press of
   Down, says them, and a new level is announced.
-- The crash popup ends with an address that locates the failed check in the code, and the reader
-  speaks it.
+- The crash popup ends with an address that locates the crash in the code, the failed check or,
+  after a hardware fault, the instruction that faulted, and the reader speaks it.
 - The reader speaks in a recorded voice, one clip per word from the SD card, made with a generator
   in this repository.
 
@@ -297,6 +297,13 @@ needs, and the screen reader stays silent until you leave with Back.
 Down on the home screen opens the file browser, which Momentum calls Archive. Left and Right
 switch its tabs: Favorites, Sub-GHz, RFID, NFC, Infrared, Bad KB, Apps, Search and Browser. Up and
 Down move in the list, and OK opens a folder or a file.
+
+A new tab is said by its name, then its selected entry, such as "NFC, Fun_Files". A folder you
+open there is not named: the tab's name stays the screen's name.
+
+The Apps menu and the file lists that apps open, such as a saved signal to load, name a folder as
+it opens, then say "Parent folder", the entry that leads back up, which has no position; the
+entries below it count from 1, so the first of five files is "1 of 5".
 
 A long press of Back opens the manage menu for the selected entry: Cut, Copy, New Dir, Rename and
 Delete, with Paste once something is cut or copied. A long press of OK opens the actions menu: Run
@@ -603,8 +610,10 @@ resends everything.
 ## When it crashes
 
 When the device crashes, it reboots and shows a popup, and the reader reads it: "Flipper crashed
-and was rebooted", then the message, most often "furi_check failed". The last line is "at" and an
-address of eight hexadecimal digits, such as "at 0803ABCD". Back closes the popup. The address
+and was rebooted", then the message, most often "furi_check failed", or after a hardware fault its
+name, such as "BusFault" or "NULL pointer dereference". The last line is "at" and an address of
+eight hexadecimal digits, such as "at 0803ABCD": where the failed check is, the instruction that
+faulted, or the call that went through a null function pointer. Back closes the popup. The address
 stays, across reboots and firmware updates, until the next crash. It is kept in two of the clock's
 backup registers, which the official firmware and Momentum leave unused; after another firmware
 that uses them, the last crash shown may be wrong until the next one.

@@ -36,7 +36,7 @@ summary() {
 }
 
 clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
-  -I "$SRC" -o "$OUT/test_screen_model" \
+  -I "$SRC" -I "$ROOT/Momentum-Firmware/applications/services/gui" -o "$OUT/test_screen_model" \
   "$TESTS/test_screen_model.c" "$SRC/screen_model.c"
 "$OUT/test_screen_model"
 
