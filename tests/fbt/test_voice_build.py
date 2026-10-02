@@ -59,6 +59,16 @@ finally:
     sys.argv = saved_argv
 check(refused is not None and "--jobs 0" in refused, f"--jobs 0 is refused: {refused}")
 
+# The order the clips go onto the card (clip_order): the most spoken first, as the list gives
+# them, then the rest sorted. The device reads a folder's entries one by one, in the order the
+# files were made, so a word made early is found sooner. A listed word the set lacks is left out
+order = vb.clip_order({"zulu", "the", "of", "apple", "word"}, ["of", "the", "missing"])
+check(order == ["of", "the", "apple", "word", "zulu"], f"the listed words first, then the rest sorted: {order}")
+check(vb.clip_order({"b", "a"}, ()) == ["a", "b"], "without a list, sorted")
+first = vb.spoken_first({"one", "a", "of"}, collections.Counter({"the": 9, "of": 12, "screen": 3, "word": 9}))
+check(first == ["a", "of", "one", "the", "word", "screen"],
+      f"the base list first, then the firmware's words by how often its texts use them, ties sorted: {first}")
+
 # The expander's compiler: clang, else cc, else gcc; without any, one sentence
 saved_which = vb.shutil.which
 try:
@@ -146,13 +156,16 @@ App(appid="notes", name="Notifications", apptype=FlipperAppType.SETTINGS)
         vb.log = lambda msg: None
         os.makedirs(os.path.join(d, "work"))
         try:
-            words, _, added = vb.extract_words(os.path.join(d, "work"), [("card-apps", [os.path.join(d, "apps", "cooker")])])
+            words, _, added, frequency = vb.extract_words(
+                os.path.join(d, "work"), [("card-apps", [os.path.join(d, "apps", "cooker")])])
         finally:
             vb.core_roots, vb.firmware_strings, vb.bubble_texts, vb.log = saved
         check({"hello", "space", "playground", "games", "notifications", "chief", "cooker", "stir"} <= words
               and not {"driver", "parser", "background", "never"} & words,
               f"the names come in with the strings, the others not: {sorted(words)}")
         check(added == {"card-apps": 4}, f"an extra source's names count as its own words, chief, cooker, stir, gently: {added}")
+        check(frequency["hello"] == 1 and frequency["space"] == 1 and "stir" not in frequency,
+              f"the firmware's own words count how often its texts use them, an extra source's not: {dict(frequency)}")
 
 # A clip the engine makes silent is a failure, not 30 ms of silence played for the word (T10)
 import wave  # noqa: E402
@@ -430,6 +443,16 @@ else:
         check(c.commands.count(guard) == 4, f"the mute is renewed as the sync goes: {c.commands}")
         check(c.commands[-1] == "sr voice on\r" and c.read.stall == vb.RESTORE_STALL_S and c.stopped >= 1 and len(opened) == 1,
               f"the voice is restored in the same session, which is closed: {c.commands[-1:]}, {opened}")
+
+        # The clips go in clip order: the manifest's most spoken words first, then the rest sorted
+        c = FakeConsole()
+        manifest["first"] = ["charlie"]
+        result, opened, said = transfer([c], sync)
+        del manifest["first"]
+        card = vb.set_card_dir("heart")
+        clips = [p for p in c.sent if p.endswith(".raw")]
+        check(clips == [f"{card}/{vb.bucket(w)}/{w}.raw" for w in ("charlie", "alpha", "bravo")],
+              f"the most spoken word goes first: {clips}")
 
         # Ctrl-C during the second clip: the old session is closed and left alone, and the voice
         # comes back through a fresh one

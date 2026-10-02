@@ -225,5 +225,21 @@ with tempfile.TemporaryDirectory() as tmp:
     check(not os.path.exists(out4) and not os.path.exists(out4 + ".tmp"),
           "a pack that fails partway leaves no broken tar and no stray temp file at out_path")
 
+# The clips go into the pack in clip order, the most spoken first, as a sync writes them: the
+# device's unpacker makes the files in the archive's order, and the folders keep it
+with tempfile.TemporaryDirectory() as tmp:
+    ordered_dir = make_set(tmp, "ordered", words={"zulu": "h1", "the": "h2", "apple": "h3"})
+    manifest_path = os.path.join(ordered_dir, "manifest.json")
+    with open(manifest_path, encoding="utf-8") as f:
+        ordered = json.load(f)
+    ordered["first"] = ["the"]
+    with open(manifest_path, "w", encoding="utf-8") as f:
+        json.dump(ordered, f)
+    out5 = os.path.join(tmp, "out5.tar")
+    pack(ordered_dir, "ordered", "0.1.0", out5)
+    with tarfile.open(out5) as tar:
+        clips = [os.path.basename(m.name) for m in tar.getmembers() if m.name.endswith(".raw")]
+    check(clips == ["the.raw", "apple.raw", "zulu.raw"], f"the pack's clips in clip order: {clips}")
+
 print(f"voice pack: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)
