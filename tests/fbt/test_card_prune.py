@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """tools/card_prune.py's rule: of the folders under /ext/update, only the fork's own builds are
-candidates, the folders named f7-update-sonar-, f7-update-mntm-screen-reader- or
-f7-update-mntm-HEAD- plus anything; every other folder stays, a foreign package such as
+candidates, the folders named f7-update-sonar-, f7-update-mntm-screen-reader-,
+f7-update-mntm-HEAD- or f7-update-mntm-claude- plus anything; every other folder stays, a foreign package such as
 f7-update-1.4.3, f7-update-mntm-012 or an Unleashed one included. Of the candidates, the running
 build's folder stays: its name ends with "-" and the firmware.commit.hash from `info device`, or,
 for a tagged build whose firmware.version is not mntm-dev, it is f7-update-<firmware.version>.
@@ -65,6 +65,13 @@ check(plan(tagged, "6451e86e", "mntm-dev", set()) == ["f7-update-sonar-0.0.9", "
 head = ["f7-update-mntm-HEAD-a5c2ed7d", "f7-update-mntm-HEAD-3bdcca70"]
 check(plan(head, "a5c2ed7d", "mntm-dev", set()) == ["f7-update-mntm-HEAD-3bdcca70"],
       "a source build on a detached HEAD is the fork's own: the running one stays, the other goes")
+
+work = ["f7-update-1.4.3", "f7-update-mntm-012", "f7-update-mntm-claude-reading-fixes-2026-10-01-0294fe87",
+        "f7-update-mntm-claude-reading-fixes-2026-10-01-ea05c6d9", "f7-update-mntm-screen-reader-bb3a635b"]
+check(plan(work, "ea05c6d9", "mntm-dev", set()) == ["f7-update-mntm-claude-reading-fixes-2026-10-01-0294fe87",
+                                                    "f7-update-mntm-screen-reader-bb3a635b"],
+      "a build of a claude/ work branch is the fork's own: the running one stays, the older one goes, "
+      "and the rollback packages stay")
 
 print(f"card prune: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)
