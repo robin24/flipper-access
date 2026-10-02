@@ -432,9 +432,9 @@ When it crashes in the README. This section is the decoding and the capture.
 To find the line of code on the Mac for an address starting with 08, which is in the firmware's
 flash, look at its last digit. An even address, ending in 0, 2, 4, 6, 8, A, C or E, is the
 instruction that faulted, which a hardware fault leaves: take it as it is. An odd address is
-where a failed check would have returned to: subtract 2. Give the result to addr2line with the
-`firmware.elf` of the build that `sr status` names, from the project folder. For "at 0803ABCD",
-odd:
+where a call would have returned to, the call of a failed check, or a call through a null
+function pointer: subtract 2. Give the result to addr2line with the `firmware.elf` of the build
+that `sr status` names, from the project folder. For "at 0803ABCD", odd:
 
 ```bash
 Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e Momentum-Firmware/build/f7-firmware-C/firmware.elf -f -i -C -a 0x0803ABCB
@@ -455,17 +455,22 @@ one of those checks, in that function or in one inlined into it. In
 `ble_svc_serial_notify_buffer_is_empty`, for example, four checks share one call and addr2line
 always names the last.
 
-An even address comes with the hardware faults: "HardFault", "NULL pointer dereference", "MPU
-fault, possibly stack overflow", "MemManage", "BusFault" and "UsageFault". The fault handler takes
-it from the frame the core pushed when the fault hit. It names the instruction itself, which is
-often inside a library function such as strlen or memcpy; who called that function is not kept.
-For a function of the C library addr2line prints the name alone, with "??:?" for the file and
-line, since the library carries no line information.
-After an imprecise bus fault, a write the core reports late, the instruction is a few past the
-write. When the handler cannot trust the frame, because pushing it failed as after a stack
-overflow ("MemManage fault, possibly stack overflow"), the address is odd and in the handler. So
-is the address for "StackOverflow", found by FreeRTOS, and for any other message from a crash call
-in the code.
+An even address comes with the hardware faults, "HardFault", "NULL pointer dereference",
+"MemManage", "BusFault" and "UsageFault", on any thread. The fault handler takes it from the frame
+the core pushed when the fault hit. It names the instruction itself, which is often inside a
+library function such as strlen or memcpy; who called that function is not kept. For a function
+of the C library addr2line prints the name alone, with "??:?" for the file and line, since the
+library carries no line information. After an imprecise bus fault, a write the core reports late,
+the instruction is a few past the write.
+
+When the address that faulted is no code, as after a call through a null function pointer, the
+handler takes the return address of that call from the frame instead: odd, and less 2 it names
+the call. The popup then says "MemManage", since the jump to address 0 hits the memory guard there.
+A stack overflow usually leaves an odd address in the handler: the frame the core pushes after
+the overflow lands in the stack's guard too, so the handler cannot trust it. That is the usual
+case for "MPU fault, possibly stack overflow" and "MemManage fault, possibly stack overflow".
+"StackOverflow", found by FreeRTOS, and any other message from a crash call in the code give an
+odd address as well.
 
 An address starting with 20, from 2000 to 2003, is in RAM, inside an app loaded from the card. The
 firmware's elf cannot name it, and the app's own elf would need the address the app was loaded at,

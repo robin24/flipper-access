@@ -62,15 +62,21 @@ Firmware:
   the console pipe, at about 1.3 KB, and about 1.6 KB with an interrupt's frame.
 - F5: the volume chord and the reader-on chord speak before they save.
 - F6: a frame the reader could not take is asked for again.
-- F7, on 2026-10-01: after a hardware fault, HardFault, MemManage, BusFault or UsageFault, the
-  crash address is the instruction that faulted, which the handler takes from the frame the core
-  pushed, instead of an address inside the handler. Such an address is even and a failed check's
-  return address odd, so the address says which it is. A frame the core could not push or pop,
-  as after a stack overflow, is not trusted, and the address stays in the handler as before. The
-  review's second idea, part of the thread's name after a stack overflow, is left out: the second
-  register holds the build now, and the debug log names the thread. Checked on the device with a
-  bus fault the Crash Test app gained, strlen reading an address no memory answers: before the
-  change the address was in BusFault_Handler, after it on the load in strlen that faulted.
+- F7, on 2026-10-01 and 2026-10-02: after a hardware fault, HardFault, MemManage, BusFault or
+  UsageFault, the crash address is the instruction that faulted, which the handler takes from the
+  frame the core pushed, instead of an address inside the handler. Such an address is even. After
+  a call through a null function pointer, whose target is no code, it is the return address of
+  that call, from the same frame, and odd like a failed check's. A frame the core could not push
+  or pop, as after a stack overflow, is not trusted, and the address stays in the handler as
+  before. The first version, of 2026-10-01, trusted a frame only in SRAM1, which left out the
+  services' threads, the GUI's among them, whose stacks lie in SRAM2; an independent review found
+  that, and it is fixed. The review's second idea, part of the thread's name after a stack
+  overflow, is left out: the second register holds the build now, and the debug log names the
+  thread. Checked on the device with three faults the Crash Test app gained, each before and after
+  its change: strlen reading an address no memory answers, from BusFault_Handler to the load in
+  strlen that faulted; the same while the GUI draws, from the bus fault handler to that load; and
+  a null call inside furi_hal_info_get, from the MemManage handler to the call in
+  property_value_out.
 - F8: a chord key held into a second Back hold no longer takes that hold's keys, and with the
   reader off, Back held long and let go before Down's long press no longer opens the power-off
   dialog beside the toggle.
@@ -403,7 +409,10 @@ Passed:
   screen, START in the DSi style, and the FM Radio app's up and down buttons. tools/sr_drive.py:
   0 failures.
 - F7: the Crash Test app's bus fault, before the change at 08007F9F, in BusFault_Handler, and
-  after it at 0807337E, the load in strlen that faulted.
+  after it at 0807337E, the load in strlen that faulted. On 2026-10-02, after the review's fixes,
+  in ea05c6d94: the bus fault while the GUI draws, before at 08008007 in the bus fault handler,
+  after at 080733DE in strlen; and the null call, before at 08007F23 in the MemManage handler,
+  after at 08040937, the call in property_value_out.
 
 Measured: T11's second note, and the espeak set's gaps, whose cause is narrowed down but not
 found; both are under Not done.

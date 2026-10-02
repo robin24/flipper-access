@@ -612,8 +612,8 @@ resends everything.
 When the device crashes, it reboots and shows a popup, and the reader reads it: "Flipper crashed
 and was rebooted", then the message, most often "furi_check failed", or after a hardware fault its
 name, such as "BusFault" or "NULL pointer dereference". The last line is "at" and an address of
-eight hexadecimal digits, such as "at 0803ABCD": where the failed check is, or the instruction
-that faulted. Back closes the popup. The address
+eight hexadecimal digits, such as "at 0803ABCD": where the failed check is, the instruction that
+faulted, or the call that went through a null function pointer. Back closes the popup. The address
 stays, across reboots and firmware updates, until the next crash. It is kept in two of the clock's
 backup registers, which the official firmware and Momentum leave unused; after another firmware
 that uses them, the last crash shown may be wrong until the next one.
