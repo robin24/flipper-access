@@ -298,9 +298,12 @@ Down on the home screen opens the file browser, which Momentum calls Archive. Le
 switch its tabs: Favorites, Sub-GHz, RFID, NFC, Infrared, Bad KB, Apps, Search and Browser. Up and
 Down move in the list, and OK opens a folder or a file.
 
-A new tab is said by its name, then its selected entry, such as "NFC, Fun_Files". Opening a
-folder says the folder's name, then "Parent folder", the entry that leads back up, which has no
-position; the entries below it count from 1, so the first of five files is "1 of 5".
+A new tab is said by its name, then its selected entry, such as "NFC, Fun_Files". A folder you
+open there is not named: the tab's name stays the screen's name.
+
+The Apps menu and the file lists that apps open, such as a saved signal to load, name a folder as
+it opens, then say "Parent folder", the entry that leads back up, which has no position; the
+entries below it count from 1, so the first of five files is "1 of 5".
 
 A long press of Back opens the manage menu for the selected entry: Cut, Copy, New Dir, Rename and
 Delete, with Paste once something is cut or copied. A long press of OK opens the actions menu: Run
