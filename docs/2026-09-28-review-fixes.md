@@ -56,7 +56,8 @@ Firmware:
   as the up and down buttons; and a word the screen shows in pieces, hyphenated by the wrapper or
   broken by the text box, is read whole. With them came two found on the device: a new tab of
   the file browser says its name first, and the DSi menu style's letter-spaced START is one
-  word. The screen model's host tests hold the titles, the joined words and the up and down
+  word. A third followed on 2026-10-03: the C64 style draws its numbers apart from the names, so
+  its focus is read as "Apps, 1 of 11", not "0.Apps". The screen model's host tests hold the titles, the joined words and the up and down
   buttons, and failed against the model before; the positions were checked on the device. The
   review of 2026-10-01 found three edge cases, fixed on 2026-10-02: a text box line that starts
   after a bold or monospace marker following a space is a new word, not the end of the one
@@ -395,8 +396,8 @@ Found on the way:
   list holds them for the next sync.
 - Switching the file browser's tabs says the first entry but not the tab's name. The DSi menu
   style reads its START label as "S TAR T", and C64's items keep their numbers, such as "0.Apps".
-  A long file name is split where the screen wraps it, one of G9's open items. All but C64's
-  numbers are fixed since 2026-10-01, below.
+  A long file name is split where the screen wraps it, one of G9's open items. All are fixed,
+  C64's numbers on 2026-10-03 and the rest since 2026-10-01, below.
 - Without a card the device takes back its factory name, R0skie here, since Momentum keeps the
   name on the card too; the console lacks its power command, and Settings, Power is an app on the
   card.
@@ -445,5 +446,10 @@ the figures are in `docs/measurements/2026-10-02-card-settings-and-clip-order.tx
   words' median place fell from 106 to 7, the median open from 51 ms to 25, and three long
   sentences gave 3 underruns where they gave 18. macOS's `._` files from that write, which the
   plan C note above describes, were removed through the Flipper.
+- The heart set, the same day: its most spoken words, about 24 a folder, were moved to the
+  fronts of its folders through the Flipper by renames, which copy no data and leave no macOS
+  files. The median open fell from 55 ms to 26, and the long sentences' 3 underruns to none.
+- The C64 menu style, in 44e1d8e83 on the fork's branch `claude/c64-menu-2026-10-03`: its
+  focus read "0.Apps, 1 of 11" before the fix and "Apps, 1 of 11" after it.
 - The prune removes the packages of the claude/ work branches too, checked on the card.
 - T11's second note: the faster sync was left out, as recommended, since full syncs are rare.

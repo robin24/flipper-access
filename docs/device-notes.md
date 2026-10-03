@@ -18,11 +18,13 @@ These are the working notes for the one device Sonar is developed on, and the de
   fixes, then the crash address of hardware faults. On 2026-10-02 it got ea05c6d94 on the same
   branch, with the fixes after that day's review, then 778d09f8f on the branch
   `claude/card-settings-2026-10-02`, with the settings read after a card change or a format.
-  Since 2026-10-03 it runs f9782c740, the merge of that branch into `screen-reader`, whose files
-  are 778d09f8f's, so the About screen names screen-reader again. It was flashed complete with
+  On 2026-10-03 it got f9782c740, the merge of that branch into `screen-reader`, then 44e1d8e83
+  on the branch `claude/c64-menu-2026-10-03`, with the C64 menu style's numbers apart from the
+  names. Since 2026-10-03 it runs 59878faeb, the merge of that branch into `screen-reader`, whose
+  files are 44e1d8e83's, so the About screen names screen-reader. It was flashed complete with
   `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
-  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,076
-  bytes, 10,564 spare below the BLE stack. The apps on the card, the Passport among them,
+  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,084
+  bytes, 10,556 spare below the BLE stack. The apps on the card, the Passport among them,
   came with it. The earlier images are listed under Useful commands. The checks on the device
   after the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`, and those of
   2026-10-01 in `docs/measurements/2026-10-01-remaining-items.txt`.
@@ -311,9 +313,11 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
   sat near the ends of their folders: espeak's clips opened in a median of 51 ms, up to 84,
   longer than the 82 ms half of the speech ring, and long sentences played with underruns. On
   2026-10-03 espeak's folders were rewritten in clip order, the most spoken words first: a median
-  of 25 ms, and 3 underruns over three long sentences where there were 18. heart is still
-  alphabetical, a median of 59 ms, up to 76; it had no underruns in the tests of 2026-10-01.
-  samantha keeps the order of its first rollout, the firmware's words first, 23 ms. espeak's clips are kept in
+  of 25 ms, and 3 underruns over three long sentences where there were 18. The same day heart's
+  most spoken words, about 24 a folder, were moved to the fronts of its folders through the
+  Flipper by renames, which copy no data and leave no macOS files: a median of 26 ms where it was
+  55, and no underruns where there were 3. samantha keeps the order of its first rollout, the
+  firmware's words first, 23 ms. espeak's clips are kept in
   `backups/espeak-clips-2026-10-03.tar`. See `docs/measurements/2026-10-01-remaining-items.txt`
   and `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
 - Writing to the card from this Mac through a card reader leaves a `._` file of 4 KB beside every
@@ -357,6 +361,10 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- 59878faeb, the merge of the C64 fix into `screen-reader`, on 2026-10-03: 870,084 bytes, 10,556
+  spare, 16 fewer than 44e1d8e83 for the shorter branch name.
+- 44e1d8e83, the C64 menu style's numbers, on the branch `claude/c64-menu-2026-10-03`, on
+  2026-10-03: 870,100 bytes, 10,540 spare.
 - f9782c740, the merge of the settings fix into `screen-reader`, on 2026-10-03: 870,076 bytes,
   10,564 spare, 24 fewer than 778d09f8f for the shorter branch name.
 - 778d09f8f, the settings read after a card change or a format, on the branch

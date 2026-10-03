@@ -150,3 +150,91 @@ running build f9782c74, version mntm-dev; 4 folders in /ext/update; keeping 3: f
 removing f7-update-mntm-claude-card-settings-2026-10-02-778d09f8
 removed 1 folders
 tools/sr_drive.py: 0 failures.
+
+Section: The heart set put in clip order on the card, by renames, 2026-10-03
+
+The heart set's clips exist only on the card, and writing from the Mac would leave macOS's ._ files again. So the reorder went through the Flipper alone, by renames: a file moved into a folder takes its first free place, and a rename copies no data. reorder_on_card.py, a scratch script, moves a folder's most spoken clips, the top 1,536 of the clip order, about 24 a folder, together with the files in the front places, into /ext/sr/reorder-heart/<folder>, then back, the most spoken first, and checks the folder's listing. A first try on folder 1c with every clip moved took 66 s for 352 renames, about 0.19 s each, so the whole set that way would have taken over an hour.
+
+Before, from the console:
+heart: median 55 ms, mean 55 ms, max 78 ms, over 40 ms: 22
+heart: underruns 3 over 3 sentences of 28 words
+
+The reorder, 17:24:09 to 17:39:31: 63 folders, 1c already done, 5,526 renames in 921 s; /ext/sr/reorder-heart removed, the voice back on.
+
+After:
+word      folder samantha       espeak         heart         
+the       1c      31 of 179       5 of 176       5 of 176    
+screen    11      41 of 187       2 of 183       2 of 183    
+reader    16      24 of 145       3 of 143       3 of 143    
+reads     02      41 of 163      17 of 160      17 of 160    
+every     04      81 of 157      78 of 149      64 of 149    
+word      3d      43 of 160      25 of 152      25 of 152    
+on        10      28 of 173       7 of 165       7 of 165    
+this      01      28 of 142       1 of 138       1 of 138    
+long      13      26 of 171       6 of 168       6 of 168    
+line      27      16 of 152       2 of 150       2 of 150    
+and       26       2 of 171       1 of 167       1 of 167    
+then      36     157 of 169      39 of 164     150 of 164    
+it        10      21 of 173       8 of 165       8 of 165    
+stops     22      40 of 202      24 of 198      24 of 198    
+after     09       2 of 186      11 of 180      11 of 180    
+last      19      24 of 153       2 of 142       2 of 142    
+whole     34     166 of 172     164 of 169     161 of 169    
+so        17      31 of 152      13 of 150      13 of 150    
+that      2c      41 of 173      18 of 171      18 of 171    
+no        3a      25 of 149       3 of 147       3 of 147    
+piece     05     125 of 167     121 of 162     117 of 162    
+of        28      25 of 173       1 of 163       1 of 163    
+a         2c       1 of 173       1 of 171       1 of 171    
+is        15      25 of 181       6 of 173       6 of 173    
+spelled   20      61 of 182      30 of 181      30 of 181    
+samantha: median position 28, mean 44
+espeak: median position 7, mean 24
+heart: median position 7, mean 27
+heart: median 26 ms, mean 29 ms, max 65 ms, over 40 ms: 4
+heart: underruns 0 over 3 sentences of 28 words
+
+Section: The C64 menu style's numbers, 2026-10-03
+
+The C64 style drew each item as one string, its number first, so the reader's focus read "0.Apps". Before the fix, on f9782c74, with the style set to C64 in the Momentum app and back to List afterwards, the settings file then equal to the copy before:
+   6.2    No application is running
+  13.4    screen: Menu Style List
+  16.0    focus: Menu Style Wii
+  17.5    focus: Menu Style DSi
+  19.1    focus: Menu Style PS4
+  20.6    focus: Menu Style Vertical
+  22.1    focus: Menu Style C64
+  23.6    screen: Reset Menu. Item 1/8 SubGHz. Add Item. Menu Style C64, 1 of 6
+  28.4    home: Home screen
+  30.9    screen: * FLIPPADORE 64 BASIC *. 110576 BASIC BYTES FREE. 0.Apps
+  33.3    screen: * FLIPPADORE 64 BASIC *. 109856 BASIC BYTES FREE. 0.Apps, 1 of 11
+  36.5    screen: * FLIPPADORE 64 BASIC *. 109856 BASIC BYTES FREE. 5.GPIO, 6 of 11
+  38.1    home: Home screen
+  48.5    screen: Menu Style C64
+  51.1    focus: Menu Style Vertical
+  52.7    focus: Menu Style PS4
+  54.2    focus: Menu Style DSi
+  55.7    focus: Menu Style Wii
+  57.3    focus: Menu Style List
+  58.8    screen: Reset Menu. Item 1/8 SubGHz. Add Item. Menu Style List, 1 of 6
+  63.6    home: Home screen
+  66.7    No application is running
+
+The fix, 44e1d8e83 on the fork's branch claude/c64-menu-2026-10-03: the number drawn with canvas_draw_str, the name after it with the scrolling text line, narrower by the number's width, and the focus hint on the name. Built from a clean tree after wiping the resources and apps: 870,100 bytes, 10,540 spare, md5 a5b9a7b97bf4780bf735a0a4f5a23eef; lint_all clean, the host tests exit 0. The flash: started 17:46:59, the port went away at 17:49:21 and was back at 17:55:58; sr screen showed no crash; info device: 44e1d8e8, dirty false, branch claude/c64-menu-2026-10-03, Sonar. The prune removed f7-update-mntm-screen-reader-f9782c74 and kept the rollback packages and the running build's.
+
+After the fix, the same steps:
+  22.2    focus: Menu Style C64
+  23.7    screen: Reset Menu. Item 1/8 SubGHz. Add Item. Menu Style C64, 1 of 6
+  28.6    home: Home screen
+  31.1    screen: * FLIPPADORE 64 BASIC *. 110544 BASIC BYTES FREE. Apps
+  33.5    screen: * FLIPPADORE 64 BASIC *. 109824 BASIC BYTES FREE. Apps, 1 of 11
+  36.7    screen: * FLIPPADORE 64 BASIC *. 109824 BASIC BYTES FREE. GPIO, 6 of 11
+  38.3    home: Home screen
+  48.7    screen: Menu Style C64
+  58.9    screen: Reset Menu. Item 1/8 SubGHz. Add Item. Menu Style List, 1 of 6
+  63.7    home: Home screen
+The settings file was again equal to the copy before.
+
+Section: The flash from screen-reader after the C64 fix, 2026-10-03
+
+The fork's pull request 5 went into screen-reader as 59878faeb, whose parents are f9782c740 and 44e1d8e83 and whose files are identical to 44e1d8e83. Built from a clean tree after wiping the resources and apps: firmware.bin 870,084 bytes, 10,556 spare, md5 2ba9188d7b8608209612b38faf372cd5. ./fbt flash_usb_full: started 18:04:13, the upload ended at 18:06:32; the port went away at 18:06:32 and was back at 18:13:46. sr screen: records 0, no crash. sysctl debug 1 and sysctl log_level debug were set again. info device: 59878fae, dirty false, branch screen-reader, 03-10-2026, API 87.3, Sonar. sr status: volume: 0, Robin's. tools/card_prune.py removed f7-update-mntm-claude-c64-menu-2026-10-03-44e1d8e8 and kept f7-update-1.4.3, f7-update-mntm-012 and f7-update-mntm-screen-reader-59878fae. tools/sr_drive.py: 0 failures.
