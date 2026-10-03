@@ -150,7 +150,7 @@ roadmap, the docs index and the merge routine where the code changed.
   the clip is not on the card and 29 ms when it is, and listing a folder costs 134 ms. Listing
   would save about 9 minutes of a full sync into an empty set, and about 5 of the 39 minutes the
   full sync of 2026-10-01 took over the old clips; an everyday sync of a few new words would gain
-  nothing. Offered for later.
+  nothing. Left out on 2026-10-02, since full syncs are rare.
 - For plan C: the release spec's card reader step counts on Python's tar reader writing no macOS
   metadata files. On this Mac on 2026-10-03, every file and folder written to the card got a
   `._` file beside it, from the `com.apple.provenance` attribute that macOS gives everything a
@@ -428,3 +428,22 @@ Measured: T11's second note, and the espeak set's gaps, whose cause is narrowed 
 found; both are under Not done.
 
 Left: R12's weekly build, due on Monday 5 October.
+
+## Results on the device, 2026-10-02 and 2026-10-03
+
+After the merges of 2026-10-02, the remaining items were done with Robin. The console output and
+the figures are in `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
+
+- F2's two cases, in 778d09f8f on the fork's branch `claude/card-settings-2026-10-02`: with the
+  card's settings file at volume 50 and the device at 30, Robin took the card out and put it
+  back. Before the fix the device stayed at 30, the mount swallowed; after it, it read 50. The
+  format was not tried, for want of a spare card.
+- The espeak set's gaps: a clip's open time follows its place in its folder, which keeps the
+  order the files were made in, and espeak and heart were written alphabetically, so common
+  words sat near the ends. The sync and the pack now write the most spoken words first, and
+  espeak's folders on the card were rewritten that way through the Mac's card reader: the test
+  words' median place fell from 106 to 7, the median open from 51 ms to 25, and three long
+  sentences gave 3 underruns where they gave 18. macOS's `._` files from that write, which the
+  plan C note above describes, were removed through the Flipper.
+- The prune removes the packages of the claude/ work branches too, checked on the card.
+- T11's second note: the faster sync was left out, as recommended, since full syncs are rare.
