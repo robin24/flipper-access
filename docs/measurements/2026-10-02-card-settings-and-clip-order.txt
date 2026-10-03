@@ -234,3 +234,7 @@ After the fix, the same steps:
   58.9    screen: Reset Menu. Item 1/8 SubGHz. Add Item. Menu Style List, 1 of 6
   63.7    home: Home screen
 The settings file was again equal to the copy before.
+
+Section: The flash from screen-reader after the C64 fix, 2026-10-03
+
+The fork's pull request 5 went into screen-reader as 59878faeb, whose parents are f9782c740 and 44e1d8e83 and whose files are identical to 44e1d8e83. Built from a clean tree after wiping the resources and apps: firmware.bin 870,084 bytes, 10,556 spare, md5 2ba9188d7b8608209612b38faf372cd5. ./fbt flash_usb_full: started 18:04:13, the upload ended at 18:06:32; the port went away at 18:06:32 and was back at 18:13:46. sr screen: records 0, no crash. sysctl debug 1 and sysctl log_level debug were set again. info device: 59878fae, dirty false, branch screen-reader, 03-10-2026, API 87.3, Sonar. sr status: volume: 0, Robin's. tools/card_prune.py removed f7-update-mntm-claude-c64-menu-2026-10-03-44e1d8e8 and kept f7-update-1.4.3, f7-update-mntm-012 and f7-update-mntm-screen-reader-59878fae. tools/sr_drive.py: 0 failures.
