@@ -302,14 +302,23 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
   the same as the old Mac's: 10,539 clips, about 74 minutes to make and 39 to send, over the old
   clips. `voice/` holds the record of the card again, whose `.sync-id` is b1c1f2d07f7e630b. The
   words the device had spelled, "noted", "spoken", "samantha" and "espeak", have clips since.
-- The card also holds the sets heart and espeak. espeak's clips open slowly on this card: over
-  25 words a median of 51 ms and up to 84, longer than the 82 ms half of the speech ring, so a
-  sentence of 24 words played with 4 or 5 underruns. samantha's open in a median of 23 ms, up to
-  46, and heart's in 59, up to 76, both without underruns. The cause lies in espeak's files on
-  this card, not in the firmware, and it is not the lookup: a clip that is there is found in
-  espeak's folders as fast as in samantha's. Where the time goes is not pinned down; writing the
-  set's folders fresh might cure it. See `docs/measurements/2026-09-29-review-fixes.txt` and
-  `docs/measurements/2026-10-01-remaining-items.txt`.
+- The card also holds the sets heart and espeak. A clip's open time follows its place in its
+  folder, since the card finds a file by reading the folder's entries in the order the files were
+  made. espeak and heart were written alphabetically on 2026-09-26, so common words such as "the"
+  sat near the ends of their folders: espeak's clips opened in a median of 51 ms, up to 84,
+  longer than the 82 ms half of the speech ring, and long sentences played with underruns. On
+  2026-10-03 espeak's folders were rewritten in clip order, the most spoken words first: a median
+  of 25 ms, and 3 underruns over three long sentences where there were 18. heart is still
+  alphabetical, a median of 59 ms, up to 76, without underruns in the same tests; samantha keeps
+  the order of its first rollout, the firmware's words first, 23 ms. espeak's clips are kept in
+  `backups/espeak-clips-2026-10-03.tar`. See `docs/measurements/2026-10-01-remaining-items.txt`
+  and `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
+- Writing to the card from this Mac through a card reader leaves a `._` file of 4 KB beside every
+  file and folder written: macOS gives everything a process of this session makes the
+  `com.apple.provenance` attribute, which exFAT keeps only in such a file, and which cannot be
+  removed. They double a folder's entries, so remove them afterwards from the Flipper's console,
+  as on 2026-10-03, or write through the Flipper. The microSD adapter's lock slider must be up,
+  towards the contacts, or the Mac mounts the card read-only.
 - The figures behind the hashed folders: finding a file on this exFAT card reads the folder's
   entries one by one, about 0.17 ms per entry. At the rollout on 2026-09-24, with about 2,900
   clips, no folder held more than about 65, and a clip opened in under 40 ms.

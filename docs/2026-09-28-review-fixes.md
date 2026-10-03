@@ -151,10 +151,11 @@ roadmap, the docs index and the merge routine where the code changed.
   would save about 9 minutes of a full sync into an empty set, and about 5 of the 39 minutes the
   full sync of 2026-10-01 took over the old clips; an everyday sync of a few new words would gain
   nothing. Offered for later.
-- The espeak set's gaps on this card, found on 2026-09-29: its clips take twice as long to open as
-  samantha's, though finding them is not slower. The cause lies in the set's files on this card,
-  not in the firmware, and is not pinned down; writing its folders fresh might cure it. Offered
-  for later.
+- For plan C: the release spec's card reader step counts on Python's tar reader writing no macOS
+  metadata files. On this Mac on 2026-10-03, every file and folder written to the card got a
+  `._` file beside it, from the `com.apple.provenance` attribute that macOS gives everything a
+  process makes and exFAT keeps only in such a file. The install script will have to remove them
+  afterwards, which leaves gaps in the folders, or unpack on the device.
 - R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
   plan C.
   Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
