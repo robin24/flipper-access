@@ -582,12 +582,10 @@ resends everything.
   Without a card most main apps are missing too, since they load from the card, as in Momentum.
 - Momentum keeps its settings on the card, in `/ext/.int`, where `/int` leads, and the device's
   name too, in `/ext/dolphin/name.settings`. Without a card the device starts with the default
-  settings, the reader at volume 80, and a change made then is not kept. When the card goes back
-  in, your settings return at once, and a chord in the moment before that saves nothing.
-- Two cases need a restart before you change a setting. After formatting the card on the
-  Flipper, no change is saved until the next restart. After changing to another card while the
-  Flipper runs, the settings of the card before stay in use, and a change would save them onto
-  the new card.
+  settings, the reader at volume 80, and a change made then is not kept. When a card goes in,
+  this one or another, its settings are read at once, and a chord in the moment before that saves
+  nothing. After a card is formatted on the Flipper, the settings in use are written to it with
+  the next change; that has not been tried on a device.
 - The screen shown after a firmware update is not read. Back closes it.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
 - Twice, after a long idle, the first OK that the scripted driver `tools/sr_drive.py` sent on the

@@ -33,11 +33,16 @@ Firmware:
   first fix added at boot without a card found no file. Without a card nothing can be saved
   either. The gap was the moment a card goes in after a boot without one, before the settings are
   read from it: a chord then wrote the defaults over them. A host test holds the new rule, and
-  failed against the first fix. Two cases stay open, and the README's Known limits name them:
-  after a change to another card while the device runs, Momentum does not read the new card's
-  settings, since skip_double_mount in furi/flipper.c swallows that mount, so a save writes the
-  old card's settings onto it; and after formatting the card on the device, nothing is saved
-  until a restart, since no mount follows the format.
+  failed against the first fix. Two cases stayed open until 2026-10-02, when both were fixed.
+  After a change to another card while the device ran, Momentum did not read the new card's
+  settings: skip_double_mount in furi/flipper.c, meant for the boot's mount event, swallowed the
+  first real mount, since Momentum's 7db15e838 sends no mount event for a card mounted at boot,
+  so a save wrote the old card's settings onto the new one. Now a card taken out clears that skip
+  and stops the saves until the next card's settings are read. After a format on the device no
+  mount followed, so after a boot with an unusable card nothing was saved until a restart; now a
+  format counts as the card taken out and put in. A host test holds the card change, and failed
+  against the code before; on the device the card change was checked before and after, the format
+  was not, since no spare card was at hand.
 - S1: the NFC-V listener keeps the speaker from its first exchange until it ends.
 - F3: the console's `input send` has its own chord state, apart from the keys'.
 - G1 to G8: the keyboards read their prompt, field and keys, name their special keys, and never
@@ -150,8 +155,6 @@ roadmap, the docs index and the merge routine where the code changed.
   samantha's, though finding them is not slower. The cause lies in the set's files on this card,
   not in the firmware, and is not pinned down; writing its folders fresh might cure it. Offered
   for later.
-- F2's two open cases, a card changed while the device runs and a card formatted on it, stay as
-  the README's Known limits describe them.
 - R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
   plan C.
   Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
