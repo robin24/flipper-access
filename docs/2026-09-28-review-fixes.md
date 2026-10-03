@@ -446,6 +446,9 @@ the figures are in `docs/measurements/2026-10-02-card-settings-and-clip-order.tx
   words' median place fell from 106 to 7, the median open from 51 ms to 25, and three long
   sentences gave 3 underruns where they gave 18. macOS's `._` files from that write, which the
   plan C note above describes, were removed through the Flipper.
+- The heart set, the same day: its most spoken words, about 24 a folder, were moved to the
+  fronts of its folders through the Flipper by renames, which copy no data and leave no macOS
+  files. The median open fell from 55 ms to 26, and the long sentences' 3 underruns to none.
 - The C64 menu style, in 44e1d8e83 on the fork's branch `claude/c64-menu-2026-10-03`: its
   focus read "0.Apps, 1 of 11" before the fix and "Apps, 1 of 11" after it.
 - The prune removes the packages of the claude/ work branches too, checked on the card.

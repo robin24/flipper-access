@@ -311,9 +311,11 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
   sat near the ends of their folders: espeak's clips opened in a median of 51 ms, up to 84,
   longer than the 82 ms half of the speech ring, and long sentences played with underruns. On
   2026-10-03 espeak's folders were rewritten in clip order, the most spoken words first: a median
-  of 25 ms, and 3 underruns over three long sentences where there were 18. heart is still
-  alphabetical, a median of 59 ms, up to 76; it had no underruns in the tests of 2026-10-01.
-  samantha keeps the order of its first rollout, the firmware's words first, 23 ms. espeak's clips are kept in
+  of 25 ms, and 3 underruns over three long sentences where there were 18. The same day heart's
+  most spoken words, about 24 a folder, were moved to the fronts of its folders through the
+  Flipper by renames, which copy no data and leave no macOS files: a median of 26 ms where it was
+  55, and no underruns where there were 3. samantha keeps the order of its first rollout, the
+  firmware's words first, 23 ms. espeak's clips are kept in
   `backups/espeak-clips-2026-10-03.tar`. See `docs/measurements/2026-10-01-remaining-items.txt`
   and `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
 - Writing to the card from this Mac through a card reader leaves a `._` file of 4 KB beside every
