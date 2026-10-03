@@ -142,3 +142,11 @@ espeak: median 25 ms, mean 29 ms, max 79 ms, over 40 ms: 3
 espeak: underruns 3 over 3 sentences of 28 words
 
 The words still far down, "whole", "piece" and "every", are not in the firmware's own texts, so they come after it, sorted. The clips are kept on the Mac in backups/espeak-clips-2026-10-03.tar, in the card's folders, outside git.
+
+Section: The flash from screen-reader, 2026-10-03
+
+The fork's pull request 4 went into screen-reader as f9782c740, whose parents are bb3a635be and 778d09f8f and whose files are identical to 778d09f8f. Built from a clean tree after wiping the resources and apps: firmware.bin 870,076 bytes, 10,564 spare, md5 8fa2e72867cdea7bb300896610becb8b, 24 bytes fewer than 778d09f8f for the shorter branch name. ./fbt flash_usb_full: started 16:10:29, the upload ended at 16:12:51; the port went away at 16:12:51 and was back at 16:20:08. sr screen: records 0, no crash. sysctl debug 1 and sysctl log_level debug were set again. info device: f9782c74, dirty false, branch screen-reader, 03-10-2026, API 87.3, Sonar. sr status: volume: 30. tools/card_prune.py:
+running build f9782c74, version mntm-dev; 4 folders in /ext/update; keeping 3: f7-update-1.4.3, f7-update-mntm-012, f7-update-mntm-screen-reader-f9782c74
+removing f7-update-mntm-claude-card-settings-2026-10-02-778d09f8
+removed 1 folders
+tools/sr_drive.py: 0 failures.
