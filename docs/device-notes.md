@@ -357,6 +357,8 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- 44e1d8e83, the C64 menu style's numbers, on the branch `claude/c64-menu-2026-10-03`, on
+  2026-10-03: 870,100 bytes, 10,540 spare.
 - f9782c740, the merge of the settings fix into `screen-reader`, on 2026-10-03: 870,076 bytes,
   10,564 spare, 24 fewer than 778d09f8f for the shorter branch name.
 - 778d09f8f, the settings read after a card change or a format, on the branch
