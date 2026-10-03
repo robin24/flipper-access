@@ -107,8 +107,8 @@ These are the working notes for the one device Sonar is developed on, and the de
 - `tests/fbt/test_card_prune.py`: a plain Python test of `tools/card_prune.py`'s rule over
   synthetic folder lists.
 - `tools/card_prune.py`: removes the fork's old update packages from `/ext/update` on the card,
-  keeping the running build's folder and every package of another firmware, such as the two
-  rollback packages; `--dry` lists what would go.
+  those of the claude/ work branches included, keeping the running build's folder and every
+  package of another firmware, such as the two rollback packages; `--dry` lists what would go.
 - `tools/flash_headroom.sh`: the image size against the flash the BLE stack leaves free; see
   Useful commands.
 - `tools/momentum-base.txt`: the Momentum commit the fork builds on, the merged release tag's.
