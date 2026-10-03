@@ -202,9 +202,16 @@ Steps:
    - Through a card reader, about a minute for the voice: the script first writes a small
      marker file to the card over USB, then asks the user to take the microSD card out of the
      Flipper and put it into the computer's card reader. It finds the card among the mounted
-     volumes by that marker, unpacks the pack onto it with Python's own tar reader, which
-     writes no macOS metadata files, removes the marker, ejects the card, and asks the user to
-     put it back into the Flipper, then waits until the console sees the card again. When no
+     volumes by that marker, unpacks the pack onto it with Python's own tar reader, removes the
+     marker, ejects the card, and asks the user to put it back into the Flipper, then waits
+     until the console sees the card again. The tar reader copies no metadata, but macOS still
+     puts a `._` file of 4 KB beside every file and folder written: it gives everything a
+     process makes the `com.apple.provenance` attribute, which exFAT keeps only in such a file,
+     and which cannot be removed (seen on 2026-10-03,
+     `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`). So the script deletes
+     every `._` file under the set's folder: from the Mac before the eject, which is untried, or
+     through the console afterwards, as was done on 2026-10-03. Their free places stay between
+     the clips; with them, espeak's clips opened in a median of 25 ms. When no
      card with the marker appears within a few minutes, the script says so and offers USB.
    - Over USB: upload the pack as one file to `/ext`, unpack it with
      `storage extract /ext/<pack>.tar /ext`, and remove the tar (the archive lever below).
