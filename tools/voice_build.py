@@ -242,8 +242,9 @@ def clip_order(words, first):
     entries in the order the files were made, and the device finds a clip by reading its folder's
     entries one by one, so a word made early opens sooner: written alphabetically, "the" and
     "word" sat near the ends of their folders and took about 25 ms longer to open
-    (docs/measurements/2026-10-01-remaining-items.txt). A file sent again keeps the place of the
-    one it replaces, so only a new folder takes this order."""
+    (docs/measurements/2026-10-01-remaining-items.txt). A file sent again goes into the first free
+    place in its folder, its old one in a folder without gaps, and a pack unpacked over a set
+    rewrites its files in place, so only a new folder takes this order in full."""
     words = set(words)
     head = [w for w in dict.fromkeys(first) if w in words]
     return head + sorted(words - set(head))

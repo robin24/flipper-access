@@ -358,7 +358,8 @@ In a set's folder, each clip is a file `<hh>/<word>.raw`, where `<hh>` is one of
 named by two hex digits: the word's FNV-1a hash modulo 64. Finding a file on the card means
 reading its folder's entries one by one, in the order the files were made, so many small folders
 keep every clip quick to open, and the sync and the release pack write the most spoken words
-first: the base list, then the firmware's own words by how often its texts use them. A
+first into a new folder: the base list, then the firmware's own words by how often its texts use
+them. A set already on the card keeps the order it was written in. A
 clip is raw unsigned 8-bit mono sound at 16,000 samples per second, where 128 is silence.
 
 Beside the clip folders are `voice.txt`, the generator's settings line, which `sr voice status`

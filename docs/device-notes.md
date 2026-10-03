@@ -309,15 +309,16 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
   longer than the 82 ms half of the speech ring, and long sentences played with underruns. On
   2026-10-03 espeak's folders were rewritten in clip order, the most spoken words first: a median
   of 25 ms, and 3 underruns over three long sentences where there were 18. heart is still
-  alphabetical, a median of 59 ms, up to 76, without underruns in the same tests; samantha keeps
-  the order of its first rollout, the firmware's words first, 23 ms. espeak's clips are kept in
+  alphabetical, a median of 59 ms, up to 76; it had no underruns in the tests of 2026-10-01.
+  samantha keeps the order of its first rollout, the firmware's words first, 23 ms. espeak's clips are kept in
   `backups/espeak-clips-2026-10-03.tar`. See `docs/measurements/2026-10-01-remaining-items.txt`
   and `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
 - Writing to the card from this Mac through a card reader leaves a `._` file of 4 KB beside every
   file and folder written: macOS gives everything a process of this session makes the
   `com.apple.provenance` attribute, which exFAT keeps only in such a file, and which cannot be
-  removed. They double a folder's entries, so remove them afterwards from the Flipper's console,
-  as on 2026-10-03, or write through the Flipper. The microSD adapter's lock slider must be up,
+  removed. They take 4 KB each and double a folder's entries. Removing them from the Flipper's
+  console, as on 2026-10-03, frees the space, but the lookup still walks their free places, so
+  write through the Flipper where it matters. The microSD adapter's lock slider must be up,
   towards the contacts, or the Mac mounts the card read-only.
 - The figures behind the hashed folders: finding a file on this exFAT card reads the folder's
   entries one by one, about 0.17 ms per entry. At the rollout on 2026-09-24, with about 2,900
