@@ -15,11 +15,14 @@ These are the working notes for the one device Sonar is developed on, and the de
   branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings are
   saved only once they were read from the card. On 2026-10-01 it got f37f06887 and then
   0294fe871, on the fork's branch `claude/reading-fixes-2026-10-01`: that day's screen-reading
-  fixes, then the crash address of hardware faults. Since 2026-10-02 it runs ea05c6d94 on the same
-  branch, with the fixes after that day's review. It was flashed complete with
+  fixes, then the crash address of hardware faults. On 2026-10-02 it got ea05c6d94 on the same
+  branch, with the fixes after that day's review, then 778d09f8f on the branch
+  `claude/card-settings-2026-10-02`, with the settings read after a card change or a format.
+  Since 2026-10-03 it runs f9782c740, the merge of that branch into `screen-reader`, whose files
+  are 778d09f8f's, so the About screen names screen-reader again. It was flashed complete with
   `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
-  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,012
-  bytes, 10,628 spare below the BLE stack. The apps on the card, the Passport among them,
+  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,076
+  bytes, 10,564 spare below the BLE stack. The apps on the card, the Passport among them,
   came with it. The earlier images are listed under Useful commands. The checks on the device
   after the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`, and those of
   2026-10-01 in `docs/measurements/2026-10-01-remaining-items.txt`.
@@ -354,6 +357,11 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- f9782c740, the merge of the settings fix into `screen-reader`, on 2026-10-03: 870,076 bytes,
+  10,564 spare, 24 fewer than 778d09f8f for the shorter branch name.
+- 778d09f8f, the settings read after a card change or a format, on the branch
+  `claude/card-settings-2026-10-02`, on 2026-10-02: 870,100 bytes, 10,540 spare, 88 bytes over
+  ea05c6d94.
 - ea05c6d94, the fixes after the review of 2026-10-01 to the crash address, the line breaks and
   the file browser, on 2026-10-02: 870,012 bytes, 10,628 spare, 136 bytes over 0294fe871.
 - 0294fe871, the crash address of hardware faults, on the branch
