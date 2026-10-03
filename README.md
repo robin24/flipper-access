@@ -356,7 +356,10 @@ settings' Voice row or with `sr voice use`; Auto, the default, is the first set 
 
 In a set's folder, each clip is a file `<hh>/<word>.raw`, where `<hh>` is one of 64 folders,
 named by two hex digits: the word's FNV-1a hash modulo 64. Finding a file on the card means
-reading its folder's entries one by one, so many small folders keep every clip quick to open. A
+reading its folder's entries one by one, in the order the files were made, so many small folders
+keep every clip quick to open, and the sync and the release pack write the most spoken words
+first into a new folder: the base list, then the firmware's own words by how often its texts use
+them. A set already on the card keeps the order it was written in. A
 clip is raw unsigned 8-bit mono sound at 16,000 samples per second, where 128 is silence.
 
 Beside the clip folders are `voice.txt`, the generator's settings line, which `sr voice status`
@@ -582,12 +585,10 @@ resends everything.
   Without a card most main apps are missing too, since they load from the card, as in Momentum.
 - Momentum keeps its settings on the card, in `/ext/.int`, where `/int` leads, and the device's
   name too, in `/ext/dolphin/name.settings`. Without a card the device starts with the default
-  settings, the reader at volume 80, and a change made then is not kept. When the card goes back
-  in, your settings return at once, and a chord in the moment before that saves nothing.
-- Two cases need a restart before you change a setting. After formatting the card on the
-  Flipper, no change is saved until the next restart. After changing to another card while the
-  Flipper runs, the settings of the card before stay in use, and a change would save them onto
-  the new card.
+  settings, the reader at volume 80, and a change made then is not kept. When a card goes in,
+  this one or another, its settings are read at once, and a chord in the moment before that saves
+  nothing. After a card is formatted on the Flipper, the settings in use are written to it with
+  the next change; that has not been tried on a device.
 - The screen shown after a firmware update is not read. Back closes it.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
 - Twice, after a long idle, the first OK that the scripted driver `tools/sr_drive.py` sent on the

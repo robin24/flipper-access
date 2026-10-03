@@ -1,0 +1,152 @@
+The settings after a card change or a format, the order of the clips in the card's folders, and the espeak set rewritten in that order, 2026-10-02 and 2026-10-03
+
+Claude ran the console; Robin took the card out and put it back when asked, and moved it to the Mac's card reader and back.
+
+Firmware: ea05c6d94 at the start, the merge of the day before; then 778d09f8f on the fork's branch claude/card-settings-2026-10-02. Release configuration, fbt's defaults (COMPACT=1, DEBUG=0).
+Device: Delphi on /dev/cu.usbmodemflip_Delphi1, the samantha set in use, espeak and heart beside it.
+Console replies are verbatim from the console tools; a time in brackets is the shell's.
+
+Section: The merges
+
+Both builds of the project's pull request passed first. The fork's pull request 3 went into screen-reader as bb3a635be, whose parents are 1787a6b61 and ea05c6d94 and whose files are identical to ea05c6d94, the build on the device; the project's pull request 3 went into main as dd12c506b, whose parents are c3f928e and 2bf4cc8, and which records ea05c6d94.
+
+Section: Where the clips sit in their folders
+
+The espeak set's clips open in twice the time of samantha's, though looking a clip up from the console is not slower (docs/measurements/2026-10-01-remaining-items.txt). speech.c times storage_file_open alone, no read. A folder on this exFAT card is searched entry by entry, in the order the files were made, so the place of a word in its folder's listing, which storage list gives in that order, is what the open pays for. The 25 words of the open-time test, each with its place among the folder's files:
+
+word      folder samantha       espeak         heart
+the       1c      31 of 179     153 of 176     153 of 176
+screen    11      41 of 187     143 of 183     143 of 183
+reader    16      24 of 145     100 of 143     100 of 143
+reads     02      41 of 163     121 of 160     121 of 160
+every     04      81 of 157      50 of 149      50 of 149
+word      3d      43 of 160     152 of 152     152 of 152
+on        10      28 of 173     102 of 165     102 of 165
+this      01      28 of 142     123 of 138     123 of 138
+long      13      26 of 171      88 of 168      88 of 168
+line      27      16 of 152      75 of 150      75 of 150
+and       26       2 of 171       7 of 167       7 of 167
+then      36     157 of 169     146 of 164     146 of 164
+it        10      21 of 173      74 of 165      74 of 165
+stops     22      40 of 202     151 of 198     151 of 198
+after     09       2 of 186       4 of 180       4 of 180
+last      19      24 of 153      74 of 142      74 of 142
+whole     34     166 of 172     159 of 169     159 of 169
+so        17      31 of 152     124 of 150     124 of 150
+that      2c      41 of 173     147 of 171     147 of 171
+no        3a      25 of 149      83 of 147      83 of 147
+piece     05     125 of 167     107 of 162     107 of 162
+of        28      25 of 173     106 of 163     106 of 163
+a         2c       1 of 173       1 of 171       1 of 171
+is        15      25 of 181      78 of 173      78 of 173
+spelled   20      61 of 182     145 of 181     145 of 181
+samantha: median position 28, mean 44
+espeak: median position 106, mean 101
+heart: median position 106, mean 101
+
+espeak and heart were written in alphabetical order on 2026-09-26, so "the", "word" and "whole" came near the ends of their folders and "a", "after" and "and" near the starts. samantha's folders keep the order of the first rollout of 2026-09-24, which wrote the firmware's own words before the apps'; the rebuild of 2026-10-01 replaced each clip in its place. The test words sit 78 places further down in espeak's folders at the median, and their opens took about 28 ms longer. The rewrite below puts the most spoken words first and measures again.
+
+Section: The settings after a card change or a format
+
+The cause of the card change, from the code. furi/flipper.c sets skip_double_mount at a boot with a card, after loading the settings itself, to skip the mount event the storage service sent for that card. Since Momentum's 7db15e838, "Storage: Dont send mount event if SD mounted at boot", no such event comes, so the flag stays set and swallows the first real mount after the boot: the settings of a card put in are never read, and a save writes the ones in RAM over them. A format on the device changes the card's state inside sd_format_card, between two ticks of the storage service, so no unmount or mount event follows at all.
+
+Before the fix, on ea05c6d9. The card's settings file was set to sr_volume 50 from the console (a read of /ext/.int/.momentum_settings.txt, that one line changed, written back; every other line the same), while the device held 30:
+sr status: volume: 30
+Robin took the card out:
+storage info /ext: Storage error: filesystem not ready
+sr status: volume: 30
+and put it back:
+storage info /ext: Type: EXFAT
+sr status: volume: 30
+storage read /int/.momentum_settings.txt: sr_volume: 50
+[18:00:49] sr status: volume: 30
+The mount was swallowed. The file was set back to 30, and the whole file compared equal to the copy taken before the test.
+
+The fix, three commits on the fork's branch claude/card-settings-2026-10-02, each built with the headroom check, the host tests and lint_all:
+02682e9c3, settings.c's momentum_settings_card_removed: nothing is saved after the card leaves until a card's settings are read again: 870,012 bytes, 10,628 spare. The new host test, a card changed while running with a chord before the new card's settings are read: 22 checks, 2 failures with the function empty, 0 with it.
+42c4ad0d9, the unmount: the storage service calls flipper_mount_callback for it too, which clears skip_double_mount and calls momentum_settings_card_removed: 870,068 bytes, 10,572 spare.
+778d09f8f, the format: a successful one counts as an unmount, and the next tick announces the mount: 870,100 bytes, 10,540 spare, md5 9bfd577e5e79d06b92f7266700d401fe, built from a clean tree after wiping the resources and apps.
+
+The flash, ./fbt flash_usb_full: the upload ended at 18:14:20; the port went away at 18:14:21 and was back at 18:21:22. sr screen: records 0, no crash. sysctl debug 1 and sysctl log_level debug were set again. info device: 778d09f8, dirty false, branch claude/card-settings-2026-10-02, 02-10-2026, API 87.3, Sonar. sr status: volume: 30. tools/card_prune.py, with the work branches' prefix:
+would remove f7-update-mntm-claude-reading-fixes-2026-10-01-ea05c6d9
+would remove 1 folders
+running build 778d09f8, version mntm-dev; 4 folders in /ext/update; keeping 3: f7-update-1.4.3, f7-update-mntm-012, f7-update-mntm-claude-card-settings-2026-10-02-778d09f8
+removing f7-update-mntm-claude-reading-fixes-2026-10-01-ea05c6d9
+removed 1 folders
+
+After the fix, the same test. The settings file was as before the tests; sr_volume set to 50 in it, 30 in the device:
+sr status: volume: 30
+Robin took the card out:
+storage info /ext: Storage error: filesystem not ready
+sr status: volume: 30
+and put it back:
+[18:32:14]
+storage info /ext: Type: EXFAT
+sr status: volume: 50
+storage read /int/.momentum_settings.txt: sr_volume: 50
+The card's settings were read. sr volume 30 set Robin's level again, in the device and in the file, and the whole file compared equal to the copy taken before the tests.
+
+The format was not tried: it would wipe the card, and no spare card was at hand.
+
+Section: The clip order
+
+tools/voice_build.py's clip_order and spoken_first: the sync and tools/voice_pack.py write a set's clips with the base list first (tools/voice_words.txt: digits, letters, the reader's own words), then the firmware's own words by how often its texts use them, which the extraction now counts, ties sorted, then every other word sorted. The run with --extract keeps that list in the set's manifest.json as "first", for the runs without it and for the pack. A file sent again goes into the first free place in its folder (FatFs's dir_alloc), its old one in a folder without gaps, and a pack unpacked over an installed set rewrites its files in place, so only a new folder, a new card or a pack into an empty set takes the order in full; a --sync-all leaves a set already on the card in its order. New checks: clip_order and spoken_first, the extraction's counts, the sync's order of sends, and the pack's order of clips; against the tools before, the voice build test stopped at the missing clip_order, and the pack's check failed with the clips in alphabetical order. After: voice build 156 of 156 checks passed, voice pack 29 of 29.
+
+The prune: tools/card_prune.py counts the packages of the claude/ work branches as the fork's own; its new check failed against the prefixes before. Its first run is in the section above.
+
+Section: The espeak set rewritten in clip order
+
+Before, on 2026-10-02 on 778d09f8, from the console, the 25 words of the open-time test and three sentences of 28 words:
+espeak: median 51 ms, mean 54 ms, max 82 ms, over 40 ms: 21
+espeak: underruns 18 over 3 sentences of 28 words
+
+The clips exist only on the card, so they were copied to the Mac first. Over USB, through the storage protocol, at about 7 clips a second, the copy stopped after 3,833 clips: the device sent nothing for 30 seconds in the middle of a read_chunks. The device was up since the flash and answered at once afterwards, and the voice came back on; most likely a byte was lost on the link, from which the protocol cannot recover. A retry with a fresh session went on from there, but at Robin's suggestion the card went into the Mac's card reader instead, on 2026-10-03.
+
+The card came up read-only ("Media Read-Only: Yes"): the microSD adapter's lock slider. Unlocked, the Mac listed all 64 folders with the same files in the same order as the Flipper's storage list, so the Mac sees the directory order too. card_rewrite.py, a scratch script not kept in the repository, copied the clips the USB copy had not reached, 5,348, checked every size, then rewrote each folder: every file removed, the folder removed and made again, the clips written in clip order, and the folder's listing checked against the order and the sizes. 10,526 clips in 163 s.
+
+macOS left a ._ file of 4,096 bytes beside every file and folder it wrote: 10,526 in the clip folders, 64 beside them, and a .fseventsd folder at the card's root. The cause is the com.apple.provenance attribute, which this macOS gives every file a process of this session makes, and which exFAT can only keep in such a file; an exFAT disk image showed the same for Python's open() and for /bin/mkdir and /bin/cp, and xattr -d and -c cannot remove it. With them, the opens were:
+espeak: median 26 ms, mean 31 ms, max 87 ms, over 40 ms: 5
+dot_clean_card.py, another scratch script, removed them through the Flipper, every name starting with ._ in the set and the folder .fseventsd, 10,608 files in 592 s; none is left. Their places stay as free entries between the clips.
+
+After, on 2026-10-03:
+word      folder samantha       espeak         heart         
+the       1c      31 of 179       5 of 176     153 of 176    
+screen    11      41 of 187       2 of 183     143 of 183    
+reader    16      24 of 145       3 of 143     100 of 143    
+reads     02      41 of 163      17 of 160     121 of 160    
+every     04      81 of 157      78 of 149      50 of 149    
+word      3d      43 of 160      25 of 152     152 of 152    
+on        10      28 of 173       7 of 165     102 of 165    
+this      01      28 of 142       1 of 138     123 of 138    
+long      13      26 of 171       6 of 168      88 of 168    
+line      27      16 of 152       2 of 150      75 of 150    
+and       26       2 of 171       1 of 167       7 of 167    
+then      36     157 of 169      39 of 164     146 of 164    
+it        10      21 of 173       8 of 165      74 of 165    
+stops     22      40 of 202      24 of 198     151 of 198    
+after     09       2 of 186      11 of 180       4 of 180    
+last      19      24 of 153       2 of 142      74 of 142    
+whole     34     166 of 172     164 of 169     159 of 169    
+so        17      31 of 152      13 of 150     124 of 150    
+that      2c      41 of 173      18 of 171     147 of 171    
+no        3a      25 of 149       3 of 147      83 of 147    
+piece     05     125 of 167     121 of 162     107 of 162    
+of        28      25 of 173       1 of 163     106 of 163    
+a         2c       1 of 173       1 of 171       1 of 171    
+is        15      25 of 181       6 of 173      78 of 173    
+spelled   20      61 of 182      30 of 181     145 of 181    
+samantha: median position 28, mean 44
+espeak: median position 7, mean 24
+heart: median position 106, mean 101
+espeak: median 25 ms, mean 29 ms, max 79 ms, over 40 ms: 3
+espeak: underruns 3 over 3 sentences of 28 words
+
+The words still far down, "whole", "piece" and "every", are not in the firmware's own texts, so they come after it, sorted. The clips are kept on the Mac in backups/espeak-clips-2026-10-03.tar, in the card's folders, outside git.
+
+Section: The flash from screen-reader, 2026-10-03
+
+The fork's pull request 4 went into screen-reader as f9782c740, whose parents are bb3a635be and 778d09f8f and whose files are identical to 778d09f8f. Built from a clean tree after wiping the resources and apps: firmware.bin 870,076 bytes, 10,564 spare, md5 8fa2e72867cdea7bb300896610becb8b, 24 bytes fewer than 778d09f8f for the shorter branch name. ./fbt flash_usb_full: started 16:10:29, the upload ended at 16:12:51; the port went away at 16:12:51 and was back at 16:20:08. sr screen: records 0, no crash. sysctl debug 1 and sysctl log_level debug were set again. info device: f9782c74, dirty false, branch screen-reader, 03-10-2026, API 87.3, Sonar. sr status: volume: 30. tools/card_prune.py:
+running build f9782c74, version mntm-dev; 4 folders in /ext/update; keeping 3: f7-update-1.4.3, f7-update-mntm-012, f7-update-mntm-screen-reader-f9782c74
+removing f7-update-mntm-claude-card-settings-2026-10-02-778d09f8
+removed 1 folders
+tools/sr_drive.py: 0 failures.

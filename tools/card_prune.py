@@ -7,7 +7,8 @@ Every `./fbt flash_usb` and `flash_usb_full` leaves its package in /ext/update/<
 the updater's own backup.tar of internal storage inside, and nothing removes them. The rule:
 only the fork's own builds are candidates, the folders whose names start with OWN_PREFIXES
 (f7-update-sonar- for releases and continuous builds, f7-update-mntm-screen-reader- for builds
-on the branch, f7-update-mntm-HEAD- for builds on a detached HEAD, which a fresh clone gives).
+on the branch, f7-update-mntm-HEAD- for builds on a detached HEAD, which a fresh clone gives,
+f7-update-mntm-claude- for builds on the claude/ work branches).
 Every other folder stays: a package of another firmware, such as f7-update-1.4.3,
 f7-update-mntm-012 or an Unleashed one, may be someone's way back, and is never touched. Of the
 candidates, the running build's folder stays: its name ends with "-" and the
@@ -30,7 +31,7 @@ except (SystemExit, ImportError):  # flipper_cli exits without pyserial; plan() 
     find_port = open_cli = run = None
 
 UPDATE_DIR = "/ext/update"
-OWN_PREFIXES = ("f7-update-sonar-", "f7-update-mntm-screen-reader-", "f7-update-mntm-HEAD-")
+OWN_PREFIXES = ("f7-update-sonar-", "f7-update-mntm-screen-reader-", "f7-update-mntm-HEAD-", "f7-update-mntm-claude-")
 DEV_VERSION = "mntm-dev"  # the firmware.version of every build that is not on a tag
 
 

@@ -33,11 +33,16 @@ Firmware:
   first fix added at boot without a card found no file. Without a card nothing can be saved
   either. The gap was the moment a card goes in after a boot without one, before the settings are
   read from it: a chord then wrote the defaults over them. A host test holds the new rule, and
-  failed against the first fix. Two cases stay open, and the README's Known limits name them:
-  after a change to another card while the device runs, Momentum does not read the new card's
-  settings, since skip_double_mount in furi/flipper.c swallows that mount, so a save writes the
-  old card's settings onto it; and after formatting the card on the device, nothing is saved
-  until a restart, since no mount follows the format.
+  failed against the first fix. Two cases stayed open until 2026-10-02, when both were fixed.
+  After a change to another card while the device ran, Momentum did not read the new card's
+  settings: skip_double_mount in furi/flipper.c, meant for the boot's mount event, swallowed the
+  first real mount, since Momentum's 7db15e838 sends no mount event for a card mounted at boot,
+  so a save wrote the old card's settings onto the new one. Now a card taken out clears that skip
+  and stops the saves until the next card's settings are read. After a format on the device no
+  mount followed, so after a boot with an unusable card nothing was saved until a restart; now a
+  format counts as the card taken out and put in. A host test holds the card change, and failed
+  against the code before; on the device the card change was checked before and after, the format
+  was not, since no spare card was at hand.
 - S1: the NFC-V listener keeps the speaker from its first exchange until it ends.
 - F3: the console's `input send` has its own chord state, apart from the keys'.
 - G1 to G8: the keyboards read their prompt, field and keys, name their special keys, and never
@@ -145,13 +150,12 @@ roadmap, the docs index and the merge routine where the code changed.
   the clip is not on the card and 29 ms when it is, and listing a folder costs 134 ms. Listing
   would save about 9 minutes of a full sync into an empty set, and about 5 of the 39 minutes the
   full sync of 2026-10-01 took over the old clips; an everyday sync of a few new words would gain
-  nothing. Offered for later.
-- The espeak set's gaps on this card, found on 2026-09-29: its clips take twice as long to open as
-  samantha's, though finding them is not slower. The cause lies in the set's files on this card,
-  not in the firmware, and is not pinned down; writing its folders fresh might cure it. Offered
-  for later.
-- F2's two open cases, a card changed while the device runs and a card formatted on it, stay as
-  the README's Known limits describe them.
+  nothing. Left out on 2026-10-02, since full syncs are rare.
+- For plan C: the release spec's card reader step counts on Python's tar reader writing no macOS
+  metadata files. On this Mac on 2026-10-03, every file and folder written to the card got a
+  `._` file beside it, from the `com.apple.provenance` attribute that macOS gives everything a
+  process makes and exFAT keeps only in such a file. The install script will have to remove them
+  afterwards, which leaves gaps in the folders, or unpack on the device.
 - R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
   plan C.
   Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
@@ -424,3 +428,22 @@ Measured: T11's second note, and the espeak set's gaps, whose cause is narrowed 
 found; both are under Not done.
 
 Left: R12's weekly build, due on Monday 5 October.
+
+## Results on the device, 2026-10-02 and 2026-10-03
+
+After the merges of 2026-10-02, the remaining items were done with Robin. The console output and
+the figures are in `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
+
+- F2's two cases, in 778d09f8f on the fork's branch `claude/card-settings-2026-10-02`: with the
+  card's settings file at volume 50 and the device at 30, Robin took the card out and put it
+  back. Before the fix the device stayed at 30, the mount swallowed; after it, it read 50. The
+  format was not tried, for want of a spare card.
+- The espeak set's gaps: a clip's open time follows its place in its folder, which keeps the
+  order the files were made in, and espeak and heart were written alphabetically, so common
+  words sat near the ends. The sync and the pack now write the most spoken words first, and
+  espeak's folders on the card were rewritten that way through the Mac's card reader: the test
+  words' median place fell from 106 to 7, the median open from 51 ms to 25, and three long
+  sentences gave 3 underruns where they gave 18. macOS's `._` files from that write, which the
+  plan C note above describes, were removed through the Flipper.
+- The prune removes the packages of the claude/ work branches too, checked on the card.
+- T11's second note: the faster sync was left out, as recommended, since full syncs are rare.

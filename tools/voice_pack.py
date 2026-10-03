@@ -30,7 +30,7 @@ import tarfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
-from voice_build import bucket, initial, set_local_dir, set_valid  # noqa: E402
+from voice_build import bucket, clip_order, initial, set_local_dir, set_valid  # noqa: E402
 
 LICENCES = {
     "kokoro": (
@@ -98,7 +98,7 @@ def pack(set_dir, set_name, version, out_path, personal=False):
     if settings["backend"] == "say" and not personal:
         sys.exit("a set made with the macOS voices is for the maker's device only (Apple's licence); --personal packs it anyway")
     prefix = f"sr/voices/{set_name}"
-    words = sorted(manifest["words"])
+    words = clip_order(manifest["words"], manifest.get("first", ()))
     mtime = fixed_time()
     count = 0
     # Built next to out_path, not at it: a word whose clip went missing (sys.exit, below) must
@@ -122,8 +122,8 @@ def pack(set_dir, set_name, version, out_path, personal=False):
             tar.addfile(info, io.BytesIO(data))
             # On the Mac a set keeps its clips under <initial>/<word>.raw (voice_build.initial);
             # the pack, like the card and the sync, uses the 64 hashed folders the firmware looks
-            # in (voice_build.bucket, the same FNV-1a modulo 64), words sorted for a deterministic
-            # archive.
+            # in (voice_build.bucket, the same FNV-1a modulo 64), words in clip order, the most
+            # spoken first, as the device's unpacker then makes them (voice_build.clip_order).
             for word in words:
                 local = os.path.join(set_dir, initial(word), word + ".raw")
                 if not os.path.exists(local):

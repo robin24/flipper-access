@@ -236,6 +236,27 @@ def initial(word):
     return c if c.isalnum() else "_"
 
 
+def clip_order(words, first):
+    """The order the clips go onto the card, by a sync or a pack: the words of `first`, the most
+    spoken (spoken_first), in its order, then the rest sorted. A folder on the card keeps its
+    entries in the order the files were made, and the device finds a clip by reading its folder's
+    entries one by one, so a word made early opens sooner: written alphabetically, "the" and
+    "word" sat near the ends of their folders and took about 25 ms longer to open
+    (docs/measurements/2026-10-01-remaining-items.txt). A file sent again goes into the first free
+    place in its folder, its old one in a folder without gaps, and a pack unpacked over a set
+    rewrites its files in place, so only a new folder takes this order in full."""
+    words = set(words)
+    head = [w for w in dict.fromkeys(first) if w in words]
+    return head + sorted(words - set(head))
+
+
+def spoken_first(base, frequency):
+    """The words to make first on the card (clip_order): the base list, which the reader speaks
+    all the time (digits, letters, its own words), then the firmware's own words by how often its
+    texts use them (extract_words), the most used first, ties sorted."""
+    return sorted(base) + sorted((w for w in frequency if w not in base), key=lambda w: (-frequency[w], w))
+
+
 def load_list(path):
     """Load one word per line, '#' starting a comment. A non-blank token that clip_name rejects
     (for example a word that mixes letters and digits, such as "md5") is silently unusable, so
@@ -487,7 +508,8 @@ def extract_words(workdir, extra=()):
     on top of the firmware's own, each in turn. The second return value maps each clip spoken
     with an apostrophe to that spelling (spoken_forms). The third maps each label to how many
     words it alone added on top of everything folded in before it, so the caller can report an
-    optional source's worth."""
+    optional source's worth. The fourth counts how often the firmware's own texts use each word,
+    for the order the clips go onto the card (spoken_first)."""
     exe = build_expander(workdir)
     strings = firmware_strings()
     bubbles = bubble_texts()
@@ -506,13 +528,16 @@ def extract_words(workdir, extra=()):
         words |= new_words
         apps += new_spellings
     originals, both = spoken_forms(own, apps)
+    frequency = collections.Counter()
+    for (n, _), c in own.items():
+        frequency[n] += c
     longest = sorted(words, key=lambda w: (-len(w), w))[:10]
     log(f"extract: {len(words)} words; longest: {' '.join(longest)}")
     log(f"extract: {len(originals)} with an apostrophe: {' '.join(originals[n] for n in sorted(originals))}")
     if both:
         log(f"extract: {len(both)} written both with and without an apostrophe, spoken as written most often: "
             + ", ".join(f"{n} as {both[n] or n}" for n in sorted(both)))
-    return words, originals, added
+    return words, originals, added, frequency
 
 
 def settings_hash(settings, text, unkeyed=UNKEYED):
@@ -1029,7 +1054,7 @@ def sync(port, out_dir, manifest, set_name, force_all=False, pulled=None):
             write_card_code(storage, ops, card, synced[SYNC_ID])
         made_dirs = set()
         sent = skipped = missing = failed = 0
-        for i, word in enumerate(sorted(words), 1):
+        for i, word in enumerate(clip_order(words, manifest.get("first", ())), 1):
             h = words[word]
             if synced.get(word) == h:
                 skipped += 1
@@ -1273,7 +1298,8 @@ def main():
         if mark_synced_only:
             return 0
 
-    words = load_list(os.path.join(HERE, "voice_words.txt"))
+    base = load_list(os.path.join(HERE, "voice_words.txt"))
+    words = set(base)
     words |= load_list(os.path.join(HERE, "voice_words.local.txt"))
     for path in a.words:
         words |= load_list(path)
@@ -1286,8 +1312,11 @@ def main():
         if a.card_apps:
             card_faps, card_matched, card_unmatched = card_apps(a.port)
             extra.append(("card-apps", sorted(set(card_matched))))
-        extracted, originals, added = extract_words(workdir, extra)
+        extracted, originals, added, frequency = extract_words(workdir, extra)
         words |= extracted
+        # The most spoken words, made first in the card's folders: kept for the runs without
+        # --extract and for the pack
+        manifest["first"] = spoken_first(base, frequency)
         names = {**originals, **names}  # an entry in tools/voice_names.txt still wins
         if a.extract_all:
             log(f"extract-all: {len(ext_dirs)} apps under applications/external, "

@@ -15,11 +15,14 @@ These are the working notes for the one device Sonar is developed on, and the de
   branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings are
   saved only once they were read from the card. On 2026-10-01 it got f37f06887 and then
   0294fe871, on the fork's branch `claude/reading-fixes-2026-10-01`: that day's screen-reading
-  fixes, then the crash address of hardware faults. Since 2026-10-02 it runs ea05c6d94 on the same
-  branch, with the fixes after that day's review. It was flashed complete with
+  fixes, then the crash address of hardware faults. On 2026-10-02 it got ea05c6d94 on the same
+  branch, with the fixes after that day's review, then 778d09f8f on the branch
+  `claude/card-settings-2026-10-02`, with the settings read after a card change or a format.
+  Since 2026-10-03 it runs f9782c740, the merge of that branch into `screen-reader`, whose files
+  are 778d09f8f's, so the About screen names screen-reader again. It was flashed complete with
   `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
-  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,012
-  bytes, 10,628 spare below the BLE stack. The apps on the card, the Passport among them,
+  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,076
+  bytes, 10,564 spare below the BLE stack. The apps on the card, the Passport among them,
   came with it. The earlier images are listed under Useful commands. The checks on the device
   after the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`, and those of
   2026-10-01 in `docs/measurements/2026-10-01-remaining-items.txt`.
@@ -107,8 +110,8 @@ These are the working notes for the one device Sonar is developed on, and the de
 - `tests/fbt/test_card_prune.py`: a plain Python test of `tools/card_prune.py`'s rule over
   synthetic folder lists.
 - `tools/card_prune.py`: removes the fork's old update packages from `/ext/update` on the card,
-  keeping the running build's folder and every package of another firmware, such as the two
-  rollback packages; `--dry` lists what would go.
+  those of the claude/ work branches included, keeping the running build's folder and every
+  package of another firmware, such as the two rollback packages; `--dry` lists what would go.
 - `tools/flash_headroom.sh`: the image size against the flash the BLE stack leaves free; see
   Useful commands.
 - `tools/momentum-base.txt`: the Momentum commit the fork builds on, the merged release tag's.
@@ -302,14 +305,24 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
   the same as the old Mac's: 10,539 clips, about 74 minutes to make and 39 to send, over the old
   clips. `voice/` holds the record of the card again, whose `.sync-id` is b1c1f2d07f7e630b. The
   words the device had spelled, "noted", "spoken", "samantha" and "espeak", have clips since.
-- The card also holds the sets heart and espeak. espeak's clips open slowly on this card: over
-  25 words a median of 51 ms and up to 84, longer than the 82 ms half of the speech ring, so a
-  sentence of 24 words played with 4 or 5 underruns. samantha's open in a median of 23 ms, up to
-  46, and heart's in 59, up to 76, both without underruns. The cause lies in espeak's files on
-  this card, not in the firmware, and it is not the lookup: a clip that is there is found in
-  espeak's folders as fast as in samantha's. Where the time goes is not pinned down; writing the
-  set's folders fresh might cure it. See `docs/measurements/2026-09-29-review-fixes.txt` and
-  `docs/measurements/2026-10-01-remaining-items.txt`.
+- The card also holds the sets heart and espeak. A clip's open time follows its place in its
+  folder, since the card finds a file by reading the folder's entries in the order the files were
+  made. espeak and heart were written alphabetically on 2026-09-26, so common words such as "the"
+  sat near the ends of their folders: espeak's clips opened in a median of 51 ms, up to 84,
+  longer than the 82 ms half of the speech ring, and long sentences played with underruns. On
+  2026-10-03 espeak's folders were rewritten in clip order, the most spoken words first: a median
+  of 25 ms, and 3 underruns over three long sentences where there were 18. heart is still
+  alphabetical, a median of 59 ms, up to 76; it had no underruns in the tests of 2026-10-01.
+  samantha keeps the order of its first rollout, the firmware's words first, 23 ms. espeak's clips are kept in
+  `backups/espeak-clips-2026-10-03.tar`. See `docs/measurements/2026-10-01-remaining-items.txt`
+  and `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
+- Writing to the card from this Mac through a card reader leaves a `._` file of 4 KB beside every
+  file and folder written: macOS gives everything a process of this session makes the
+  `com.apple.provenance` attribute, which exFAT keeps only in such a file, and which cannot be
+  removed. They take 4 KB each and double a folder's entries. Removing them from the Flipper's
+  console, as on 2026-10-03, frees the space, but the lookup still walks their free places, so
+  write through the Flipper where it matters. The microSD adapter's lock slider must be up,
+  towards the contacts, or the Mac mounts the card read-only.
 - The figures behind the hashed folders: finding a file on this exFAT card reads the folder's
   entries one by one, about 0.17 ms per entry. At the rollout on 2026-09-24, with about 2,900
   clips, no folder held more than about 65, and a clip opened in under 40 ms.
@@ -344,6 +357,11 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- f9782c740, the merge of the settings fix into `screen-reader`, on 2026-10-03: 870,076 bytes,
+  10,564 spare, 24 fewer than 778d09f8f for the shorter branch name.
+- 778d09f8f, the settings read after a card change or a format, on the branch
+  `claude/card-settings-2026-10-02`, on 2026-10-02: 870,100 bytes, 10,540 spare, 88 bytes over
+  ea05c6d94.
 - ea05c6d94, the fixes after the review of 2026-10-01 to the crash address, the line breaks and
   the file browser, on 2026-10-02: 870,012 bytes, 10,628 spare, 136 bytes over 0294fe871.
 - 0294fe871, the crash address of hardware faults, on the branch
