@@ -7,6 +7,8 @@ Status on 2026-09-25: the recorded voice, phase 3 on-device control, the polish 
 Status on 2026-09-26: the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, is written, and its plan A, `docs/superpowers/plans/2026-09-26-publishing-plan-a.md`, is done: the repositories, the cleanup, the continuous build and the upstream tooling. Its tools: `tools/card_prune.py` removes old update packages from the card; `tools/strip_js_symbols.py` and `tools/subghz_manifest.py` redo the fork's two mechanical changes after a Momentum merge, in the API table and in the built-in Sub-GHz app's source list; `tools/upstream_check.sh` shows from a dry run what a merge would meet; and the Build workflow, `.github/workflows/build.yml`, runs the host tests, the release build and the headroom check on every push. The device runs the clean Sonar build with plan A's fix wave, commit a5c2ed7d9, flashed complete on 2026-09-26. Plan B's code is in: the voice sets, the Kokoro and eSpeak voices and the pack tool. Plan C, the
 install path and the first release, follows. The names are decided: the repository is `flipper-access`, and the firmware is Sonar.
 
+Status on 2026-10-08: the review of 2026-09-28 is worked through. Its fixes, their checks on the device and what those checks found were merged in five pull requests on each repository from 2026-09-29 to 2026-10-03, as listed in `docs/2026-09-28-review-fixes.md`. The device runs 59878faeb, the tip of `screen-reader`, since 2026-10-03: firmware.bin 870,084 bytes, 10,556 spare. The first weekly build of that tip passed on 2026-10-05. Plan C, not yet begun, is next: steps 4 to 8 of section 11 of the publishing spec, that is the install script, the release workflow and its rehearsal, the documentation reviewed by Robin, the round-trip install test, and the tag `sonar-0.1.0` with the GitHub Release and this repository made public. The review's release findings wait for it, as listed under Not done in the fixes record, and so do the two decisions left to Robin in section 12 of the spec: the voice, and the voice pack's terms.
+
 ## Done so far
 
 - Terminal access, the backup of internal storage, and the Momentum install, 2026-09-22.
@@ -20,6 +22,9 @@ install path and the first release, follows. The names are decided: the reposito
 - The polish round, 2026-09-24: the change delay, and the generator reading the apps on the card.
 - The firmware stripdown, 2026-09-25, so that Sub-GHz works with the reader on. The games, the JavaScript engine and SAM left the build and the card. Sub-GHz was built back into the firmware. Animations are off by default, with an Animations row to turn them back on. Flash 862,612 bytes, 18,028 spare; idle heap 116,672 to 116,752 bytes free, animations off.
 - The dolphin in words, the crash address, the reader toggle, and the Archive's menus naming their selection, 2026-09-25.
+- Publishing plan A, 2026-09-26: the repositories, the cleanup, the continuous build and the upstream tooling.
+- Publishing plan B's code, 2026-09-26: the voice sets, the Kokoro and eSpeak voices and the pack tool.
+- The review of 2026-09-28 and its fixes, merged from 2026-09-29 to 2026-10-03 and checked on the device, and the first weekly build, 2026-10-05: `docs/2026-09-28-review-fixes.md`.
 
 ## Why a fork
 
