@@ -384,7 +384,7 @@ Passed:
 
 Waiting for a sync of the voice, since Robin left the samantha set on the card as it was: T4 and T6
 for the sync, T7 for "were", T9 for the app names, and T5 for the card's code. T2 is met: the
-virtual environment has Python 3.13. R12's weekly build is due on Monday 5 October. The five
+virtual environment has Python 3.13. R12's weekly build passed on Monday 5 October, below. The five
 voice checks passed on 2026-10-01, below.
 
 Found on the way:
@@ -428,7 +428,7 @@ Passed:
 Measured: T11's second note, and the espeak set's gaps, whose cause is narrowed down but not
 found; both are under Not done.
 
-Left: R12's weekly build, due on Monday 5 October.
+Left: R12's weekly build, due on Monday 5 October. It passed that day, below.
 
 ## Results on the device, 2026-10-02 and 2026-10-03
 
@@ -453,3 +453,15 @@ the figures are in `docs/measurements/2026-10-02-card-settings-and-clip-order.tx
   focus read "0.Apps, 1 of 11" before the fix and "Apps, 1 of 11" after it.
 - The prune removes the packages of the claude/ work branches too, checked on the card.
 - T11's second note: the faster sync was left out, as recommended, since full syncs are rare.
+
+## The weekly build, 2026-10-05
+
+R12 passed. The first weekly run of the Build workflow, run 68, built the fork's `screen-reader`
+tip, 59878faeb, in place of the commit main records, 44e1d8e83, whose files it holds, and named
+the package after it, `sonar-ci-59878fae`. Every step passed: the host tests with `--no-skips`,
+Momentum's lint, the build, the check that the build changed no tracked file, and the headroom,
+with firmware.bin at 870,104 bytes, 10,536 spare below the limit of 880,640. That is the size of
+the push build of 44e1d8e83 on 2026-10-03, and 20 bytes more than the Mac's image of 59878faeb,
+which the device runs. The run started at 04:59 UTC, 36 minutes after its time in the schedule, a
+delay GitHub's scheduled runs often have, and took 13 minutes. It is at
+https://github.com/robin24/flipper-access/actions/runs/37265824333.
