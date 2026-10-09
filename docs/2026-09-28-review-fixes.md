@@ -3,8 +3,9 @@
 The review report is `docs/2026-09-28-review.md` on the branch `claude/flipper-access-review-m87rn7`.
 The fixes are on the branch `claude/flipper-access-review-fixes-ssg5yj`, in this repository and in
 the fork, one finding per commit, each firmware change followed by its own submodule bump here.
-That branch was merged on 2026-09-30 and deleted on 2026-10-01. What was finished on 2026-10-01
-is on the branch `claude/reading-fixes-2026-10-01`, in both, the same way.
+That branch was merged on 2026-09-29, pull request 1, and deleted on 2026-10-01. What was finished
+on 2026-10-01 was on the branch `claude/reading-fixes-2026-10-01`, in both, the same way; it was
+merged on 2026-10-02, pull request 3, and deleted.
 
 How it was checked, for every fix below:
 
@@ -188,7 +189,8 @@ All nine questions are answered, and each answer is carried out:
 
 The fork's GitHub files stay as they are, and these settings keep them from doing anything
 (R14). Issues and Discussions are off already, and the fork's description already points to
-flipper-access. GitHub's labels may differ slightly from these.
+flipper-access. GitHub's labels may differ slightly from these. Done: Robin made all three
+settings, as confirmed on 2026-10-08.
 
 1. Actions off: on the fork's settings, under Actions and then General, choose "Disable actions"
    under "Actions permissions", then Save. The page is
