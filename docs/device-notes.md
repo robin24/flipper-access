@@ -4,41 +4,49 @@ These are the working notes for the one device Sonar is developed on, and the de
 
 ## Device state
 
-- Device name: Delphi since 2026-09-25, R0skie before. Hardware version 12, region DE. 64 GB
-  microSD card, exFAT.
+- Device name: R0skie, its factory name, again since 2026-10-09, when the card was erased: Momentum
+  keeps the name on the card. It was Delphi from 2026-09-25. Hardware version 12, region DE. 64 GB
+  microSD card, exFAT, formatted on the device on 2026-10-09.
 - Firmware: Momentum mntm-012, built 31 December 2025, installed 2026-09-22 from the terminal.
   Before that it ran official firmware 1.4.3. Since then it runs the `screen-reader` branch built
-  here: phase 3 and the polish round on 2026-09-24, the firmware stripdown and the features after
-  it on 2026-09-25, the publishing plan A's a5c2ed7d9 and then plan B's 86820a7db, with the voice
-  sets, on 2026-09-26. On 2026-09-29 it got b9c87352c, the merge of the fixes after the review of
+  here: phase 3 and the polish round on 2026-09-24, the firmware stripdown and the features after it
+  on 2026-09-25, the publishing plan A's a5c2ed7d9 and then plan B's 86820a7db, with the voice sets,
+  on 2026-09-26. On 2026-09-29 it got b9c87352c, the merge of the fixes after the review of
   2026-09-28, the first build on the new MacBook. On 2026-09-30 it got 4b56919df, on the fork's
-  branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings are
-  saved only once they were read from the card. On 2026-10-01 it got f37f06887 and then
-  0294fe871, on the fork's branch `claude/reading-fixes-2026-10-01`: that day's screen-reading
-  fixes, then the crash address of hardware faults. On 2026-10-02 it got ea05c6d94 on the same
-  branch, with the fixes after that day's review, then 778d09f8f on the branch
-  `claude/card-settings-2026-10-02`, with the settings read after a card change or a format.
-  On 2026-10-03 it got f9782c740, the merge of that branch into `screen-reader`, then 44e1d8e83
-  on the branch `claude/c64-menu-2026-10-03`, with the C64 menu style's numbers apart from the
-  names. Since 2026-10-03 it runs 59878faeb, the merge of that branch into `screen-reader`, whose
-  files are 44e1d8e83's, so the About screen names screen-reader. It was flashed complete with
-  `./fbt flash_usb_full`. It reports itself as Sonar and clean, with API version 87.3:
-  `firmware.origin.fork : Sonar` and `firmware.commit.dirty : false`. firmware.bin is 870,084
-  bytes, 10,556 spare below the BLE stack. The apps on the card, the Passport among them,
-  came with it. The earlier images are listed under Useful commands. The checks on the device
-  after the review fixes are in `docs/measurements/2026-09-29-review-fixes.txt`, and those of
-  2026-10-01 in `docs/measurements/2026-10-01-remaining-items.txt`.
-- Serial port on this Mac: `/dev/cu.usbmodemflip_Delphi1`, which was
-  `/dev/cu.usbmodemflip_R0skie1` before the rename, at 230400 baud. It disappears while the device
-  is in the updater and comes back after the reboot. Without the card it is R0skie again, since
-  Momentum keeps the name on the card.
+  branch `claude/device-checks-2026-09-30`: those fixes with F2 corrected, so the settings are saved
+  only once they were read from the card. On 2026-10-01 it got f37f06887 and then 0294fe871, on the
+  fork's branch `claude/reading-fixes-2026-10-01`: that day's screen-reading fixes, then the crash
+  address of hardware faults. On 2026-10-02 it got ea05c6d94 on the same branch, with the fixes
+  after that day's review, then 778d09f8f on the branch `claude/card-settings-2026-10-02`, with the
+  settings read after a card change or a format. On 2026-10-03 it got f9782c740, the merge of that
+  branch into `screen-reader`, then 44e1d8e83 on the branch `claude/c64-menu-2026-10-03`, with the
+  C64 menu style's numbers apart from the names. From 2026-10-03 it ran 59878faeb, the merge of that
+  branch into `screen-reader`, whose files are 44e1d8e83's. On 2026-10-09 the card was erased and
+  the device set up again from nothing, as a new user would with the README; since then it runs
+  9149fe493, on the fork's branch `claude/device-checks-2026-10-09`, with that day's fixes: the
+  flash on a blank card, every slash read as "slash", no first boot tutorial, the update picture
+  spoken, and its view's crash fixed. It was flashed complete with `./fbt flash_usb_full`. It
+  reports itself as Sonar and clean, with API version 87.3: `firmware.origin.fork : Sonar` and
+  `firmware.commit.dirty : false`. firmware.bin is 870,172 bytes, 10,468 spare below the BLE stack.
+  The apps on the card, the Passport among them, came with it. The earlier images are listed under
+  Useful commands. The checks on the device after the review fixes are in
+  `docs/measurements/2026-09-29-review-fixes.txt`, and those of 2026-10-01 in
+  `docs/measurements/2026-10-01-remaining-items.txt`, and those of 2026-10-09 in
+  `docs/measurements/2026-10-09-device-checks.txt`.
+- Serial port on this Mac: `/dev/cu.usbmodemflip_R0skie1` since 2026-10-09, and
+  `/dev/cu.usbmodemflip_Delphi1` while the device was named Delphi, at 230400 baud. It disappears
+  while the device is in the updater and comes back after the reboot. Without the card it is R0skie
+  again, since Momentum keeps the name on the card.
 - Menu style List, set in `/int/.momentum_settings.txt`. `/int` is the folder `/ext/.int` on the
   card: Momentum has no internal storage of its own, so without the card the settings file is
   neither read nor saved. The Debug flag and the log level are kept in the clock's registers
   instead, and stay. The reader marks the main menu's focus only in the List style; the other styles
   are read by inversion where possible. Momentum's default style is DSi; Sonar's is List since
-  a0dea0841. The same file has lock on boot off, dark mode on, the reader's volume at 30, Robin's
-  level on 2026-10-02, and the voice set samantha. The first update of 2026-09-26, to a0dea0841,
+  a0dea0841. Since the card was erased on 2026-10-09 the file holds the defaults, the reader's
+  volume apart, which Robin set to 40: lock on boot on, Momentum's default, which acts only with
+  a PIN; dark mode off; the voice set Auto, the first set by name, which is espeak after a boot.
+  Before, the file had lock on boot off, dark mode on, the volume at 40 and the voice set
+  samantha. The first update of 2026-09-26, to a0dea0841,
   left it at its defaults, the volume apart, because keys pressed during the update saved the
   settings in RAM over the restored file: see `docs/measurements/2026-09-26-plan-a.txt`. The three
   values were restored from that update's `backup.tar`, and the device rebooted. Since 3bdcca70c the
@@ -57,13 +65,15 @@ These are the working notes for the one device Sonar is developed on, and the de
   catcher. The Debug flag is on and the log level is debug, both kept across reboots, and
   `tools/uart_log.py` captures the debug console in the background. An update to a release build
   turns both off, so step 6 of the Routine sets them again. See Crash diagnosis. The board was not
-  at hand for the checks of 2026-09-29 and 2026-09-30, so no UART capture ran then.
+  at hand for the checks of 2026-09-29 and 2026-09-30, nor on 2026-10-09, so no UART capture ran
+  then, and the Debug flag and the log level are off since that day's flashes.
 - The old project folder is gone, and with it `voice/`, `voices/`, `voice-models/`, `backups/`,
   `firmware-packages/` and `tools/voice_words.local.txt`. The project was cloned again on the
   MacBook on 2026-09-29, and the local word list made again with `delphi`. The samantha set was
   made again there on 2026-10-01: see The voice on this card.
-  The card still holds the two rollback packages in `/ext/update` and the 1.4.3 backup at its
-  root; the backups are on the Mac again, see The folders and tools.
+  Since the card was erased on 2026-10-09 it holds neither the rollback packages nor any backup.
+  The official 1.4.3 and Momentum mntm-012 packages are on the Mac in `firmware-packages/`, and the
+  stock backup in `backups/backup-stock-1.4.3.tar`; the card's backup of 2026-09-29 is gone.
 
 ## The folders and tools
 
@@ -320,6 +330,12 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
   firmware's words first, 23 ms. espeak's clips are kept in
   `backups/espeak-clips-2026-10-03.tar`. See `docs/measurements/2026-10-01-remaining-items.txt`
   and `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`.
+- On 2026-10-09 the card was erased, and all three sets were made again from nothing with the
+  README's commands and sent in the clip order: first the 2,911 words of `--extract`, then the
+  routine with `--card-apps`, which added 7,628 words from the 160 apps on the card. Each set holds
+  10,535 clips, samantha one more, a word the device had spelled. Making the clips took 72 seconds
+  for espeak in all, about 22 minutes for heart and 67 for samantha; sending each set about 30
+  minutes. The sets made before are kept on the Mac in `backups/voice-folders-2026-10-09/`.
 - Writing to the card from this Mac through a card reader leaves a `._` file of 4 KB beside every
   file and folder written: macOS gives everything a process of this session makes the
   `com.apple.provenance` attribute, which exFAT keeps only in such a file, and which cannot be
@@ -361,6 +377,13 @@ tools/flash_headroom.sh
 
 The image sizes so far, newest first:
 
+- 9149fe493, the slideshow view's key handler and timer without a picture, on the branch
+  `claude/device-checks-2026-10-09`, on 2026-10-09: 870,172 bytes, 10,468 spare.
+- 2bf03d177, the slideshow view's draw without a picture: 870,164 bytes, 10,476 spare.
+- 859855918, the first boot without the tutorial and the update picture spoken, with the flash
+  script's and the slash's fixes: 870,164 bytes, 10,476 spare, 80 over 59878faeb.
+- 59878faeb again, built from an empty build folder for the fresh start of 2026-10-09: 870,084
+  bytes, the same as on 2026-10-03.
 - 59878faeb, the merge of the C64 fix into `screen-reader`, on 2026-10-03: 870,084 bytes, 10,556
   spare, 16 fewer than 44e1d8e83 for the shorter branch name.
 - 44e1d8e83, the C64 menu style's numbers, on the branch `claude/c64-menu-2026-10-03`, on
@@ -546,25 +569,28 @@ ScreenReaderSrv 1,932 of 3,068, SpeechWorker 2,484 of 3,068, and InputSrv 456 of
 
 ## Rolling back to official firmware
 
-The official 1.4.3 package is on the card, in `/ext/update/f7-update-1.4.3`, which
-`tools/card_prune.py` never removes; the Mac's copy went with the old project folder, and the
-package can be downloaded again. To install the card's copy:
+The official 1.4.3 package is on the Mac, in `firmware-packages/official-1.4.3/f7-update-1.4.3`;
+the card's copy went with the erase of 2026-10-09. Momentum's flash script sends it to the card and
+starts the update, a blank card included since 2026-10-09:
 
 ```bash
-.venv/bin/python tools/flipper_cli.py "update install /ext/update/f7-update-1.4.3/update.fuf"
+(cd Momentum-Firmware && ../.venv/bin/python scripts/selfupdate.py ../firmware-packages/official-1.4.3/f7-update-1.4.3/update.fuf)
 ```
 
-Then restore the settings from the stock backup, with this command on the CLI. The card's root
-holds a copy, and `backups/backup-stock-1.4.3.tar` is the one on the Mac again since 2026-09-29.
+Then send the stock backup to the card and restore the settings from it:
+
+```bash
+.venv/bin/python Momentum-Firmware/scripts/storage.py send backups/backup-stock-1.4.3.tar /ext/backup-stock-1.4.3.tar
+```
 
 ```text
 update restore /ext/backup-stock-1.4.3.tar
 ```
 
 To go back to an earlier Sonar build: the fork's history keeps every build flashed here. The build
-before the review fixes is 86820a7db on `screen-reader`, and `backups/backup-2026-09-29.tar` holds
-its settings. Check out its commit in the submodule, with the submodules it records, and wipe the
-build folder:
+before the review fixes is 86820a7db on `screen-reader`; the backup of its settings,
+`backup-2026-09-29.tar`, was on the card and went with the erase of 2026-10-09. Check out its commit
+in the submodule, with the submodules it records, and wipe the build folder:
 
 ```bash
 git -C Momentum-Firmware checkout 86820a7db
