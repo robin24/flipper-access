@@ -588,10 +588,11 @@ def set_conflict(recorded, settings):
             f"{settings['voice']}: name them with --backend and --voice, or remove the set's folder to make it anew")
 
 
-def check_engine(recorded, backend, voice):
-    """The backend and voice --check speaks with: those named on the command line, else the
-    set's own from its manifest, else say. The set's voice goes only with the set's backend;
-    another backend brings its own default voice (None here, settings_for fills it in)."""
+def set_engine(recorded, backend, voice):
+    """The backend and voice a run makes, checks and syncs with: those named on the command line,
+    else the set's own from its manifest, else say. The set's voice goes only with the set's
+    backend; another backend brings its own default voice (None here, settings_for fills it in).
+    So the routine names only the set, and a run naming another backend or voice is refused."""
     if recorded and recorded.get("backend") in BACKENDS:
         if backend is None:
             backend = recorded["backend"]
@@ -1223,7 +1224,7 @@ def main():
         sys.exit(too_old)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--set", default="samantha", help="the voice set to work on (default samantha, the voice/ directory)")
-    ap.add_argument("--backend", choices=sorted(BACKENDS), help="the speech engine (default say; --check takes the set's own)")
+    ap.add_argument("--backend", choices=sorted(BACKENDS), help="the speech engine (default: the set's own, else say)")
     ap.add_argument("--voice", help="the engine's voice (defaults: say Samantha, espeak en-us+f3, kokoro af_heart)")
     ap.add_argument("--rate", type=int, help="words per minute for say and espeak, percent of the model's pace for kokoro")
     ap.add_argument("--highpass", type=float, help="high-pass cutoff in Hz (default 500)")
@@ -1254,10 +1255,7 @@ def main():
     workdir = os.path.join(out_dir, ".build")
     manifest_path = os.path.join(out_dir, "manifest.json")
     manifest = json.load(open(manifest_path)) if os.path.exists(manifest_path) else {"words": {}}
-    if a.check:
-        backend, voice = check_engine(manifest.get("settings"), a.backend, a.voice)
-    else:
-        backend, voice = a.backend or "say", a.voice
+    backend, voice = set_engine(manifest.get("settings"), a.backend, a.voice)
     if backend != "kokoro" and (a.model or a.voices_file):
         sys.exit("--model and --voices-file are for --backend kokoro")
     settings = settings_for(backend, dict(voice=voice, rate=a.rate, highpass=a.highpass, gain=a.gain, soft=a.soft,
