@@ -4,7 +4,10 @@
 // view_dispatcher_set_current_view makes the view current before it calls the enter callback, so
 // a draw can come first, and an exit frees the slideshow while the view is still current. On the
 // device a draw before the first enter crashed with a NULL pointer dereference in
-// slideshow_is_loaded, at boots after an update. Every draw must cope without a slideshow. When
+// slideshow_is_loaded, at boots after an update. And the dispatcher sends a key's release to the
+// view that had its press, after a switch too: the release of the OK that closed the update picture
+// reached the view after its exit. The auto-advance timer's callback runs on the timer thread.
+// Every draw, key and timer callback must cope without a slideshow. When
 // one is loaded and has one page, the update picture, the draw gives the reader its words as a
 // focus note. Built with clang's address and undefined behaviour checks, so a read of a freed
 // slideshow fails too.
@@ -79,15 +82,20 @@ void view_commit_model(View* view, bool update) {
     (void)update;
 }
 
-// Timers that never fire
+// Timers that never fire by themselves; the periodic one's callback, the auto-advance, is kept
+// for the test to call
 struct FuriTimer {
     int unused;
 };
 
+static FuriTimerCallback auto_callback = NULL;
+static void* auto_context = NULL;
+
 FuriTimer* furi_timer_alloc(FuriTimerCallback callback, FuriTimerType type, void* context) {
-    (void)callback;
-    (void)type;
-    (void)context;
+    if(type == FuriTimerTypePeriodic) {
+        auto_callback = callback;
+        auto_context = context;
+    }
     return calloc(1, sizeof(FuriTimer));
 }
 
@@ -190,10 +198,12 @@ int main(void) {
     desktop_view_slideshow_set_callback(instance, on_event, NULL);
     View* view = desktop_view_slideshow_get_view(instance);
 
-    // A draw before the first enter: the view is current, its slideshow not yet loaded
+    // A draw and a key before the first enter: the view is current, its slideshow not yet loaded
     draw(instance);
     CHECK(pictures_drawn == 0);
     CHECK(note[0] == '\0');
+    InputEvent early = {.key = InputKeyOk, .type = InputTypeShort};
+    CHECK(view->input(&early, view->context));
 
     // The update picture, one page: drawn and spoken, as the focus, so the reader says it
     // without a key press on the home screen's layer
@@ -210,6 +220,13 @@ int main(void) {
     draw(instance);
     CHECK(pictures_drawn == 0);
     CHECK(note[0] == '\0');
+
+    // The release of the OK that closed the picture, sent to this view after its exit, and an
+    // auto-advance already running when the exit stopped its timer: both find no slideshow
+    InputEvent release = {.key = InputKeyOk, .type = InputTypeRelease};
+    CHECK(view->input(&release, view->context));
+    CHECK(auto_callback != NULL);
+    if(auto_callback) auto_callback(auto_context);
 
     // A slideshow of several pages is drawn but not given this note
     load_pages = 7;
