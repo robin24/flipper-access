@@ -467,3 +467,67 @@ the push build of 44e1d8e83 on 2026-10-03, and 20 bytes more than the Mac's imag
 which the device runs. The run started at 04:59 UTC, 36 minutes after its time in the schedule, a
 delay GitHub's scheduled runs often have, and took 13 minutes. It is at
 https://github.com/robin24/flipper-access/actions/runs/37265824333.
+
+## Results on the device, 2026-10-09
+
+The items never tried on the device, before plan C. Robin had no spare card, so the card was
+erased and the device set up again from nothing, as a new user would with the README. Claude ran
+the console, and Robin did everything physical and listened. The console output and the figures
+are in `docs/measurements/2026-10-09-device-checks.txt`.
+
+Passed:
+
+- F2's format, on 59878faeb: the card, erased on the Mac as Mac OS Extended, which the Flipper
+  cannot read, gave "file/dir not exist" and no settings file. `storage format /ext` through
+  `tools/flipper_cli.py`, with `y` as a second command for its question, made it an empty exFAT
+  card, and the volume set then, 50, was written to a new settings file on it, every other line
+  as the device held it. With the card out, the volume set to 60 could not be saved; with the
+  card back, the device read 50 again.
+- The PIN entry, first tried today: "Locked with PIN, press Up to enter it", then "Enter PIN" on
+  Up, "1 digit entered" and so on, never the arrow, Back clearing the digits, "Wrong PIN try
+  again", the timeout screen after the third wrong PIN, and the unlock. The reader toggle inside
+  the entry kept the digit entered. The PIN setup's two how-to screens were read. While the device
+  was locked with a PIN its serial port was gone from the Mac, and it came back with the unlock.
+  Lock on boot was on throughout, Momentum's default, not off as Robin was told; no reboot came
+  while the PIN was set, and the PIN was removed afterwards.
+- A date with slashes from an NFC card parser: no saved dump of a MyKey card is among the
+  firmware's files, so one was written by hand. Its Info screen showed "Prod. date: 15/03/2019"
+  and history lines such as "02/10/2026 12.50", and Robin heard "15 of 3 of 2019", which was
+  confusing. As Robin decided, every slash is now read as "slash", below.
+- The README's steps from nothing, apart from the fixes below: the firmware built from an empty
+  build folder in 3.5 minutes, the same 870,084 bytes; the update took five minutes; the three
+  voice sets made again from nothing with the README's commands, 2,911 words each, then the
+  routine with `--card-apps`, 7,628 words more from the 160 apps on the card, every clip made and
+  sent without a failure. The reader spoke from the first set on the card.
+
+Found on the way and fixed, on the branch `claude/device-checks-2026-10-09` in both repositories.
+Each fix has a test that failed against the code before it:
+
+- `./fbt flash_usb_full` stopped on the blank card with exit 4, before the update: its first step,
+  `loader close`, met "could not find command", since the console's loader command is a plugin on
+  the card. The script now goes on to the update (c10fcb027, tests/fbt/test_selfupdate.py). On the
+  device, with the loader plugin hidden, the flash said "No loader command on the card, so no app
+  to close" and updated.
+- Every slash is read as "slash", between two digits too (3758f2aed). The Passport's points read
+  "experience seven slash one hundred to level three".
+- After the install the device showed Momentum's first boot tutorial: seven pictures whose words
+  are drawn as pixels, which wait for given arrow keys and ignore OK on the first. The reader read
+  nothing, and the read chord called it the home screen. As Robin chose, Sonar leaves the tutorial
+  out of the package, the card's resources and the Momentum app's Misc screen (0050d36d8), so a
+  first boot shows the picture every update shows, and that picture is spoken, "Firmware updated,
+  press OK to continue", as a focus note without a key press (859855918).
+- That picture's view crashed with a NULL pointer dereference. On 85985591, two of four boots
+  with the picture crashed at 08084D48, in slideshow_is_loaded: a draw before the view had loaded
+  its picture, which the GUI thread can make since the view is current a moment before it is
+  entered. With the draw fixed, the boots were clean, but the first OK that closed the picture
+  crashed at 08086B66, in the key handler: the dispatcher sends a key's release to the view that
+  had its press, after its exit too, when the picture was freed. The view now copes without a
+  picture in its draw, its key handler and its timer (2bf03d177, 9149fe493,
+  tests/host/test_desktop_slideshow.c). On 9149fe493 the update's boot and 20 reboots with the
+  picture were clean, each picture spoken and closed with OK.
+- `tools/voice_build.py --set espeak --sync` was refused, "the set was made with espeak en-us+f3,
+  not say Samantha", since only `--check` took a set's own backend. Every run now does, unless it
+  names another (675250f).
+
+Left: F1, a Sub-GHz transmit through an external CC1101 module with the reader speaking, for want
+of a module and a second receiver.
