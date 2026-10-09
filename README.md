@@ -42,6 +42,9 @@ Removed:
   card.
 - The screen reader's own SAM synthesizer is gone. The reader speaks only from the recorded clips,
   so without them it is silent.
+- Momentum's tutorial of seven pictures at the first boot is gone, from the update package, the
+  card and the Momentum app's Misc screen, since the reader cannot read its pictures. A first boot
+  shows the picture that every update shows, which the reader speaks.
 - The home screen's animations are off by default, and a setting turns them back on. With them
   off, the home screen has nothing else to read, and returning to it loads nothing from the card.
 
@@ -53,6 +56,10 @@ Changed:
   such as a clock or the free memory, which is read with the screen.
 - FreeRTOS checks the threads' stacks for overflow, which Momentum ships switched off. An
   overflow crashes the device at once as "StackOverflow"; only the debug log names the thread.
+- The picture after an update is spoken, and its view copes with being drawn, or sent a key's
+  release, while it has no picture loaded, which crashed some boots after an update.
+- `./fbt flash_usb_full` also works on a blank card, whose console lacks the loader command, a
+  plugin on the card, that the flash used to close the running app first.
 
 The removals were made so that Sub-GHz works with the reader on. It is built into the firmware
 again, not loaded from the card, and no longer crashes the device out of memory.
@@ -68,6 +75,11 @@ under The voice.
 The screen reader is on from the first boot. It speaks only from the recorded voice on the SD
 card, so without the card, or without the voice on it, it is silent.
 
+After the install, and after every later update, the device shows a picture saying that the
+firmware was updated. The reader says "Firmware updated, press OK to continue" without a key
+press, and OK, Right or Back closes it. Momentum's tutorial of seven pictures at the first boot is
+left out, since its words are drawn as pixels and it waits for given arrow keys.
+
 Two chords are the first things to try. For each, hold Back, press the second key, then let go of
 Back.
 
@@ -79,7 +91,7 @@ Back.
 To turn the reader off, hold Back and then Down until the long press registers, about a third of a
 second. You hear "Screen reader off". The same chord turns the reader on again, and you hear
 "Screen reader on" followed by the screen. It works on every screen, the lock screen included, and
-by design also in the PIN entry, which has not been tried on a device.
+also in the PIN entry, where the digits entered so far are kept.
 
 ## Using it on the device
 
@@ -106,8 +118,8 @@ third key pressed while the second is still held goes to the app as a normal key
   status bar, such as the main menu, answers with the level and the mood alone.
 - Back and Down held until the long press registers, about a third of a second, turns the reader
   off, or on again. You hear "Screen reader off", or "Screen reader on" followed by the screen. It
-  works while the reader is off, and on every screen, the lock screen included, and by design also
-  in the PIN entry, which has not been tried on a device.
+  works while the reader is off, and on every screen, the lock screen included, and also in the
+  PIN entry, where the digits entered so far are kept.
 - Back and a short press of OK repeats the focused item with its position, for example "Apps, 1
   of 11". With nothing focused it says "No focus".
 - Back and a long press of OK spells the focused item with the recorded letters: Apps is spelled
@@ -228,7 +240,7 @@ The Passport, which Right opens on the home screen, shows the level, the mood an
 points line is labelled XP, which the reader says as "experience". It ends with the level the
 points lead to, "to level 3", which the reader says but the screen does not show. At level 2
 with 7 of its 100 points, the Passport reads the device's name, then "Mood, Happy. Level, two.
-experience seven of one hundred to level three". OK in the Passport shows the points in total
+experience seven slash one hundred to level three". OK in the Passport shows the points in total
 instead, and the line then ends with the last level, "to level 30". At the last level the line is
 "Max Level!", with nothing after it.
 
@@ -268,8 +280,10 @@ seconds after the one before. You hear "Unlocked", then "Home screen".
 
 For a PIN lock, press Up to open the PIN entry. A PIN is a sequence of arrow key presses. The
 reader says how many you have entered, "1 digit entered", "2 digits entered" and so on, never
-which keys. OK confirms the PIN, and Back clears what you entered. The PIN entry has not been
-tried on a device yet.
+which keys. OK confirms the PIN, and Back clears what you entered. A wrong PIN says "Wrong PIN try
+again". From the third wrong PIN in a row, a timeout screen follows, 30 seconds after the third,
+twice as long after each one more. While the device is locked with a PIN its console is closed, so
+the computer's tools cannot reach it until it is unlocked.
 
 ### Infrared universal remotes
 
@@ -459,8 +473,9 @@ release, in the project's folder `voice-models/`. The whole vocabulary takes abo
 .venv/bin/python tools/voice_build.py --set heart --backend kokoro --extract --jobs 8
 ```
 
-A set keeps the backend and voice it was made with: a run that names others is refused, since it
-would make the whole set again.
+A set keeps the backend and voice it was made with. A later run that names none takes the set's
+own, so `--set` alone is enough, and a run that names others is refused, since it would make the
+whole set again.
 
 The tools that talk to the device find its serial port by the Flipper's USB id, on a Mac, Linux
 or Windows. With two Flippers plugged in, or for another port, give it with `--port`, or in the
@@ -486,10 +501,15 @@ Add `--dry` to any of these commands to build the word list and print its counts
 clip or touching the card. It shows how many strings and words there are, the ten longest words,
 and with `--card-apps` which apps matched which source folder.
 
-The sync sends new or changed clips and `voice.txt` to the card:
+The sync sends new or changed clips and `voice.txt` to the card. Without `--set` it sends
+samantha; for another set, name it:
 
 ```bash
 .venv/bin/python tools/voice_build.py --sync
+```
+
+```bash
+.venv/bin/python tools/voice_build.py --set heart --sync
 ```
 
 A full sync of about 2,900 clips takes about 6.5 minutes. Later syncs send only what changed, which
@@ -521,10 +541,15 @@ anyway:
 .venv/bin/python tools/voice_build.py --sync --sync-all
 ```
 
-The missing-word command gives the words the device had to spell their own clips:
+The missing-word command gives the words the device had to spell their own clips. It serves
+samantha; for another set, add `--set` with its name, as in the second command:
 
 ```bash
 .venv/bin/python tools/voice_build.py --extract --card-apps --pull-missing --sync
+```
+
+```bash
+.venv/bin/python tools/voice_build.py --set heart --extract --card-apps --pull-missing --sync
 ```
 
 It fetches `missing.txt` from the card, makes clips for those words and sends them. The words leave
@@ -588,18 +613,17 @@ resends everything.
   settings, the reader at volume 80, and a change made then is not kept. When a card goes in,
   this one or another, its settings are read at once, and a chord in the moment before that saves
   nothing. After a card is formatted on the Flipper, the settings in use are written to it with
-  the next change; that has not been tried on a device.
-- The screen shown after a firmware update is not read. Back closes it.
+  the next change.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
 - Twice, after a long idle, the first OK that the scripted driver `tools/sr_drive.py` sent on the
   home screen opened the lock menu instead of the main menu. It has not been reproduced since and
   is not explained. Up, not OK, is the default key for the lock menu. Back closes it.
 - Keys sent from `sr watch` and from remote control bypass the chords, as described under Back
   chords.
-- A slash between two numbers is read as "of": the Passport's points, "18/100", are "eighteen of
-  one hundred", and counts such as "Keys found: 5/32" read the same way. So does a date drawn with
-  slashes, which only a few NFC card parsers show; that has not been tried on a device. Any other
-  slash is "slash": "/ext/apps" is "slash ext slash apps".
+- Numbers with slashes are not interpreted: every slash is read as "slash". The Passport's
+  points, "18/100", are "eighteen slash one hundred", a count such as "Keys found: 5/32" is "five
+  slash thirty two", and a date that an NFC card parser shows, such as 15/03/2019, is "fifteen
+  slash zero three slash two thousand nineteen". "/ext/apps" is "slash ext slash apps".
 - An external CC1101 radio module, the add-on board for a stronger Sub-GHz radio, has not been
   tried with the reader on. Speech moves its sound through a DMA channel that the external
   radio's driver does not use, so a transmit and speech should not disturb each other, but no
