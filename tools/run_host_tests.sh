@@ -5,7 +5,8 @@
 # unpacking as the device does, for the voice pack check; and tests/host/voice_words.c, the words
 # the device looks up in a text, for the check of the generator's words against them,
 # tests/fbt/test_voice_parity.py. Then the Python checks: the build's
-# exclusion filter, the built-in Sub-GHz app's source list, and the tests of ten tools:
+# exclusion filter, the built-in Sub-GHz app's source list, the first boot without Momentum's
+# tutorial, and the tests of ten tools:
 # tests/fbt/test_card_prune.py, test_flash_headroom.py, test_flipper_cli.py, test_momentum_base.py,
 # test_selfupdate.py, test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py,
 # test_voice_build.py and test_voice_pack.py.
@@ -144,6 +145,13 @@ if ! python3 "$ROOT/tests/fbt/test_subghz_sources.py" > "$OUT/subghz_sources.txt
   exit 1
 fi
 summary "$OUT/subghz_sources.txt"
+
+if ! python3 "$ROOT/tests/fbt/test_first_boot.py" > "$OUT/first_boot.txt"; then
+  cat "$OUT/first_boot.txt"
+  echo "first boot checks failed"
+  exit 1
+fi
+summary "$OUT/first_boot.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_card_prune.py" > "$OUT/card_prune.txt"; then
   cat "$OUT/card_prune.txt"
