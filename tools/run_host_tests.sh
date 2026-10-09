@@ -1,7 +1,8 @@
 #!/bin/bash
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
 # helpers, the chords and the throttle; Momentum's settings file, which saves nothing before it
-# was loaded from the card; tests/host/tar_unpack.c, the firmware's tar reader
+# was loaded from the card; the desktop's slideshow view, drawn before its enter and after its
+# exit; tests/host/tar_unpack.c, the firmware's tar reader
 # unpacking as the device does, for the voice pack check; and tests/host/voice_words.c, the words
 # the device looks up in a text, for the check of the generator's words against them,
 # tests/fbt/test_voice_parity.py. Then the Python checks: the build's
@@ -114,6 +115,17 @@ if ! "$OUT/test_momentum_settings" > "$OUT/momentum_settings.txt"; then
   exit 1
 fi
 echo "Momentum settings: $(tail -n 1 "$OUT/momentum_settings.txt")"
+
+# The desktop's slideshow view, which the GUI thread may draw before its enter and after its exit,
+# with the stand-ins in tests/host/stubs_desktop. The test includes the view's source itself
+clang "${CFLAGS[@]}" -fshort-enums -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$TESTS/stubs_desktop" -o "$OUT/test_desktop_slideshow" "$TESTS/test_desktop_slideshow.c"
+if ! "$OUT/test_desktop_slideshow" > "$OUT/desktop_slideshow.txt" 2>&1; then
+  cat "$OUT/desktop_slideshow.txt"
+  echo "desktop slideshow checks failed"
+  exit 1
+fi
+echo "desktop slideshow: $(tail -n 1 "$OUT/desktop_slideshow.txt")"
 
 # The firmware's own tar reader walked as the device unpacks, for test_voice_pack.py. lib/microtar
 # is one of the firmware's submodules, which fbt checks out on its first run; without it the
