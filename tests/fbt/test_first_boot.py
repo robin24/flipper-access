@@ -43,5 +43,12 @@ worker = read("applications/system/updater/util/update_task_worker_backup.c")
 check('"firstboot.bin"' in worker and "splash_file" in worker,
       "the updater, unchanged, falls back to the update picture when the package has no firstboot.bin")
 
+# The update picture, shown after every update and at a first boot, holds its words as pixels
+# too: the slideshow view tells the reader what it says and which key closes it, as a focus note,
+# which the reader speaks on the home screen's layer without a key press
+slideshow = read("applications/services/desktop/views/desktop_view_slideshow.c")
+check('canvas_tap_hint_note(canvas, "Firmware updated, press OK to continue", true)' in slideshow,
+      "the update picture is spoken: Firmware updated, press OK to continue")
+
 print(f"first boot: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)
