@@ -1,14 +1,16 @@
 #!/bin/bash
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
 # helpers, the chords and the throttle; Momentum's settings file, which saves nothing before it
-# was loaded from the card; tests/host/tar_unpack.c, the firmware's tar reader
+# was loaded from the card; the desktop's slideshow view, drawn before its enter and after its
+# exit; tests/host/tar_unpack.c, the firmware's tar reader
 # unpacking as the device does, for the voice pack check; and tests/host/voice_words.c, the words
 # the device looks up in a text, for the check of the generator's words against them,
 # tests/fbt/test_voice_parity.py. Then the Python checks: the build's
-# exclusion filter, the built-in Sub-GHz app's source list, and the tests of nine tools:
+# exclusion filter, the built-in Sub-GHz app's source list, the first boot without Momentum's
+# tutorial, and the tests of ten tools:
 # tests/fbt/test_card_prune.py, test_flash_headroom.py, test_flipper_cli.py, test_momentum_base.py,
-# test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py, test_voice_build.py
-# and test_voice_pack.py.
+# test_selfupdate.py, test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py,
+# test_voice_build.py and test_voice_pack.py.
 # Each Python check prints its skip lines, then its summary, so a run shows what it left out, such
 # as the golden checks without the pinned base commit, or the voice generator's resampler checks
 # without numpy and scipy. With --no-skips, as the continuous build runs it with the packages of
@@ -114,6 +116,17 @@ if ! "$OUT/test_momentum_settings" > "$OUT/momentum_settings.txt"; then
 fi
 echo "Momentum settings: $(tail -n 1 "$OUT/momentum_settings.txt")"
 
+# The desktop's slideshow view, which the GUI thread may draw before its enter and after its exit,
+# with the stand-ins in tests/host/stubs_desktop. The test includes the view's source itself
+clang "${CFLAGS[@]}" -fshort-enums -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$TESTS/stubs_desktop" -o "$OUT/test_desktop_slideshow" "$TESTS/test_desktop_slideshow.c"
+if ! "$OUT/test_desktop_slideshow" > "$OUT/desktop_slideshow.txt" 2>&1; then
+  cat "$OUT/desktop_slideshow.txt"
+  echo "desktop slideshow checks failed"
+  exit 1
+fi
+echo "desktop slideshow: $(tail -n 1 "$OUT/desktop_slideshow.txt")"
+
 # The firmware's own tar reader walked as the device unpacks, for test_voice_pack.py. lib/microtar
 # is one of the firmware's submodules, which fbt checks out on its first run; without it the
 # voice pack check says it skipped the unpack.
@@ -145,6 +158,13 @@ if ! python3 "$ROOT/tests/fbt/test_subghz_sources.py" > "$OUT/subghz_sources.txt
 fi
 summary "$OUT/subghz_sources.txt"
 
+if ! python3 "$ROOT/tests/fbt/test_first_boot.py" > "$OUT/first_boot.txt"; then
+  cat "$OUT/first_boot.txt"
+  echo "first boot checks failed"
+  exit 1
+fi
+summary "$OUT/first_boot.txt"
+
 if ! python3 "$ROOT/tests/fbt/test_card_prune.py" > "$OUT/card_prune.txt"; then
   cat "$OUT/card_prune.txt"
   echo "card prune checks failed"
@@ -172,6 +192,13 @@ if ! python3 "$ROOT/tests/fbt/test_momentum_base.py" > "$OUT/momentum_base.txt";
   exit 1
 fi
 summary "$OUT/momentum_base.txt"
+
+if ! python3 "$ROOT/tests/fbt/test_selfupdate.py" > "$OUT/selfupdate.txt"; then
+  cat "$OUT/selfupdate.txt"
+  echo "selfupdate checks failed"
+  exit 1
+fi
+summary "$OUT/selfupdate.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_strip_js_symbols.py" > "$OUT/strip_js_symbols.txt"; then
   cat "$OUT/strip_js_symbols.txt"

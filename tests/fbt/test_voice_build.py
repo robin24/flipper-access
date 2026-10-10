@@ -15,6 +15,7 @@ import json
 import math
 import os
 import sys
+import tempfile
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
@@ -58,6 +59,39 @@ except SystemExit as e:
 finally:
     sys.argv = saved_argv
 check(refused is not None and "--jobs 0" in refused, f"--jobs 0 is refused: {refused}")
+
+# A run that names no backend or voice takes the set's own, as the README's routine names only the
+# set: --set espeak --sync on an espeak set goes on to make and send its clips, instead of counting
+# as a say run and being refused. The run ends at stand-ins for the clip pool and the sync, which
+# would start worker processes or open a port; the engine's presence is not the question here
+
+
+class PastTheCheck(Exception):
+    pass
+
+
+def past_the_check(*args, **kwargs):
+    raise PastTheCheck()
+
+
+saved = (sys.argv, vb.set_local_dir, vb.engine_problem, vb.clip_pool, vb.sync)
+with tempfile.TemporaryDirectory() as tmp:
+    with open(os.path.join(tmp, "manifest.json"), "w") as f:
+        json.dump({"words": {}, "settings": vb.settings_for("espeak", {})}, f)
+    vb.set_local_dir = lambda name: tmp
+    vb.engine_problem = lambda settings: None
+    vb.clip_pool = vb.sync = past_the_check
+    sys.argv = ["voice_build.py", "--set", "espeak", "--sync"]
+    try:
+        vb.main()
+        stopped = "finished"
+    except PastTheCheck:
+        stopped = "past the check"
+    except SystemExit as e:
+        stopped = str(e.code)
+    finally:
+        sys.argv, vb.set_local_dir, vb.engine_problem, vb.clip_pool, vb.sync = saved
+check(stopped == "past the check", f"--set espeak --sync takes the set's backend, not say: {stopped}")
 
 # The order the clips go onto the card (clip_order): the most spoken first, as the list gives
 # them, then the rest sorted. The device reads a folder's entries one by one, in the order the
@@ -118,7 +152,6 @@ check(vb.spoken_forms(own, C({("dont", None): 99}))[0] == vb.spoken_forms(own, C
 # The apps' names and categories as the menus show them (T9): each App's own name, for the kinds
 # a menu lists, and each fap_category; not a Lib's name inside an App, a plugin's or a service's,
 # nor a commented-out App; a manifest Python cannot read is left out
-import tempfile  # noqa: E402
 with tempfile.TemporaryDirectory() as d:
     def manifest(folder, text):
         os.makedirs(os.path.join(d, folder))
@@ -272,13 +305,13 @@ check(vb.set_conflict(kokoro, vb.settings_for("kokoro", {"voice": "bf_emma", "mo
 
 # --check speaks with the set's own backend and voice unless the command line names them
 heart = {"backend": "kokoro", "voice": "af_heart", "rate": 100}
-check(vb.check_engine(None, None, None) == ("say", None), "a check of a new set speaks with say")
-check(vb.check_engine(heart, None, None) == ("kokoro", "af_heart"), "a check of a set speaks with its backend and voice")
-check(vb.check_engine({**heart, "voice": "bf_emma"}, None, None) == ("kokoro", "bf_emma"), "its own voice, not the default")
-check(vb.check_engine(heart, None, "af_bella") == ("kokoro", "af_bella"), "a voice on the command line wins")
-check(vb.check_engine(heart, "espeak", None) == ("espeak", None), "a named backend brings its own default voice")
-check(vb.check_engine(heart, "kokoro", None) == ("kokoro", "af_heart"), "naming the set's backend keeps its voice")
-check(vb.check_engine({"backend": "piper", "voice": "x"}, None, None) == ("say", None), "an unknown recorded backend is not used")
+check(vb.set_engine(None, None, None) == ("say", None), "a check of a new set speaks with say")
+check(vb.set_engine(heart, None, None) == ("kokoro", "af_heart"), "a check of a set speaks with its backend and voice")
+check(vb.set_engine({**heart, "voice": "bf_emma"}, None, None) == ("kokoro", "bf_emma"), "its own voice, not the default")
+check(vb.set_engine(heart, None, "af_bella") == ("kokoro", "af_bella"), "a voice on the command line wins")
+check(vb.set_engine(heart, "espeak", None) == ("espeak", None), "a named backend brings its own default voice")
+check(vb.set_engine(heart, "kokoro", None) == ("kokoro", "af_heart"), "naming the set's backend keeps its voice")
+check(vb.set_engine({"backend": "piper", "voice": "x"}, None, None) == ("say", None), "an unknown recorded backend is not used")
 
 
 # --migrate-sets: the first layout's folder and missing list move into the samantha set; a

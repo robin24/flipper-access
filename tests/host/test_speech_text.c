@@ -30,7 +30,7 @@ static void test_words_and_numbers(void) {
     expect("Settings. Bluetooth, 1 of 11", "Settings. Bluetooth, one of eleven");
     expect("125 kHz RFID", "one hundred twenty five kilohertz R F I D");
     expect("433.92 MHz", "four hundred thirty three point nine two megahertz");
-    expect("Mood: Happy. Level: 1. 18/100", "Mood, Happy. Level, one. eighteen of one hundred");
+    expect("Mood: Happy. Level: 1. 18/100", "Mood, Happy. Level, one. eighteen slash one hundred");
     expect("Battery: 87%", "Battery, eighty seven percent");
     expect("2026", "two thousand twenty six");
     expect("1234567", "one two three four five six seven");
@@ -136,7 +136,7 @@ static void test_rule3_terms(void) {
     expect("HZ", "H Z");
     expect("Sub-GHz: Read", "sub gigahertz, Read");
     // "XP" is the Passport's points label, spoken as a word rather than spelled
-    expect("XP 7/100", "experience seven of one hundred");
+    expect("XP 7/100", "experience seven slash one hundred");
     expect("Dolphin XP", "Dolphin experience");
     // Only the exact token: lower case is copied, a longer upper case token is spelled (rule 7)
     expect("xp", "xp");
@@ -383,11 +383,12 @@ static void test_rule13_upper_a(void) {
     expect("A.", "ay.");
 }
 
-// Rule 14: a slash between two digits is "of", as the Passport's points read; a slash next to a
-// letter, even with a digit on its other side, or at the start stays "slash". The Passport's line
-// at the highest level (Max Level!) has no slash.
-static void test_rule14_slash_of(void) {
-    expect("1/3", "one of three");
+// Rule 14: every slash is "slash", between two digits too: a date such as an NFC parser's
+// 15/03/2019 read as "fifteen of three of" confused more than "slash" does in a count. The
+// Passport's line at the highest level (Max Level!) has no slash.
+static void test_rule14_slash(void) {
+    expect("1/3", "one slash three");
+    expect("15/03/2019", "fifteen slash zero three slash two thousand nineteen");
     expect("/ext/apps", "slash ext slash apps");
     expect("a/b", "a slash b");
     expect("a/5", "a slash five");
@@ -605,7 +606,7 @@ int main(void) {
     test_rule11_minus();
     test_rule12_ranges();
     test_rule13_upper_a();
-    test_rule14_slash_of();
+    test_rule14_slash();
     test_text_buffer();
     test_cut_after_a_whole_word();
     test_beyond_the_rule_list();
