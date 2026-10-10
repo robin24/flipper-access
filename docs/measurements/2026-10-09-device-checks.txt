@@ -111,7 +111,7 @@ Section: The PIN entry
 Robin set a PIN under Settings, Desktop, PIN Setup, Set PIN; the two how-to screens were read. Lock on boot was on, Momentum's default (see the last section), though Robin was told it was off; no reboot came while the PIN was set.
 Locking with PIN Code Lock: "Locked with PIN, press Up to enter it".
 [15:44:50] With the device locked: no /dev/cu.usbmodemflip_* port; flipper_cli.py: "No Flipper serial port found. Is the device plugged in and not in the updater? Or name it with --port." (desktop.c disables the console's USB while PIN-locked unless allow_locked_rpc_usb is on; it is off.)
-Up: "Enter PIN". Each arrow: "1 digit entered", "2 digits entered", never the arrow. Back cleared the digits. The reader toggle, Back held and Down held long, inside the entry with one digit entered: "Screen reader off", then on again; the next arrow said "2 digits entered", so the chord kept the digit. A wrong PIN: "Wrong PIN try again". The third wrong PIN in a row brought the timeout screen (30 seconds; desktop_pin_lock_get_fail_timeout doubles it for each one more). The right PIN unlocked, and the port came back:
+Up: "Enter PIN". Each arrow: "1 digit entered", "2 digits entered", never the arrow. Back cleared the digits. The reader toggle, Back held and Down held long, inside the entry with one digit entered: "Screen reader off", then on again; the next arrow said "2 digits entered", so the chord kept the digit. A wrong PIN: "Wrong PIN try again". The third wrong PIN in a row brought the timeout screen (30 seconds; desktop_pin_lock_get_fail_timeout doubles it for each one more), which the reader spoke, Robin said on 2026-10-11. The right PIN unlocked, and the port came back:
 sr screen: records: 1, content layer: desktop, status-right "100"
 The PIN was removed afterwards under PIN Setup, Remove PIN.
 
@@ -167,6 +167,7 @@ sr screen: reads as: Firmware updated, press OK to continue
 sr status: last crash: at 08086B66 in build 2bf03d17
 info device: 9149fe49, dirty false
 20 rounds, 19:42:35 to 19:47:08: each read as "Firmware updated, press OK to continue", each closed with OK, and the last crash stayed the one of 2bf03d17.
+Robin heard "Firmware updated, press OK to continue" spoken after the flashes, as said on 2026-10-11.
 
 675250f, tools/voice_build.py: the voice pipeline's first step, --set espeak --sync, was refused: "espeak: the set was made with espeak en-us+f3, not say Samantha: name them with --backend and --voice, or remove the set's folder to make it anew". Only --check took a set's own backend; every other run defaulted to say. Every run now takes the set's own backend and voice unless it names others. tests/fbt/test_voice_build.py: the new check runs main() on a stand-in espeak set up to stand-ins for the clip pool and the sync; before, the refusal, 156 of 157; after, 157 of 157. A first version of the check let the run reach the clip pool, whose worker processes import the main module, the test file, again and again; it was stopped, and the stand-ins keep the run from there.
 

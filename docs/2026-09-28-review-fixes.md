@@ -485,7 +485,7 @@ Passed:
   card back, the device read 50 again.
 - The PIN entry, first tried today: "Locked with PIN, press Up to enter it", then "Enter PIN" on
   Up, "1 digit entered" and so on, never the arrow, Back clearing the digits, "Wrong PIN try
-  again", the timeout screen after the third wrong PIN, and the unlock. The reader toggle inside
+  again", the timeout screen after the third wrong PIN, which was spoken too, and the unlock. The reader toggle inside
   the entry kept the digit entered. The PIN setup's two how-to screens were read. While the device
   was locked with a PIN its serial port was gone from the Mac, and it came back with the unlock.
   Lock on boot was on throughout, Momentum's default, not off as Robin was told; no reboot came
@@ -515,7 +515,8 @@ Each fix has a test that failed against the code before it:
   nothing, and the read chord called it the home screen. As Robin chose, Sonar leaves the tutorial
   out of the package, the card's resources and the Momentum app's Misc screen (0050d36d8), so a
   first boot shows the picture every update shows, and that picture is spoken, "Firmware updated,
-  press OK to continue", as a focus note without a key press (859855918).
+  press OK to continue", as a focus note without a key press (859855918). Robin heard it after
+  each of the day's flashes that reached the picture.
 - That picture's view crashed with a NULL pointer dereference. On 85985591, two of four boots
   with the picture crashed at 08084D48, in slideshow_is_loaded: a draw before the view had loaded
   its picture, which the GUI thread can make since the view is current a moment before it is
