@@ -483,13 +483,13 @@ Passed:
   card, and the volume set then, 50, was written to a new settings file on it, every other line
   as the device held it. With the card out, the volume set to 60 could not be saved; with the
   card back, the device read 50 again.
-- The PIN entry, first tried today: "Locked with PIN, press Up to enter it", then "Enter PIN" on
-  Up, "1 digit entered" and so on, never the arrow, Back clearing the digits, "Wrong PIN try
-  again", the timeout screen after the third wrong PIN, which was spoken too, and the unlock. The reader toggle inside
-  the entry kept the digit entered. The PIN setup's two how-to screens were read. While the device
-  was locked with a PIN its serial port was gone from the Mac, and it came back with the unlock.
-  Lock on boot was on throughout, Momentum's default, not off as Robin was told; no reboot came
-  while the PIN was set, and the PIN was removed afterwards.
+- The PIN entry, first tried today: "Locked with PIN, press Up to enter it", then "Enter PIN" on Up,
+  "1 digit entered" and so on, never the arrow, Back clearing the digits, "Wrong PIN try again", the
+  timeout screen after the third wrong PIN, which was spoken too, and the unlock. The reader toggle
+  inside the entry kept the digit entered. The PIN setup's two how-to screens were read. While the
+  device was locked with a PIN its serial port was gone from the Mac, and it came back with the
+  unlock. Lock on boot was on throughout, Momentum's default, not off as Robin was told; no reboot
+  came while the PIN was set, and the PIN was removed afterwards.
 - A date with slashes from an NFC card parser: no saved dump of a MyKey card is among the
   firmware's files, so one was written by hand. Its Info screen showed "Prod. date: 15/03/2019"
   and history lines such as "02/10/2026 12.50", and Robin heard "15 of 3 of 2019", which was
