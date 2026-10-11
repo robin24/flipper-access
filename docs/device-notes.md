@@ -311,8 +311,9 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 A release is made in two parts. The workflow `.github/workflows/release.yml` builds the firmware
 from a pushed tag and leaves a draft release with six assets. This Mac then adds the one voice
 pack, the checksums and `release.json`, and the draft is published by hand. Run the steps from the
-project folder. `sonar-0.1.0` stands for the tag and `0.1.0` for its version; for a release
-candidate the tag is `sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
+project folder, but for steps 6 and 7, which run in the folder of the download. `sonar-0.1.0`
+stands for the tag and `0.1.0` for its version; for a release candidate the tag is
+`sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
 
 1. Tag the fork's commit and push the tag. The fork's checkout must be on the commit that the
    project records, so `git status` shows no change for `Momentum-Firmware`. Then tag the project
@@ -370,14 +371,86 @@ candidate the tag is `sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
    tools/release_finalise.py sonar-0.1.0 --dry
    ```
 
-6. Check the draft as a user would, by downloading it into an empty folder and checking it against
-   `SHA256SUMS`. Every line should say OK:
+6. Download the draft as a user would, into a folder that does not exist yet, outside the project
+   folder. `mkdir` refuses a folder that is there already, so no file of an earlier try is checked
+   by mistake:
 
    ```bash
-   dir=$(mktemp -d) && gh release download sonar-0.1.0 --dir "$dir" && (cd "$dir" && shasum -a 256 -c SHA256SUMS)
+   mkdir /tmp/sonar-0.1.0-check
    ```
 
-7. Read the release notes on the draft's page on GitHub, then publish the draft there by hand. No
+   ```bash
+   gh release download sonar-0.1.0 --dir /tmp/sonar-0.1.0-check
+   ```
+
+   The commands of this step and the next run in that folder:
+
+   ```bash
+   cd /tmp/sonar-0.1.0-check
+   ```
+
+   Check the files against `SHA256SUMS`. Each of the seven assets should say OK; `SHA256SUMS` and
+   `release.json` are not among the checksums:
+
+   ```bash
+   shasum -a 256 -c --ignore-missing SHA256SUMS
+   ```
+
+7. Install the draft's own files on the Flipper, as the README's Install describes, so that the
+   release is the binary that was tested (review of 2026-09-28, R7) and the release notes'
+   promise holds: "Before it was published, this release's own files, downloaded from this page,
+   were installed on a Flipper with the install script and checked there." Unpack the install zip:
+
+   ```bash
+   unzip install-sonar-0.1.0.zip
+   ```
+
+   Make a virtual environment with pyserial there, as a user does. `python3` must be 3.10 or
+   newer:
+
+   ```bash
+   python3 -m venv .venv
+   ```
+
+   ```bash
+   .venv/bin/pip install pyserial
+   ```
+
+   Install with that folder's `install.py`, which uses that folder's helpers, and answer its
+   questions as a user would. Over USB it takes about half an hour:
+
+   ```bash
+   .venv/bin/python install.py --package flipper-z-f7-update-sonar-0.1.0.tgz --voice voice-heart-sonar-0.1.0.tar --release release.json
+   ```
+
+   The script ends with "The Flipper runs the firmware of the release." and "Done". Then check on
+   the Flipper. `info device` gives the tag as `firmware.version`, `sonar-0.1.0`; as
+   `firmware.commit.hash`, the first 8 characters of the release's commit, `firmware_commit` in
+   `release.json`; `firmware.commit.dirty` false; and `firmware.origin.fork` Sonar. Copy none of
+   its other lines into a committed file, since they name the device:
+
+   ```bash
+   .venv/bin/python flipper_cli.py "info device"
+   ```
+
+   The prune keeps the running build's folder: its first line names `f7-update-sonar-0.1.0` among
+   the folders it keeps, and no line says "would remove f7-update-sonar-0.1.0":
+
+   ```bash
+   .venv/bin/python card_prune.py --dry
+   ```
+
+   By ear: after the update, the picture is spoken, "Firmware updated, press OK to continue", and
+   OK closes it. Then the voice: on a card that holds other sets, Auto may take another, such as
+   espeak, so choose heart first, in the Voice row or with this command:
+
+   ```bash
+   .venv/bin/python flipper_cli.py "sr voice use heart"
+   ```
+
+   Back and Up on the home screen then says "Home screen" in the heart voice.
+
+8. Read the release notes on the draft's page on GitHub, then publish the draft there by hand. No
    script publishes a release, and a release that is published is not finalised again.
 
 ## The voice on this card
