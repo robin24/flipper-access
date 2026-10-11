@@ -2,10 +2,11 @@
 
 Date: 2026-09-26. Decisions taken with Robin: two repositories (option one below); the firmware
 fork public from the start, the project repository private until the first release; GPL-3 for
-the project repository; Kokoro and eSpeak-NG for the shipped vocabularies (section 5); merges, never rebases, for upstream;
-one tag per release; an honest statement that the code was written by AI agents under Robin's
-direction. Earlier context: `docs/roadmap.md` (why a fork, the memory plan) and the main design
-spec `2026-09-22-flipper-screen-reader-design.md`.
+the project repository; Kokoro and eSpeak-NG for the vocabularies (section 5), of which, by
+Robin's decision of 2026-10-11, a release ships one, heart, made with Kokoro; merges, never
+rebases, for upstream; one tag per release; an honest statement that the code was written by AI
+agents under Robin's direction. Earlier context: `docs/roadmap.md` (why a fork, the memory plan)
+and the main design spec `2026-09-22-flipper-screen-reader-design.md`.
 
 This document is written for a screen reader: prose and lists, no tables.
 
@@ -16,10 +17,12 @@ sighted person. It consists of:
 
 - the firmware update package, built from the `screen-reader` branch with the release options
   (`COMPACT=1 DEBUG=0`), with its resources;
-- the voice packs: the recorded vocabulary made with Kokoro's `af_heart` voice and a second,
-  light one made with eSpeak-NG, each with its licence file;
-- an install script that puts both on the device from a Mac, Linux or Windows computer, over
-  the USB serial console, with plain-text progress;
+- the voice pack: the recorded vocabulary `heart`, made with Kokoro's `af_heart` voice, with its
+  licence file. It is the only pack a release ships, by Robin's decision of 2026-10-11; the
+  eSpeak-NG backend stays for the sets users make;
+- an install script that puts the firmware and the voice on the device from a Mac, Linux or
+  Windows computer, over the USB serial console or with the voice through a card reader, with
+  plain-text progress;
 - documentation for blind users first: install, first boot, the chords and settings, the voice,
   known limits, how to report a crash;
 - the repositories on GitHub, continuous builds, a release workflow, and a sync procedure for
@@ -134,8 +137,10 @@ and nine trial files through the piezo, settled the engine:
   Mac's CPU, so a vocabulary of 10,800 words takes about 17 minutes with four processes, and
   new words later take seconds. The release vocabulary is made with it.
 - eSpeak-NG (GPL-3, repeatable by nature, a vocabulary in minutes) came second with its
-  `en-us+f3` female variant; the male default was harsh through the piezo. It is the light
-  second set: small, fast to make, and independent of any model download.
+  `en-us+f3` female variant; the male default was harsh through the piezo. It was planned as a
+  light second set: small, fast to make, and independent of any model download. By Robin's
+  decision of 2026-10-11 a release ships the Kokoro set alone, and eSpeak-NG stays a backend for
+  the sets users make.
 
 Determinism: Kokoro and eSpeak render a word identically every time, and the generator only
 makes missing clips or, when a setting changes, all of them, so a set never mixes renditions.
@@ -163,11 +168,14 @@ plan B; the trial files used the Samantha settings (high-pass 500, gain 1.3, sof
 
 The voice pack: `tools/voice_pack.py --set <name>` writes `voice-<name>-sonar-X.Y.Z.tar` with
 `sr/voices/<name>/...`, its `voice.txt` and a `LICENSE.txt` naming the engine, the model and
-its licence (Kokoro: Apache 2.0, with attribution; eSpeak-NG: GPL-3), and the pack's own terms,
-CC0 for what the fork adds. Plain tar, uncompressed (8-bit PCM compresses poorly), in the USTAR
-format with an entry for every folder before the files in it, since the device's unpacker makes
-a folder only from its entry (section 6). A release ships the Kokoro set and the eSpeak
-set; the install script puts on the card the sets the user chooses, the Kokoro one by default.
+its licence (Kokoro: Apache 2.0, in full, with attribution; eSpeak-NG: GPL-3, in full), and the
+pack's own terms: what the project adds is CC0 1.0, by Robin's decision of 2026-10-11. Plain tar,
+uncompressed (8-bit PCM compresses poorly), in the USTAR format with an entry for every folder
+before the files in it, since the device's unpacker makes a folder only from its entry (section
+6). A release ships one pack, the Kokoro set `heart`, by Robin's decision of 2026-10-11. On a
+fresh card it is the only set, so Auto speaks with it, and the install script sets no default;
+`release.json` still names `heart` as the default voice for the later desktop app. The install
+script puts on the card each pack it is given.
 
 The generator remains a user tool: anyone can make a set in another Kokoro voice, with eSpeak,
 or with `say` for personal use, and the README says how.
@@ -231,10 +239,13 @@ Re-running is safe: the unpack overwrites every clip and keeps the folders that 
 there; the package folder is replaced.
 
 Time goal: a fresh install in under 15 minutes on a Mac, voice included. Through a card reader
-the voice takes about a minute. Over USB it takes 25 to 28 minutes, whichever of the two levers
-below is used (the spike of 2026-10-11, `docs/measurements/2026-10-11-transfer-spike.txt`), so
-the goal is met only through the card reader, which stays the default answer. The two levers,
-measured:
+the voice takes about a minute, an estimate not yet measured on the device. Over USB the
+transfers alone take 25 to 28 minutes, whichever of the two levers below is used (the spike of
+2026-10-11, `docs/measurements/2026-10-11-transfer-spike.txt`). That is a lower bound, since
+the backup, the update with its restarts and the checks come on top: the whole install over USB
+with `tools/install.py`, measured on 2026-10-11 over a heart set already on the card, took 32
+minutes. So the goal is met only through the card reader, which stays the default answer. The two
+levers, measured:
 
 - Larger transfer chunks: `storage.py` sent 8 KB per round trip and `flipper_storage.py` sends
   32 KB. On a file of 5 MB that is 35.7 s against 28.5 s, and on a folder of 500 clips 88.4 s
@@ -258,14 +269,20 @@ measured:
   would have been Sonar's own, so missing from the firmware the script starts from (review of
   2026-09-28, R4).
 
+The USB way keeps the pack and `storage extract`, though sending the files one by one takes as
+long: it is the design here and in `docs/install-protocol.md`, the pack is what the release
+ships, and the mute that goes with it ends by itself if the script dies. That mute is set once,
+for the extract's whole time with a margin, since the console is busy with the extract and
+cannot renew it meanwhile, where the sync renews its mute while it sends.
+
 The update package (11.8 MB) adds 72 s over USB. A MB here is 1,048,576 bytes, a KB 1,024.
 
 Held back: clips at 11,025 samples a second instead of 16,000, which would make the pack about a
 third smaller. It changes the sound, so it waits for a listening test through the piezo, and that
 test is made only if USB is still too slow once the spike has measured the two levers above
 (Robin, 2026-09-28, the review's question 3). The spike has measured them and USB is still too
-slow; by its figures a pack a third smaller would take about 20 to 23 minutes, so this change
-alone would not reach 15 either (an estimate, not measured).
+slow. Smaller clips would shorten the voice's transfer over USB, and the listening test is still
+held back.
 
 Rejected: shipping the voice inside the update package's resources tarball. The updater would
 carry a manifest of 11,000 more entries and process it at every update, forever, and that path
@@ -291,14 +308,16 @@ tip every Monday, and by hand any branch, tag or commit of the fork. Expected ti
 twenty minutes.
 
 `release.yml`, on a tag `sonar-X.Y.Z` in the project repository: the same build, and a GitHub
-Release with these assets: the update package `.tgz` from fbt, the voice packs
-`voice-heart-sonar-X.Y.Z.tar` and `voice-espeak-sonar-X.Y.Z.tar` made on the Mac beforehand
-and uploaded by the release step (Kokoro needs the model and about 17 minutes; the continuous
-build does not make packs), and
-`install-sonar-X.Y.Z.zip` holding `install.py`, `flipper_storage.py` and `card_prune.py`,
-plus `release.json`: the version, the Momentum base commit, the voice, and every asset's name
-and SHA-256, so a later app can find and verify what to download. The release notes name the
-Momentum commit the build is based on, the changes, the known issues, and the install steps. The packs are made on the Mac; the release step uploads them.
+Release with these assets: the update package `.tgz` from fbt, the one voice pack
+`voice-heart-sonar-X.Y.Z.tar` (Robin's decision of 2026-10-11), made on the Mac and uploaded to
+the draft release (Kokoro needs the model and about 17 minutes; the continuous build does not
+make packs), and `install-sonar-X.Y.Z.zip` holding `install.py`, `flipper_cli.py`,
+`flipper_storage.py`, `card_prune.py` and the project's GPL-3 `LICENSE`, plus `release.json`:
+the version, the Momentum base commit, the voice, and every asset's name and SHA-256, so a later
+app can find and verify what to download. The release notes name the Momentum commit the build
+is based on, the changes, the known issues, and the install steps. The pack is made on the Mac
+and uploaded to the draft, and `tools/release_finalise.py` then writes `SHA256SUMS` and
+`release.json` from the draft's assets (review of 2026-09-28, R5).
 
 Versions: semantic versions with a name prefix, starting at `sonar-0.1.0`. The tag goes on
 both repositories: on the fork's commit, because fbt names the package after an exact-match
@@ -423,5 +442,7 @@ plan B is the voice work of step 3 (the voice sets, the Kokoro and eSpeak backen
 - Names: decided 2026-09-26. The project repository is `flipper-access`; the firmware is Sonar,
   prefix `sonar`, giving tags like `sonar-0.1.0`, packages `f7-update-sonar-0.1.0`, and the
   firmware origin `Sonar`.
-- The voice, after the listening test.
-- The voice pack's terms, CC0 by default when the dataset allows it.
+- The voice: decided 2026-10-11. A release ships one pack, heart, made with Kokoro's voice
+  af_heart.
+- The voice pack's terms: decided 2026-10-11. What the project adds is CC0 1.0, beside the
+  Apache 2.0 of Kokoro's model.
