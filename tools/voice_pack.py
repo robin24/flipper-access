@@ -60,7 +60,7 @@ LICENCES = {
     "kokoro": (
         "Licence of this voice set\n"
         "\n"
-        "This voice set was made with Kokoro, an open text-to-speech model, with the voice af_heart.\n"
+        "This voice set was made with Kokoro, an open text-to-speech model, with the voice {voice}.\n"
         "The clips are derived from the model's output.\n"
         "\n"
         "The model\n"

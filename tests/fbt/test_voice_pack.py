@@ -313,6 +313,15 @@ with tempfile.TemporaryDirectory() as tmp:
         check(want in text, f"and says what that is: {want}")
     check(text.isascii() and "\r" not in text and text.endswith("\n"), "plain ASCII, newline-ended, no carriage returns")
 
+    # The voice comes from the settings too, in the opening sentence and on the Voice: line alike:
+    # a set made with another Kokoro voice (the generator takes --voice) must not name af_heart
+    adam = licence_text(dict(manifest["settings"], voice="am_adam"))
+    adam_head = adam[:adam.find(apache)].split("\n")
+    check("af_heart" not in adam, "a Kokoro set made with another voice names af_heart nowhere")
+    check("with the voice am_adam." in adam_head[2], f"its opening sentence names the voice: {adam_head[2]!r}")
+    check("Voice: am_adam" in adam_head, "and so does its Voice: line")
+    check(adam.count("am_adam") == 2, f"the voice twice and no more: {adam.count('am_adam')}")
+
     # The checksums come from the manifest's settings: other settings, other checksums in the text
     other = dict(manifest["settings"], model_sha256="a" * 64 + "b" * 64)
     other_text = licence_text(other)
