@@ -1409,6 +1409,39 @@ with tempfile.TemporaryDirectory() as tmp:
               "nothing is written to it, the marker included, and nothing more is asked")
         storage.ser.close()
 
+    # Markers that earlier runs left at the card's top go too, before the eject; a folder of that name stays
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        flipper.files["/ext/.sonar-install-deadbeef"] = bytearray()
+        flipper.files["/ext/.sonar-install-0badcafe"] = bytearray()
+        flipper.dirs.add("/ext/.sonar-install-f01dab1e")
+        flipper.files["/ext/sr/.sonar-install-12345678"] = bytearray()  # not at the top: not a marker
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+        with card_reader(root, flipper) as reader:
+            console = install.voice_through_reader(storage, [pack], say, reader.ask)
+        left = sorted(p for p in flipper.files if posixpath.basename(p).startswith(".sonar-install-"))
+        check(left == ["/ext/sr/.sonar-install-12345678"] and "/ext/.sonar-install-f01dab1e" in flipper.dirs,
+              f"every marker file at the card's top is gone, this run's and the older ones: {left}")
+        check(line_with(lines, "2 marker files", "earlier") is not None, f"and the older ones are counted: {[l for _, l in lines][6:12]}")
+        console.ser.close()
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        flipper.files["/ext/.sonar-install-deadbeef"] = bytearray()
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+
+        def card_full(pack, volume, progress=None):
+            raise install.InstallError("Could not copy the voice pack: the card is full.")
+
+        with card_reader(root, flipper) as reader:
+            install.unpack_to_card = card_full
+            with contextlib.suppress(install.InstallError):
+                install.voice_through_reader(storage, [pack], say, reader.ask)
+        check(not [n for n in os.listdir(reader.volume) if n.startswith(".sonar-install-")],
+              "after a failed copy every marker is removed from the volume as far as it can be")
+        storage.ser.close()
+
     # The card turns up a few looks after Enter, as a Mac mounts it within a few seconds
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV)

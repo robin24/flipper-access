@@ -20,9 +20,10 @@ firmware, Momentum and Sonar, so a blank card works too. The steps:
    asks which; the card reader is the default, and --yes means USB.
    - Through a card reader: the script writes a marker file to the card; you take the microSD card
      out of the Flipper, put it into the computer's card reader and press Enter; the script finds it
-     by the marker, unpacks the packs onto it, removes the marker and the `._` files that macOS puts
-     beside everything it writes, and ejects the card. You put the card back and press Enter, and
-     the script waits until the Flipper sees the voice again and removes any `._` file that is left.
+     by the marker, unpacks the packs onto it, removes the marker, any marker an earlier run left,
+     and the `._` files that macOS puts beside everything it writes, and ejects the card. You put
+     the card back and press Enter, and the script waits until the Flipper sees the voice again and
+     removes any `._` file that is left.
      A card that does not turn up ends the install with a sentence that says what to do; the voice
      never goes over USB instead by itself.
    - Over USB: send the pack to /ext as one file, unpack it into /ext with `storage extract`, and
@@ -606,10 +607,24 @@ def _write_marker(storage, marker):
         storage.send_file(empty, f"{VOICE_DEST}/{marker}")
 
 
-def _copy_to_card(packs, sets, volume, marker, say, ask):
+def remove_markers(volume):
+    """Remove every marker file at the top of the card's volume, .sonar-install-<8 hex digits>:
+    this run's, and any that an earlier run left, as a run that stopped while the card was out of
+    the Flipper does. A folder of that name stays. The number of files removed."""
+    removed = 0
+    for name in sorted(os.listdir(volume)):
+        path = os.path.join(volume, name)
+        if name.startswith(MARKER_PREFIX) and os.path.isfile(path):
+            os.remove(path)
+            removed += 1
+    return removed
+
+
+def _copy_to_card(packs, sets, volume, say, ask):
     """The part of the card reader way with the card in the computer: unpack the packs onto it,
-    remove the marker and then the `._` files macOS made, and eject it. An InstallError that
-    names the step, with the marker taken off the card again."""
+    remove the marker files, this run's and older ones, and then the `._` files macOS made, and
+    eject it. An InstallError that names the step, with the marker files taken off the card again
+    as far as they can be."""
     try:
         written = 0
         for pack in packs:
@@ -617,11 +632,13 @@ def _copy_to_card(packs, sets, volume, marker, say, ask):
             written += unpack_to_card(pack, volume, _Progress(say, "{percent} percent of the voice pack is copied."))
     except InstallError:
         with contextlib.suppress(OSError):
-            os.remove(os.path.join(volume, marker))
+            remove_markers(volume)
         raise
     say(f"The voice is on the card, {_count(written, 'file')}.")
-    with _step("remove the marker file from the card"):
-        os.remove(os.path.join(volume, marker))
+    with _step("remove the marker files from the card"):
+        older = remove_markers(volume) - 1  # this run's own is among them
+    if older > 0:
+        say(f"Also removed {_count(older, 'marker file')} that an earlier run left on the card.")
     removed = sum(remove_appledouble(volume, name) for name in sets)
     if removed:
         say(f"Removed {_count(removed, 'macOS helper file')}, files whose names start with a dot and an underscore, "
@@ -748,8 +765,9 @@ def voice_through_reader(storage, packs, say, ask, port=None):
     card; the user takes the card out of the Flipper, puts it into the reader and presses Enter,
     with no clock running meanwhile; the card is looked for among the mounted volumes by the
     marker for CARD_LOOK_SECONDS; a card mounted read-only is refused before anything is written
-    to it; the packs are unpacked onto it, the marker and the `._` files under the sets' folders
-    are removed, and it is ejected; the user puts it back and presses Enter; and wait_for_card
+    to it; the packs are unpacked onto it, the marker files at its top, this run's and any an
+    earlier run left, and the `._` files under the sets' folders are removed, and it is ejected;
+    the user puts it back and presses Enter; and wait_for_card
     waits, on port or any Flipper's, until the Flipper sees the voice, and removes the `._` files
     that are left through a new console. The voice never goes over USB instead: a card that does
     not turn up, like every other failure, is an InstallError in one sentence that says what to
@@ -779,7 +797,7 @@ def voice_through_reader(storage, packs, say, ask, port=None):
             "contacts, put the card back into the Flipper, and run this script again",
         ))
     try:
-        _copy_to_card(packs, sets, volume, marker, say, ask)
+        _copy_to_card(packs, sets, volume, say, ask)
     except InstallError as e:
         raise InstallError(f"{e} Put the card back into the Flipper before running this script again.") from None
     ask("Put the card back into the Flipper, then press Enter.")
