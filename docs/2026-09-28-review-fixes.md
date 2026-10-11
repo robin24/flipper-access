@@ -1,6 +1,7 @@
 # Fixes after the review of 2026-09-28
 
-The review report is `docs/2026-09-28-review.md` on the branch `claude/flipper-access-review-m87rn7`.
+The review report is `docs/2026-09-28-review.md`, copied on 2026-10-11 from the branch
+`claude/flipper-access-review-m87rn7`, where it was written in commit 631918e96.
 The fixes are on the branch `claude/flipper-access-review-fixes-ssg5yj`, in this repository and in
 the fork, one finding per commit, each firmware change followed by its own submodule bump here.
 That branch was merged on 2026-09-29, pull request 1, and deleted on 2026-10-01. What was finished
@@ -50,21 +51,21 @@ Firmware:
   take a row of keys for typing; the cursor mode speaks; text boxes lose their question marks; a
   keyboard's description leaves out the key rows; long dialogs keep their buttons; every main menu
   style names its selected app with its position.
-- G9: the file browser's menu no longer carries the list's focus, a button menu says positions,
-  and the Loading screen says "Loading". The other three items followed on 2026-10-01: the file
-  browser counts its entries from 1 below the parent folder's entry, which has no position, and
-  says the name of the folder it opens; `elements_button_up` and `elements_button_down` are read
-  as the up and down buttons; and a word the screen shows in pieces, hyphenated by the wrapper or
-  broken by the text box, is read whole. With them came two found on the device: a new tab of
-  the file browser says its name first, and the DSi menu style's letter-spaced START is one
-  word. A third followed on 2026-10-03: the C64 style draws its numbers apart from the names, so
-  its focus is read as "Apps, 1 of 11", not "0.Apps". The screen model's host tests hold the titles, the joined words and the up and down
-  buttons, and failed against the model before; the positions were checked on the device. The
-  review of 2026-10-01 found three edge cases, fixed on 2026-10-02: a text box line that starts
-  after a bold or monospace marker following a space is a new word, not the end of the one
-  before; a line too narrow for a letter and the wrapper's dash no longer reads before the text;
-  and the file browser forgets its folder's name when it stops. A host test holds where a line
-  break falls inside a word, and failed against the old logic.
+- G9: the file browser's menu no longer carries the list's focus, a button menu says positions, and
+  the Loading screen says "Loading". The other three items followed on 2026-10-01: the file browser
+  counts its entries from 1 below the parent folder's entry, which has no position, and says the
+  name of the folder it opens; `elements_button_up` and `elements_button_down` are read as the up
+  and down buttons; and a word the screen shows in pieces, hyphenated by the wrapper or broken by
+  the text box, is read whole. With them came two found on the device: a new tab of the file browser
+  says its name first, and the DSi menu style's letter-spaced START is one word. A third followed on
+  2026-10-03: the C64 style draws its numbers apart from the names, so its focus is read as "Apps, 1
+  of 11", not "0.Apps". The screen model's host tests hold the titles, the joined words and the up
+  and down buttons, and failed against the model before; the positions were checked on the device.
+  The review of 2026-10-01 found three edge cases, fixed on 2026-10-02: a text box line that starts
+  after a bold or monospace marker following a space is a new word, not the end of the one before; a
+  line too narrow for a letter and the wrapper's dash no longer reads before the text; and the file
+  browser forgets its folder's name when it stops. A host test holds where a line break falls inside
+  a word, and failed against the old logic.
 - S2 to S10: text is cut after a whole word; speech stays silent with less than 4 KB of heap in one
   block; `sr voice off` stops the utterance and takes a time limit; a card or set that goes away
   ends the item; the ring plays silence after an underrun; a burst of wake-ups no longer ends a
@@ -145,6 +146,54 @@ credits, the Accessibility screen's five rows, the virtual environment, the 64 w
 list remembers (F10) and where the crash address is kept (F10); the design and release specs, the
 roadmap, the docs index and the merge routine where the code changed.
 
+## Fixed in plan C
+
+Plan C, `docs/superpowers/plans/2026-10-09-publishing-plan-c.md`, closed these on the branch
+`claude/plan-c-2026-10-11`, each with its tests in `tests/fbt` and a review of each task. R7, and
+the protection of the release tags that R3 asks for, stay under Not done until the rehearsal and the
+release.
+
+- R2 and R3: `tools/release_tag_check.sh` fetches the fork's release tag explicitly, deletes every
+  other tag of the checkout, and fails with one sentence unless HEAD is the tag's commit and
+  `git describe` gives the tag (8b646895e). `release.yml` also fails unless the build's
+  `version.json` calls itself the tag (910a4c623). The release tags are annotated, as Making a
+  release in `docs/device-notes.md` makes them.
+- R5 and R8: the voice pack is made on the Mac and uploaded to the draft release, and
+  `tools/release_finalise.py` then writes `SHA256SUMS` and `release.json`, with the firmware's
+  version, its commit and the API version, from the draft's own assets (34befee27).
+  `tools/install.py` compares those three, and that the build is not dirty and comes from Sonar,
+  with `info device` after the update (3dc3cff9b).
+- R6: every continuous build keeps its `firmware.elf`, the elf's map and the SDK zip in its artifact
+  (d442395f8), for 14 days, and a pull request's run uploads none, since its push's run has
+  (732c8e116). Every release carries its own as permanent assets (910a4c623).
+- R10: the voice packs carry their licences in full: the Apache License 2.0 with the Kokoro model's
+  version, the checksums of its two files and the credits of its card; the GPL-3 for a set made with
+  eSpeak-NG; and CC0 1.0 for what the project adds, as Robin decided on 2026-10-11 (39a9830ff,
+  16e1f380e). `tools/source_bundle.sh` packs the fork at the tag with every submodule, nested ones
+  included, into each release's source bundle, and prints the submodules' commits for its notes
+  (4b2f4ac5b). The install zip carries the project's GPL-3 `LICENSE` (da52b6c6a). The README offers
+  the source under Licence and credits (5a1f28efb), and the release notes template names the fork's
+  commit, the Momentum base and the commit of every submodule (f57299263).
+- R11: the transfer spike of 2026-10-11 set the chunk size to 32 KB and measured the voice over USB
+  at 24 to 27 minutes as one pack, and 26 file by file (068c27f55); a whole install over USB then
+  took 32 minutes. As Robin answered the review's questions 2 and 3, `tools/install.py` asks which
+  way the voice goes and writes it through the computer's card reader by default (59d324d04), and
+  the clips at 11,025 samples a second stay held back. The card reader way is not yet timed on the
+  device.
+- R13: `tools/install.py` installs any firmware's update package, the official firmware's included,
+  and `--restore` puts a backup of the internal storage back with `update restore` (3dc3cff9b). The
+  README's new section Going back says how (5a1f28efb).
+- R15: the README's Known limits says that the app loader checks only the API's major version, that
+  an app importing the JavaScript engine's symbols fails to load with "Missing Imports", and that an
+  app using the reader's exports fails on other firmware (5a1f28efb).
+- R16: `release.yml` pins its actions by commit, caches nothing, cancels no run and gives
+  permissions per job (910a4c623). `CHANGELOG.md`, `CONTRIBUTING.md` and the bug report form, which
+  asks for `firmware.version` and where the build came from, are new (c37304b3b). The untagged
+  builds' version stays `mntm-dev`, which `card_prune.py` relies on.
+- The note for plan C on macOS's `._` files: the card reader way removes them from the Mac before
+  the eject, and any that are left through the console once the card is back (59d324d04). Neither
+  has been tried on the device yet.
+
 ## Not done
 
 - T11's second note, listing the 64 folders instead of looking up each clip: measured on
@@ -153,17 +202,11 @@ roadmap, the docs index and the merge routine where the code changed.
   would save about 9 minutes of a full sync into an empty set, and about 5 of the 39 minutes the
   full sync of 2026-10-01 took over the old clips; an everyday sync of a few new words would gain
   nothing. Left out on 2026-10-02, since full syncs are rare.
-- For plan C: the release spec's card reader step counts on Python's tar reader writing no macOS
-  metadata files. On this Mac on 2026-10-03, every file and folder written to the card got a
-  `._` file beside it, from the `com.apple.provenance` attribute that macOS gives everything a
-  process makes and exFAT keeps only in such a file. The install script will have to remove them
-  afterwards, which leaves gaps in the folders, or unpack on the device.
-- R10's licence texts and source bundle, R11, R13, R15, R16, and R2, R3 and R5 to R8 belong to
-  plan C.
-  Your answers to the report's questions 2 and 3, on R11, are in the release spec's install
-  step: the script asks whether to copy the voice through a card reader or over USB, the card
-  reader being the default, and clips at 11,025 samples a second wait for a listening test,
-  made only if USB is still too slow once the transfer is measured.
+- R7: the released binary is the binary that was tested only once the draft release's own files are
+  downloaded, installed on the device and checked there. The rehearsal, `sonar-0.1.0-rc1`, does
+  that, and so does the release, `sonar-0.1.0`, before it is published.
+- The protection of the release tags, which R3 asks for: a ruleset on both repositories that keeps
+  `sonar-*` tags from being deleted or moved, made with the release.
 
 ## Your answers
 
