@@ -2,11 +2,13 @@
 # same tag on the fork's commit that the project records, builds that commit from a clean
 # checkout and leaves a draft GitHub Release, a prerelease for an -rc tag, with six assets: the
 # update package flipper-z-f7-update-<tag>.tgz, install-<tag>.zip (install.py, flipper_cli.py,
-# flipper_storage.py and card_prune.py, side by side), <tag>-firmware.elf and its map
-# <tag>-firmware.map, the SDK flipper-z-f7-sdk-<tag>.zip, and the source bundle
-# <tag>-source.tar.gz. The voice pack, SHA256SUMS and release.json are added on the Mac
-# afterwards with tools/release_finalise.py, and the draft is published by hand. If a release of
-# the tag exists already, a draft included, the release job fails; delete it first.
+# flipper_storage.py and card_prune.py side by side, with the project's GPL-3 LICENSE, since
+# the zip is a download of its own and flipper_storage.py is adapted from Momentum's GPL-3
+# storage.py), <tag>-firmware.elf and its map <tag>-firmware.map, the SDK
+# flipper-z-f7-sdk-<tag>.zip, and the source bundle <tag>-source.tar.gz. The voice pack,
+# SHA256SUMS and release.json are added on the Mac afterwards with tools/release_finalise.py,
+# and the draft is published by hand. If a release of the tag exists already, a draft included,
+# the release job fails; delete it first.
 #
 # Security (R16): every action is pinned by its commit, with its version in a comment; nothing is
 # cached, neither the toolchain nor pip's downloads; no run is cancelled by another; permissions
@@ -170,7 +172,7 @@ jobs:
           cp Momentum-Firmware/build/f7-firmware-C/firmware.elf "release/assets/$TAG-firmware.elf"
           cp Momentum-Firmware/build/f7-firmware-C/firmware.elf.map "release/assets/$TAG-firmware.map"
           zip -q -j -X "release/assets/install-$TAG.zip" \
-            tools/install.py tools/flipper_cli.py tools/flipper_storage.py tools/card_prune.py
+            tools/install.py tools/flipper_cli.py tools/flipper_storage.py tools/card_prune.py LICENSE
           tools/source_bundle.sh "$TAG" "release/assets/$TAG-source.tar.gz" > "$RUNNER_TEMP/submodules.txt"
           ls -l release/assets
 
