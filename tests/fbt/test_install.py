@@ -9,15 +9,22 @@ command. The checks: describe names Sonar, Momentum and the official firmware; a
 info device, update backup, the voice pack, storage extract, the update package and update install
 in that order, then info device after the wait, and never loader, power, input, sysctl or sr voice
 use; from Sonar the extract is wrapped in sr voice off and sr voice on, from any other firmware
-no sr command is sent; verify against a release.json; the wait for the port; and every failure, a
-storage error in an upload among them, ends in one sentence that names the step, exit code 1, and
-no traceback. The voice
-through a card reader is checked with temporary folders as the volumes and a stand-in card that
-leaves the stand-in Flipper when the user moves it, comes back after the eject, and gets a ._ file
-beside everything unpacked onto it, as macOS does: find_card and the volumes, unpack_to_card in
-the pack's order and refusing an entry that leaves the volume (Windows names too),
-remove_appledouble, eject, the marker, the time-out that offers USB, the wait for the card to
-come back, the ._ files removed over the console, and the questions of a run without --yes.
+no sr command is sent; verify against a release.json; the wait for the port; an update command
+refused while an application is open, whose sentence says to press Back until the Flipper says
+Home screen; and every failure, a storage error in an upload among them, ends in one sentence
+that names the step, exit code 1, and no traceback, and the last check is that every failure
+message the checks made has one sentence-ending full stop. The voice through a card reader is
+checked with temporary folders as the volumes, a stand-in user who moves the card when asked and
+presses Enter, and a stand-in card that leaves the stand-in Flipper, whose storage commands then
+say internal error, comes back after the eject, and gets a ._ file beside everything unpacked
+onto it, as macOS does: find_card and the volumes, unpack_to_card in the pack's order and
+refusing an entry that leaves the volume (Windows names too), remove_appledouble, eject, the
+marker and the markers of earlier runs, the look for the card that starts only after Enter and
+ends in one sentence without USB, a card mounted read-only, the console closed while the card is
+out, the wait after the card is back for a port that stays listed, with internal error taken for
+not yet, a port that vanishes after the first answer and comes back, a console that stops
+answering, and the time-out with the Flipper's last reason, the ._ files removed over the
+console, and the questions of a run without --yes.
 Needs pyserial. Run from the project root: python3 tests/fbt/test_install.py"""
 import contextlib
 import importlib.util

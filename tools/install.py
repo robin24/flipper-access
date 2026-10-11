@@ -468,7 +468,7 @@ def _card_reason(error):
     to check."""
     reason = _os_reason(error)
     if error.errno in (errno.EROFS, errno.EACCES, errno.EPERM):
-        reason += "; the card may be locked, so slide the lock of its microSD adapter towards the contacts"
+        reason += "; the card may be locked, so on a microSD adapter push the lock slider up, towards the contacts"
     return reason
 
 
@@ -773,11 +773,10 @@ def voice_through_reader(storage, packs, say, ask, port=None):
     marker for CARD_LOOK_SECONDS; a card mounted read-only is refused before anything is written
     to it; the packs are unpacked onto it, the marker files at its top, this run's and any an
     earlier run left, and the `._` files under the sets' folders are removed, and it is ejected;
-    the user puts it back and presses Enter; and wait_for_card
-    waits, on port or any Flipper's, until the Flipper sees the voice, and removes the `._` files
-    that are left through a new console. The voice never goes over USB instead: a card that does
-    not turn up, like every other failure, is an InstallError in one sentence that says what to
-    do."""
+    the user puts it back and presses Enter; and wait_for_card waits, on port or any Flipper's,
+    until the Flipper sees the voice, and removes the `._` files that are left through a new
+    console. The voice never goes over USB instead: a card that does not turn up, like every other
+    failure, is an InstallError in one sentence that says what to do."""
     sets = [name for pack in packs for name in pack_sets(pack)]
     marker = MARKER_PREFIX + secrets.token_hex(4)
     say("Writing a small marker file to the card, so that this computer can tell the card from other drives.")
