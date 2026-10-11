@@ -64,7 +64,7 @@ class StorageError(Exception):
 
 def _lost(why):
     """The StorageError for a console that is gone."""
-    return StorageError(f"the connection was lost: {why}. Is the Flipper still plugged in?")
+    return StorageError(f"the connection was lost: {why}; check that the Flipper is still plugged in")
 
 
 def _quoted(path):

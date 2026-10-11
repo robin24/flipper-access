@@ -12,6 +12,7 @@ away, ends in one sentence with the port closed. Needs pyserial. Run from the pr
 python3 tests/fbt/test_flipper_cli.py"""
 import importlib.util
 import os
+import re
 import sys
 import time
 from types import SimpleNamespace
@@ -32,6 +33,12 @@ def check(cond, what):
 
 def port(device, vid=None, pid=None, manufacturer=None, product=None, description=None):
     return SimpleNamespace(device=device, vid=vid, pid=pid, manufacturer=manufacturer, product=product, description=description)
+
+
+def one_sentence(text):
+    """Whether text is one sentence: one full stop, question mark or exclamation mark followed by
+    a space or the end, and that at the end."""
+    return len(re.findall(r"[.?!](?=\s|$)", text)) == 1 and text.endswith((".", "?", "!")) and "\n" not in text
 
 
 def exits(fn, *args):
@@ -75,7 +82,7 @@ else:
         # A PIN-locked Flipper has no port at all, so the sentence names the lock beside the
         # updater and qFlipper
         check(said == "No Flipper serial port found; check that the Flipper is plugged in, unlocked, not in the "
-                      "updater and not used by qFlipper, or name its port with --port.",
+                      "updater and not used by qFlipper, or name its port with --port." and one_sentence(said),
               f"none: the one sentence that names every reason: {said}")
     finally:
         fc.flipper_ports, fc.glob.glob = saved[0], saved[1]
@@ -83,14 +90,16 @@ else:
             os.environ["FLIPPER_PORT"] = saved[2]
 
     said = exits(fc.open_port, "/dev/no-such-port")
-    check(said is not None and said.startswith("cannot open /dev/no-such-port"), f"a port that is not there: {said}")
+    check(said is not None and said.startswith("cannot open /dev/no-such-port") and one_sentence(said),
+          f"a port that is not there, in one sentence: {said}")
     if os.name == "posix":
         # A pseudo-terminal stands in for the device: opened once, a second open is refused
         master, slave = os.openpty()
         name = os.ttyname(slave)
         first = fc.open_port(name)
         said = exits(fc.open_port, name)
-        check(said is not None and "another tool" in said, f"a port another tool has is named at once: {said}")
+        check(said is not None and "close qFlipper or any other tool that uses it" in said and one_sentence(said),
+              f"a port another tool has is named at once, in one sentence: {said}")
         first.close()
         again = fc.open_port(name)
         check(again.is_open, "and free again once closed")
@@ -235,13 +244,14 @@ else:
     ser, said = opened(console)
     check(ser is None and said is not None and "did not answer" in said and "R0skie" in said and not console.is_open,
           f"a console that gives no prompt: {said}")
-    check(said is not None and said.count(". ") == 0 and said.endswith(".") and "\n" not in said, f"in one sentence: {said}")
+    check(said is not None and one_sentence(said), f"in one sentence: {said}")
     check(time.monotonic() - started < 2, "after the banner's time and the carriage return's")
     # The port goes away while it is woken
     console = Console(gone=True)
     ser, said = opened(console)
     check(ser is None and said is not None and "R0skie" in said and "Device not configured" in said and not console.is_open,
           f"a port that goes away while it is woken: {said}")
+    check(said is not None and one_sentence(said) and "plugged in" in said, f"in one sentence that says what to check: {said}")
 
 print(f"flipper cli: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)

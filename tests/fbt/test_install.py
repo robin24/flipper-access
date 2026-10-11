@@ -225,7 +225,7 @@ class Flipper:
         """flipper_cli.open_port: the port, or its one sentence and exit when it is not there."""
         if port != PORT or (self.updated and self.never_back) or self.absent:
             self.absent = max(0, self.absent - 1)
-            sys.exit(f"cannot open {port}: [Errno 2] could not open port {port}. Is qFlipper or another tool using it?")
+            sys.exit(f"cannot open {port}: [Errno 2] could not open port {port}; close qFlipper or any other tool that uses it.")
         connection = Connection(self)
         if self.silent_opens:
             self.silent_opens -= 1
@@ -1783,9 +1783,10 @@ with tempfile.TemporaryDirectory() as tmp:
         check(code == 0 and any("percent of the voice pack is copied" in line for line in lines),
               f"progress lines while the pack is copied: {[x for x in lines if 'percent' in x][:3]}")
 
-# Each failure is one sentence: one full stop that ends a sentence, that is one followed by a space
-# or the end, so that the dots in paths and versions do not count
-SENTENCE_END = re.compile(r"\.(?=\s|$)")
+# Each failure is one sentence: one full stop, question mark or exclamation mark that ends a
+# sentence, that is one followed by a space or the end, so that the dots in paths and versions do
+# not count, and a question after a full stop does
+SENTENCE_END = re.compile(r"[.?!](?=\s|$)")
 several = [m for m in made_errors if len(SENTENCE_END.findall(m)) != 1 or "\n" in m]
 check(len(made_errors) > 30 and not several,
       f"every failure the checks made, {len(made_errors)} in all, is one sentence: {several[:3]}")

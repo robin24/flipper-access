@@ -89,7 +89,7 @@ def open_port(port, timeout=0.1):
     try:
         return serial.Serial(port, 230400, timeout=timeout, exclusive=True)
     except serial.SerialException as e:
-        sys.exit(f"cannot open {port}: {e}. Is qFlipper or another tool using it?")
+        sys.exit(f"cannot open {port}: {e}; close qFlipper or any other tool that uses it.")
 
 
 def _read_to_prompt(ser, seconds):
@@ -137,7 +137,7 @@ def open_cli(port):
     except PORT_ERRORS as e:
         with contextlib.suppress(*PORT_ERRORS):
             ser.close()
-        sys.exit(f"Could not use {port}: {e}. Is the Flipper still plugged in?")
+        sys.exit(f"Could not use {port}: {e}; check that the Flipper is still plugged in.")
     if not answered:
         with contextlib.suppress(*PORT_ERRORS):
             ser.close()

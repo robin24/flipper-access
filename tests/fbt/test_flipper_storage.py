@@ -12,6 +12,7 @@ Run from the project root: python3 tests/fbt/test_flipper_storage.py"""
 import importlib.util
 import os
 import posixpath
+import re
 import shlex
 import sys
 import tempfile
@@ -204,8 +205,11 @@ def says(error, *parts):
 
 
 def lost(error):
-    """Is error a StorageError that says the connection was lost, not a serial exception?"""
-    return isinstance(error, fs.StorageError) and str(error).startswith("the connection was lost")
+    """Is error a StorageError that says the connection was lost, not a serial exception, in words
+    that make one sentence with no sentence end of their own?"""
+    text = str(error)
+    return (isinstance(error, fs.StorageError) and text.startswith("the connection was lost")
+            and "plugged in" in text and not re.search(r"[.?!](\s|$)", text))
 
 
 def write(path, data):
