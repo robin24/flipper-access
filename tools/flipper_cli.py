@@ -7,10 +7,13 @@ Usage:
 
 The serial port is found automatically, by the Flipper's USB id on a Mac, Linux or Windows.
 Override with --port or the FLIPPER_PORT environment variable. The port is opened for this tool
-alone: when qFlipper or another tool has it, this one says so and stops. ANSI colour codes are
-stripped from the output so it reads cleanly in a terminal with a screen reader.
+alone: when qFlipper or another tool has it, this one says so and stops. Every open starts a fresh
+console session by dropping and raising DTR, and reads its banner to the prompt before the first
+command. ANSI colour codes are stripped from the output so it reads cleanly in a terminal with a
+screen reader.
 """
 import argparse
+import contextlib
 import glob
 import os
 import re
@@ -22,11 +25,28 @@ try:
 except ImportError:
     sys.exit("pyserial is missing. Run: .venv/bin/pip install pyserial  (or use .venv/bin/python)")
 
+# What a port that is gone raises. pyserial's SerialException is an OSError, but on a Mac or Linux
+# the call that clears the input buffer is a bare termios call, whose termios.error is not one.
+try:
+    import termios
+
+    PORT_ERRORS = (OSError, termios.error)
+except ImportError:  # Windows has no termios
+    PORT_ERRORS = (OSError,)
+
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 PROMPT = b">: "
 # The Flipper's USB serial port has STMicroelectronics' virtual COM port id, which other boards
 # with ST's USB code share, so a port that names Flipper comes first
 FLIPPER_USB_ID = (0x0483, 0x5740)
+# The open of the console: DTR is low this long before it is raised again, which the Flipper
+# takes for a terminal that went away and came back (cli_vcp.c ends the console session when DTR
+# drops and starts a new one, with the banner and a prompt, when it rises). On 2026-10-11, after
+# about ten idle hours, a fresh open got no echo and no prompt until DTR was dropped for half a
+# second and raised again.
+DTR_LOW_SECONDS = 0.5
+BANNER_SECONDS = 5  # the most the banner and its prompt may take once DTR is up
+NUDGE_SECONDS = 2  # and the prompt after one carriage return, when the banner gave none
 
 
 def flipper_ports(ports=None):
@@ -72,11 +92,59 @@ def open_port(port, timeout=0.1):
         sys.exit(f"cannot open {port}: {e}. Is qFlipper or another tool using it?")
 
 
-def open_cli(port):
-    ser = open_port(port)
+def _read_to_prompt(ser, seconds):
+    """Read from ser, and throw away, what comes until it ends in the prompt, for at most seconds;
+    whether the prompt came."""
+    deadline = time.monotonic() + seconds
+    tail = b""
+    while time.monotonic() < deadline:
+        chunk = ser.read(ser.in_waiting or 1)
+        if chunk:
+            tail = (tail + chunk)[-len(PROMPT):]
+            if tail == PROMPT:
+                return True
+        else:
+            time.sleep(0.02)
+    return False
+
+
+def wake(ser):
+    """Start a fresh console session on the open port ser and read it to its first prompt, and
+    whether the prompt came. DTR is dropped for DTR_LOW_SECONDS, what came meanwhile is thrown
+    away, and DTR is raised: the Flipper starts a new session, which prints the banner and the
+    prompt, and a console that had stopped answering answers again. The banner is read to its
+    prompt, so that none of it is taken for the reply to the first command. When no prompt comes
+    within BANNER_SECONDS, one carriage return is sent, which a session that DTR did not restart
+    answers with a prompt."""
+    ser.dtr = False
+    time.sleep(DTR_LOW_SECONDS)
+    ser.reset_input_buffer()
+    ser.dtr = True
+    if _read_to_prompt(ser, BANNER_SECONDS):
+        return True
     ser.write(b"\r")
-    time.sleep(0.4)
-    ser.read(ser.in_waiting)  # discard the welcome banner
+    return _read_to_prompt(ser, NUDGE_SECONDS)
+
+
+def open_cli(port):
+    """The Flipper's console at port, opened for this tool alone with a fresh session that has
+    said its first prompt (wake), so the first command's reply is its own. One sentence and exit
+    when the port cannot be opened, goes away meanwhile, or gives no prompt; the port is closed
+    then."""
+    ser = open_port(port)
+    try:
+        answered = wake(ser)
+    except PORT_ERRORS as e:
+        with contextlib.suppress(*PORT_ERRORS):
+            ser.close()
+        sys.exit(f"Could not use {port}: {e}. Is the Flipper still plugged in?")
+    if not answered:
+        with contextlib.suppress(*PORT_ERRORS):
+            ser.close()
+        sys.exit(
+            f"The Flipper's console at {port} did not answer; restart the Flipper by holding Left and Back together "
+            "for five seconds, then try again."
+        )
     return ser
 
 

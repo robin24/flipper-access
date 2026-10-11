@@ -3,13 +3,15 @@
 card, and its port, which goes away while the Flipper updates and comes back. The stand-in answers
 as the device's shell does (the echo of the command and a line end, the output, then a line end
 and the prompt), unpacks a tar with storage extract as the firmware does, entry line by entry line,
-and restarts on update install after its "Restarting to apply update" line. The checks: describe
-names Sonar, Momentum and the official firmware; a whole run sends info device, update backup, the
-voice pack, storage extract, the update package and update install in that order, then info device
-after the wait, and never loader, power, input, sysctl or sr voice use; from Sonar the extract is
-wrapped in sr voice off and sr voice on, from any other firmware no sr command is sent; verify
-against a release.json; the wait for the port; and every failure, a storage error in an upload
-among them, ends in one sentence that names the step, exit code 1, and no traceback. The voice
+and restarts on update install after its "Restarting to apply update" line; its console session
+begins when DTR rises, and every open is checked to drop DTR and raise it again before its first
+command. The checks: describe names Sonar, Momentum and the official firmware; a whole run sends
+info device, update backup, the voice pack, storage extract, the update package and update install
+in that order, then info device after the wait, and never loader, power, input, sysctl or sr voice
+use; from Sonar the extract is wrapped in sr voice off and sr voice on, from any other firmware
+no sr command is sent; verify against a release.json; the wait for the port; and every failure, a
+storage error in an upload among them, ends in one sentence that names the step, exit code 1, and
+no traceback. The voice
 through a card reader is checked with temporary folders as the volumes and a stand-in card that
 leaves the stand-in Flipper when the user moves it, comes back after the eject, and gets a ._ file
 beside everything unpacked onto it, as macOS does: find_card and the volumes, unpack_to_card in
@@ -191,17 +193,42 @@ class Flipper:
         return connection
 
 
+BANNER = b"\r\nWelcome to the stand-in\r\n\r\n>: "
+
+
 class Connection:
-    """One open of the port: the serial port as install.py sees it, and the shell behind it."""
+    """One open of the port: the serial port as install.py sees it, and the shell behind it. The
+    open raises DTR, and a rising DTR starts a console session, which prints the banner and the
+    prompt; DTR dropping ends the session. Typed lines are answered only in a session."""
 
     def __init__(self, flipper):
         self.flipper = flipper
-        self.out = bytearray(b"\r\nWelcome to the stand-in\r\n>: ")  # the banner, which open_cli discards
+        self.out = bytearray()
         self.typed = bytearray()
         self.target = None
         self.need = 0
         self.gone = False  # the Flipper restarted: the port is dead
         self.is_open = True
+        self.session = False
+        self.events = []  # the DTR changes and the first command, in order
+        self._dtr = False
+        self.dtr = True  # the open
+
+    @property
+    def dtr(self):
+        return self._dtr
+
+    @dtr.setter
+    def dtr(self, value):
+        if self.gone:
+            raise serial.SerialException("could not set DTR: [Errno 6] Device not configured")
+        self.events.append(("dtr", value))
+        if value and not self._dtr:
+            self.session = True
+            self.out += BANNER
+        elif not value:
+            self.session = False
+        self._dtr = value
 
     @property
     def in_waiting(self):
@@ -253,9 +280,13 @@ class Connection:
 
     def handle(self, command):
         f = self.flipper
+        if not self.session:
+            return  # no console session: no echo, no prompt
         if not command.strip():
             self.out += b"\r\n>: "
             return
+        if not any(e[0] == "command" for e in self.events):
+            self.events.append(("command", len(self.out)))  # with the bytes not yet read
         f.sent.append(command)
         words = shlex.split(command)
         if words[0] == "storage" and f.card_out:
@@ -368,7 +399,7 @@ class Connection:
 
 
 # The stand-ins in place of the computer's port list and port, and no waiting
-fc.time = SimpleNamespace(sleep=lambda seconds: None, time=time.time)  # open_cli's pause for the banner
+fc.time = SimpleNamespace(sleep=lambda seconds: None, time=time.time, monotonic=time.monotonic)  # open_cli's pauses
 fc.glob.glob = lambda pattern: []
 os.environ.pop("FLIPPER_PORT", None)
 install.RESTART_SECONDS = 0
@@ -729,6 +760,8 @@ with tempfile.TemporaryDirectory() as tmp:
     check(lines[-1].startswith("Done"), f"the last line says it is done: {lines[-1]}")
     check(all("\r" not in line and line.strip() for line in lines), "plain lines, no carriage returns, none empty")
     check(all(c.is_open is False for c in flipper.connections), "every connection was closed")
+    check(all(c.events[:3] == [("dtr", True), ("dtr", False), ("dtr", True)] for c in flipper.connections),
+          f"every open dropped DTR and raised it again before its first command: {[c.events[:4] for c in flipper.connections]}")
 
     # From the official firmware and from Momentum: the same, without any sr command
     for name, reply in (("official 1.4.3", OFFICIAL), ("Momentum mntm-012", MOMENTUM)):

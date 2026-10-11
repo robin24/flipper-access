@@ -25,16 +25,8 @@ import posixpath
 import re
 import time
 
-from flipper_cli import ANSI, PROMPT  # exits with one sentence when pyserial is missing
-
-# What a port that is gone raises. pyserial's SerialException is an OSError, but on a Mac or Linux
-# the call that clears the input buffer is a bare termios call, whose termios.error is not one.
-try:
-    import termios
-
-    PORT_ERRORS = (OSError, termios.error)
-except ImportError:  # Windows has no termios
-    PORT_ERRORS = (OSError,)
+# PORT_ERRORS: what a port that is gone raises, flipper_cli's, here for the install's use too
+from flipper_cli import ANSI, PORT_ERRORS, PROMPT  # exits with one sentence when pyserial is missing
 
 # The bytes of one `storage write_chunk`. The device takes a chunk of any size and appends it to
 # the file, so this only sets how often the host waits for the device's prompt. 32 KB, from the
