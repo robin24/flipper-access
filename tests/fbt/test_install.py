@@ -1022,28 +1022,47 @@ with tempfile.TemporaryDirectory() as tmp:
           f"a failed backup stops the run: {lines[-1:]}")
 
     # An application is open on the Flipper: the update commands are refused, and the sentence says
-    # to press Back until the Flipper says Home screen, then to run the script again
-    def home_screen_advice(line):
-        return ("application is open" in line and "press Back" in line and "Home screen" in line
-                and "run this script again" in line and line.count(". ") == 0 and line.endswith("."))
+    # to press Back to the home screen and then to run the script again: until it says Home screen
+    # when Sonar runs, a few times from other firmware, which says nothing
+    def home_screen_advice(line, sonar):
+        said = ("press Back on the Flipper until it says Home screen" if sonar
+                else "press Back on the Flipper a few times to reach the home screen")
+        return ("application is open" in line and said in line and ("Home screen" in line) == sonar
+                and "run this script again" in line and len(re.findall(r"[.?!](?=\s|$)", line)) == 1)
 
     flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
     flipper.app_open = "backup"
     code, lines, err = run(flipper, full_run)
-    check(code == 1 and "back up" in lines[-1] and home_screen_advice(lines[-1]) and no_traceback(lines, err),
-          f"update backup refused while an app is open: {lines[-1:]}")
+    check(code == 1 and "back up" in lines[-1] and home_screen_advice(lines[-1], True) and no_traceback(lines, err),
+          f"update backup refused while an app is open on Sonar: {lines[-1:]}")
     check(not [c for c in flipper.sent if c.startswith("storage write_chunk")], "and nothing was sent")
+    flipper = Flipper(MOMENTUM, after=SONAR_RELEASE)
+    flipper.app_open = "backup"
+    code, lines, err = run(flipper, full_run)
+    check(code == 1 and "back up" in lines[-1] and home_screen_advice(lines[-1], False),
+          f"update backup refused while an app is open on Momentum, which says nothing: {lines[-1:]}")
     flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
     flipper.app_open = "install"
     code, lines, err = run(flipper, full_run)
-    check(code == 1 and "start the update" in lines[-1] and home_screen_advice(lines[-1]),
-          f"update install refused while an app is open: {lines[-1:]}")
+    check(code == 1 and "start the update" in lines[-1] and home_screen_advice(lines[-1], True),
+          f"update install refused while an app is open on Sonar: {lines[-1:]}")
+    flipper = Flipper(OFFICIAL, after=SONAR_RELEASE)
+    flipper.app_open = "install"
+    code, lines, err = run(flipper, full_run)
+    check(code == 1 and "start the update" in lines[-1] and home_screen_advice(lines[-1], False),
+          f"update install refused while an app is open on the official firmware: {lines[-1:]}")
     flipper = Flipper(OFFICIAL)
     flipper.files["/ext/backup-2026-10-01.tar"] = bytearray(b"an older backup")
     flipper.app_open = "restore"
     code, lines, err = run(flipper, ["--restore", "/ext/backup-2026-10-01.tar", "--yes"])
-    check(code == 1 and "restore" in lines[-1] and home_screen_advice(lines[-1]),
-          f"update restore refused while an app is open: {lines[-1:]}")
+    check(code == 1 and "restore" in lines[-1] and home_screen_advice(lines[-1], False),
+          f"update restore refused while an app is open on the official firmware: {lines[-1:]}")
+    flipper = Flipper(OFFICIAL, after=SONAR_RELEASE)
+    flipper.files["/ext/backup-2026-10-01.tar"] = bytearray(b"an older backup")
+    flipper.app_open = "restore"
+    code, lines, err = run(flipper, ["--package", tgz, "--restore", "/ext/backup-2026-10-01.tar", "--yes"])
+    check(code == 1 and "restore" in lines[-1] and update in flipper.sent and home_screen_advice(lines[-1], True),
+          f"update restore after the update to Sonar goes by the firmware that runs then: {lines[-1:]}")
 
     # Files that are not what they should be: refused before the Flipper is touched
     no_fuf_root = os.path.join(tmp, "nofuf")

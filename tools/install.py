@@ -192,13 +192,14 @@ def _device_step(what):
         raise InstallError(_sentence(what, e)) from None
 
 
-def _device_reason(reply):
+def _device_reason(reply, sonar=False):
     """What the Flipper said when a command did not end in "Result: OK". A command that needs the
     loader, as the update commands do, is refused while an application is open on the Flipper; the
-    reason then says what to do."""
+    reason then says what to do. sonar: Sonar runs, whose reader says Home screen on the home
+    screen, while other firmware says nothing."""
     if APP_OPEN in reply:
-        return (f"the Flipper said that {APP_OPEN}; press Back on the Flipper until it says Home screen, "
-                "then run this script again")
+        back = "until it says Home screen" if sonar else "a few times to reach the home screen"
+        return f"the Flipper said that {APP_OPEN}; press Back on the Flipper {back}, then run this script again"
     if "Result: FAIL" in reply:
         return "the Flipper said that it failed"
     lines = [line.strip() for line in reply.splitlines() if line.strip()]
@@ -307,10 +308,11 @@ def _close(storage):
 # The steps
 
 
-def backup(storage, date):
+def backup(storage, date, sonar=False):
     """Back up the Flipper's internal storage to the card with `update backup` and return the
     backup's path, /ext/backup-<date>.tar, or backup-<date>-2.tar and so on when that name is
-    taken: an earlier backup, perhaps the one from before Sonar, is never overwritten."""
+    taken: an earlier backup, perhaps the one from before Sonar, is never overwritten. sonar: Sonar
+    runs, for the advice when an application is open."""
     what = "back up the Flipper's internal storage"
     with _step(what):
         path = f"/ext/backup-{date}.tar"
@@ -320,7 +322,7 @@ def backup(storage, date):
             number += 1
         reply = storage.command(f"update backup {path}", timeout=COMMAND_SECONDS)
     if "Result: OK" not in reply:
-        raise InstallError(_sentence(f"{what} to {path}", _device_reason(reply)))
+        raise InstallError(_sentence(f"{what} to {path}", _device_reason(reply, sonar)))
     return path
 
 
@@ -893,10 +895,11 @@ def upload_package(storage, package_dir, say):
     return folder
 
 
-def start_update(storage, folder):
+def start_update(storage, folder, sonar=False):
     """Start the update with `update install <folder>/update.fuf`. The Flipper checks the package,
     says "Restarting to apply update" and restarts into its updater, so the console goes away;
-    it is closed here. An InstallError with the Flipper's reason when it refuses the package."""
+    it is closed here. An InstallError with the Flipper's reason when it refuses the package.
+    sonar: Sonar runs, for the advice when an application is open."""
     what = "start the update"
     try:
         reply = storage.command(f"update install {folder}/update.fuf", timeout=COMMAND_SECONDS)
@@ -907,7 +910,7 @@ def start_update(storage, folder):
         raise InstallError(_sentence(what, e)) from None
     # The prompt came back, so the Flipper did not restart: it said why
     refused = re.search(r"^Error: (.*?)\.? Stopping update\.?$", reply, re.MULTILINE)
-    reason = f"the Flipper said: {refused.group(1)}" if refused else _device_reason(reply)
+    reason = f"the Flipper said: {refused.group(1)}" if refused else _device_reason(reply, sonar)
     raise InstallError(_sentence(f"{what} from {folder}", reason))
 
 
@@ -1038,10 +1041,11 @@ def _check_restore(storage, path):
             raise InstallError(_sentence(f"restore the internal storage from {path}", "there is no such file on the card"))
 
 
-def restore(storage, path, say):
+def restore(storage, path, say, sonar=False):
     """Put the Flipper's internal storage back from a backup with `update restore`. path is on the
     card (/ext/...), or a file on this computer, which is sent to /ext first. The Flipper reads the
-    restored settings when it restarts, which the user does."""
+    restored settings when it restarts, which the user does. sonar: Sonar runs, for the advice
+    when an application is open."""
     if path.startswith("/ext/"):
         card = path
     else:
@@ -1054,7 +1058,7 @@ def restore(storage, path, say):
     with _step(what):
         reply = storage.command(f"update restore {card}", timeout=COMMAND_SECONDS)
     if "Result: OK" not in reply:
-        raise InstallError(_sentence(what, _device_reason(reply)))
+        raise InstallError(_sentence(what, _device_reason(reply, sonar)))
     say("The internal storage is restored. Restart the Flipper so that it reads it: hold Left and Back together for five seconds.")
 
 
@@ -1203,7 +1207,7 @@ def _install(args, say):
                     return 1
                 by_reader = bool(packs) and _voice_way(say)
             say("Backing up the Flipper's internal storage to the card.")
-            say(f"The backup is {backup(storage, today())}.")
+            say(f"The backup is {backup(storage, today(), sonar)}.")
             if by_reader:
                 storage = voice_through_reader(storage, packs, say, ask, port=args.port or os.environ.get("FLIPPER_PORT"))
             else:
@@ -1212,7 +1216,7 @@ def _install(args, say):
             if package_dir:
                 folder = upload_package(storage, package_dir, say)
                 say("Starting the update.")
-                start_update(storage, folder)
+                start_update(storage, folder, sonar)
                 say("The Flipper is restarting to install the update.")
                 storage = wait_for_device(WAIT_SECONDS, say, port=args.port or os.environ.get("FLIPPER_PORT"))
                 with _step("read the Flipper's device information after the update"):
@@ -1228,7 +1232,7 @@ def _install(args, say):
                     ))
                 say("The Flipper runs the firmware of the release." if release else "The Flipper runs the firmware of the package.")
             if args.restore:
-                restore(storage, args.restore, say)
+                restore(storage, args.restore, say, is_sonar(info))  # the firmware that runs now
             if package_dir:
                 prune(storage, say, info=info, keep={name})
             say(f"Done, after {_duration(time.monotonic() - started)}.")
