@@ -3,8 +3,8 @@
 Flipper Access is the project behind Sonar, a firmware for the Flipper Zero that a blind person
 can use without sight. Sonar is built on [Momentum](https://github.com/Next-Flip/Momentum-Firmware),
 and its screen reader speaks every screen through the device's own speaker in a recorded voice.
-This repository holds the documentation, the tools and, from the first release on, the downloads.
-The firmware's source is the fork at https://github.com/robin24/Momentum-Firmware, branch
+This repository holds the documentation, the tools and the releases, which are the downloads to
+install. The firmware's source is the fork at https://github.com/robin24/Momentum-Firmware, branch
 `screen-reader`.
 
 ## How it was made
@@ -66,9 +66,179 @@ again, not loaded from the card, and no longer crashes the device out of memory.
 
 ## Install
 
-Release packages and an install script come with the first release. Until then, build and flash
-the firmware as described under Building from source, then put a voice on the card as described
-under The voice.
+Sonar is installed from a computer over the Flipper's USB cable, with the install script that
+comes with each release. It works from the official firmware, from Momentum and from an earlier
+Sonar, and with a blank card too. To build the firmware yourself instead, see Building from source.
+
+### What you need
+
+- The Flipper Zero with a microSD card in it, and a USB cable to the computer. The Flipper must be
+  unlocked, since a Flipper locked with a PIN closes its console, and qFlipper must be closed,
+  since only one program at a time can use the Flipper's port.
+- A computer with macOS, Linux or Windows, and Python 3.10 or newer. The script needs one Python
+  package, pyserial, and nothing else.
+- A card reader for microSD cards in the computer, if you have one. It is not needed, but the
+  install is faster with it.
+
+This command shows which Python you have:
+
+```bash
+python3 --version
+```
+
+It must say 3.10 or newer. The `python3` that comes with the Mac's command line tools is 3.9,
+while Homebrew's and the installer from python.org are newer. On Windows, Python comes from
+python.org, and its command is `py` where these commands say `python3`.
+
+### The downloads
+
+The releases are at https://github.com/robin24/flipper-access/releases. Download four files of
+the newest release into one folder. For the release `sonar-0.1.0` they are these, and a later
+release has its own version in their names:
+
+- `flipper-z-f7-update-sonar-0.1.0.tgz`, the firmware's update package, about 12 MB.
+- `voice-heart-sonar-0.1.0.tar`, the voice, about 111 MB.
+- `install-sonar-0.1.0.zip`, the install script with its three helpers and the licence.
+- `release.json`, the release's description, which the script checks the installed firmware
+  against.
+
+A release has more files, which the install does not need: `SHA256SUMS`, the checksums of all the
+others; the firmware's elf and map, which turn a crash address into a line of code; the SDK, for
+building apps; and the source bundle, the source of every binary, described under Licence and
+credits.
+
+To check your downloads, download `SHA256SUMS` into the same folder too, and run this command
+there. Each file you downloaded should say OK:
+
+```bash
+shasum -a 256 -c --ignore-missing SHA256SUMS
+```
+
+On Linux, the same check is:
+
+```bash
+sha256sum -c --ignore-missing SHA256SUMS
+```
+
+Unpack the install zip in the same folder. From a terminal in that folder, on a Mac or Linux:
+
+```bash
+unzip install-sonar-0.1.0.zip
+```
+
+On Windows, this does the same in a terminal:
+
+```bash
+tar -xf install-sonar-0.1.0.zip
+```
+
+That gives `install.py`, `flipper_cli.py`, `flipper_storage.py`, `card_prune.py` and `LICENSE`.
+Then make a virtual environment in the folder, once, and put pyserial into it. It is the folder
+`.venv`, as for the tools of this repository:
+
+```bash
+python3 -m venv .venv
+```
+
+```bash
+.venv/bin/pip install pyserial
+```
+
+On Windows, `.venv\Scripts\pip` and `.venv\Scripts\python` take the place of `.venv/bin/pip`
+and `.venv/bin/python` in these commands.
+
+### Running the install
+
+Plug the Flipper in, unlock it, and run the script from the same folder:
+
+```bash
+.venv/bin/python install.py --package flipper-z-f7-update-sonar-0.1.0.tgz --voice voice-heart-sonar-0.1.0.tar --release release.json
+```
+
+Its three arguments, one by one. `--package` names the update package:
+
+```text
+--package flipper-z-f7-update-sonar-0.1.0.tgz
+```
+
+`--voice` names the voice pack:
+
+```text
+--voice voice-heart-sonar-0.1.0.tar
+```
+
+`--release` names the release's description. After the update, the script compares the firmware
+on the Flipper with it and says whether it is the release's:
+
+```text
+--release release.json
+```
+
+Two more options are there when needed. `--port` names the Flipper's serial port, when the script
+does not find it by itself. `--yes` asks nothing, and sends the voice over USB. This command lists
+every option and the steps:
+
+```bash
+.venv/bin/python install.py --help
+```
+
+### What the install says and does
+
+The Flipper itself says nothing about the install: other firmware has no reader, and Sonar's
+reader is silent while the voice is unpacked and while the Flipper updates. The script speaks for
+it: it says each step on its own line, for the computer's screen reader, to the very end. The
+Flipper's first words come after the update, as described under First boot.
+
+The steps, in order:
+
+1. The script looks for the Flipper, and says where it found it and which firmware and version
+   the Flipper runs.
+2. It says what it will do and asks whether to go ahead. Enter alone means yes.
+3. It asks which way the voice goes. Enter alone, or R, means the card reader, and U means USB:
+
+   ```text
+   Copy the voice through a card reader (faster) or over USB? [R/u]
+   ```
+
+4. It backs up the Flipper's internal storage to the card, as `/ext/backup-<date>.tar`, such as
+   `/ext/backup-2026-10-11.tar`, and says the name. A backup that is already there is kept, and
+   the new one is then named `backup-<date>-2.tar`, and so on. The backup holds the settings of
+   the firmware you came from, and it is the way back, as described under Going back.
+5. It puts the voice on the card, through the card reader or over USB, as described below.
+6. It sends the update package to the card and starts the update. The Flipper restarts, updates
+   itself and restarts again, silent all the while. The script waits for it, up to 15 minutes,
+   and says a line about once a minute. Coming from other firmware, the update may also replace
+   the Bluetooth radio's stack, which adds a restart and a few minutes.
+7. It reads the firmware again and says whether the Flipper runs the release.
+8. It removes Sonar's older update packages from the card. The packages of other firmware, such
+   as the official one, stay.
+9. It says "Done, after", and the minutes it took.
+
+When a step fails, the script says in one sentence which step it was and the reason the Flipper
+gave, and stops. Running it again is safe: the clips of the voice are overwritten, the folders are
+kept, and the update package is replaced.
+
+Through a card reader, the script first writes a small marker file to the card. Then it asks you
+to take the microSD card out of the Flipper and put it into the computer's card reader, leaving the
+Flipper plugged in and unlocked. It finds the card by the marker, unpacks the voice onto it, removes
+the marker and the `._` files that macOS puts beside everything it writes, and ejects the card.
+Then it asks you to put the card back into the Flipper, and waits until the Flipper sees the voice.
+When no card turns up within 5 minutes, it says so and offers to send the voice over USB instead.
+On a Mac, macOS may first ask whether the terminal may use the files on a removable volume; allow
+it.
+
+Over USB, the script sends the voice to the card as one file, and the Flipper unpacks it there.
+When the Flipper already runs Sonar, its voice is off while the pack is unpacked, and it comes back
+by itself if the script stops.
+
+### How long it takes
+
+Most of the time goes to the voice, which is about 111 MB. Over USB, a test install on a Mac on
+2026-10-11 took 32 minutes in all, on a card that already held the voice: about 11 minutes to send
+the voice, 13 to unpack it, a minute to send the update package, and 6 for the update. On a card
+without the voice, the unpacking takes about 16 minutes, so a first install over USB takes about
+35. The card reader way is faster, since the computer writes the voice to the card itself; it has
+not been timed yet.
 
 ## First boot
 
@@ -93,6 +263,48 @@ second. You hear "Screen reader off". The same chord turns the reader on again, 
 "Screen reader on" followed by the screen. It works on every screen, the lock screen included, and
 also in the PIN entry, where the digits entered so far are kept.
 
+## Going back
+
+The install script installs any firmware's update package, the official firmware's and Momentum's
+included, and puts back the backup that the Sonar install made. The official firmware's update
+package comes from Flipper's update server, such as version 1.4.3 at
+https://update.flipperzero.one/builds/firmware/1.4.3/flipper-z-f7-update-1.4.3.tgz, and Momentum's
+from its releases at https://github.com/Next-Flip/Momentum-Firmware/releases, such as
+`flipper-z-f7-update-mntm-012.tgz`.
+
+Download the package into the folder of the install, and run the script with it and with the
+backup, named by its path on the card:
+
+```bash
+.venv/bin/python install.py --package flipper-z-f7-update-1.4.3.tgz --restore /ext/backup-2026-10-11.tar
+```
+
+Its two arguments, one by one. `--package` names the update package:
+
+```text
+--package flipper-z-f7-update-1.4.3.tgz
+```
+
+`--restore` names the backup to put back:
+
+```text
+--restore /ext/backup-2026-10-11.tar
+```
+
+Give the name of your own backup, the one the install that brought Sonar said, since that one holds
+the settings of the firmware you came from. Every later install makes a backup of Sonar's settings
+too, under a later date. `--restore` also takes a backup file on the computer, which the script
+sends to the card first.
+
+The script makes a new backup first, then installs the package, waits for the Flipper, checks that
+it runs the package's version, and puts the old backup back. Then it tells you to restart the
+Flipper, so that it reads the settings: hold Left and Back together for five seconds. It also
+removes Sonar's update packages from the card. The official firmware and Momentum have no screen
+reader, so the Flipper is silent from the update on, and the script says each step to the end. The
+voice stays on the card, in the folder `sr`, which other firmware ignores.
+
+To go back to an earlier Sonar release, install that release's files as described under Install.
+
 ## Using it on the device
 
 The screen reader can be controlled from the device alone. Chords with the Back button read the
@@ -102,7 +314,9 @@ only icons, such as the lock menu, the lock screen and the infrared universal re
 names.
 
 A few sections also give a console command. It is sent from a computer over USB with
-`tools/flipper_cli.py` from this repository, set up as described under Building from source.
+`tools/flipper_cli.py` from this repository, set up as described under Building from source. After
+an install from a release, the same tool is in the install's folder, without the `tools/` in front:
+there the commands start with `.venv/bin/python flipper_cli.py`.
 
 ### Back chords
 
@@ -366,7 +580,10 @@ word gets its own clip at the next run.
 The card holds one folder per voice set, `/ext/sr/voices/<set>/`. A set is a vocabulary made with
 one engine and one voice: `heart`, made with Kokoro's voice af_heart, for example, or `samantha`,
 made on a Mac with its Samantha voice. The reader speaks with the set chosen in the Accessibility
-settings' Voice row or with `sr voice use`; Auto, the default, is the first set in name order.
+settings' Voice row or with `sr voice use`; Auto, the default, is the first set in name order. On
+a card with the release's voice alone, Auto speaks with heart. A set added later whose name comes
+first in name order, such as `espeak`, then becomes Auto's choice; choose heart in the Voice row to
+keep it.
 
 In a set's folder, each clip is a file `<hh>/<word>.raw`, where `<hh>` is one of 64 folders,
 named by two hex digits: the word's FNV-1a hash modulo 64. Finding a file on the card means
@@ -442,11 +659,22 @@ on.
 
 ### Licensing
 
-A release ships two voice sets made with free engines, each with its own licence file: `heart`,
-made with Kokoro, an open speech model by hexgrad under the Apache License 2.0, with its voice
-af_heart; and `espeak`, made with eSpeak-NG under the GPL-3.0, with its voice en-us+f3. The
-generator can also use the voices of macOS's `say`, which Apple licenses for use on the Mac, so a
-set made that way is for the maker's own device only.
+A release ships one voice, the set `heart`, made with Kokoro, an open speech model by hexgrad,
+with its voice af_heart. Its licence is the file `LICENSE.txt` in the set's folder on the card,
+written to be read line by line:
+
+- Kokoro's model is under the Apache License 2.0, whose whole text the file carries, with the
+  model's version and the checksums of the two model files the clips were made with.
+- What the Sonar project adds, the choice of words, the processing and the layout, is released
+  under CC0 1.0, which dedicates it to the public domain as far as the law allows.
+- The file also gives the credits of the model's card: the StyleTTS 2 architecture, by Li et al.,
+  and two sets of training audio, Koniwa under CC BY 3.0 and SIWIS under CC BY 4.0.
+
+More voices can be made with the generator, as described under Making a vocabulary, and chosen in
+the Voice row: with eSpeak-NG, under the GPL-3.0, with its voice en-us+f3, or with another of
+Kokoro's voices. A pack of such a set, made with `tools/voice_pack.py`, carries the same kind of
+licence file. The generator can also use the voices of macOS's `say`, which Apple licenses for use
+on the Mac, so a set made that way is for the maker's own device only.
 
 ### Making a vocabulary
 
@@ -631,6 +859,12 @@ resends everything.
 - The device has rebooted a few times while idle, with a "furi_check failed" popup, and the cause
   is unknown. The popup now carries an address, and `sr status` the build, so a report with both
   helps: see When it crashes.
+- Apps from elsewhere: Sonar's app interface is version 87.3, and the Flipper's app loader checks
+  only the first number, 87, so the second says nothing about which apps load. An app built for
+  Momentum's version 87 loads, unless it uses the JavaScript engine's functions, which Sonar leaves
+  out: such an app fails to load with the error "Missing Imports". The other way round, an app
+  built with Sonar's SDK that uses the functions Sonar adds for its reader, such as
+  `canvas_tap_hint_note`, fails to load on other firmware.
 
 ## When it crashes
 
@@ -657,13 +891,23 @@ than 9028a849 recorded it, and "last crash: none" when no crash has left one.
 .venv/bin/python tools/flipper_cli.py "sr status"
 ```
 
-To report a crash, open an issue on this repository with:
+From the install's folder of a release, the same command is:
+
+```bash
+.venv/bin/python flipper_cli.py "sr status"
+```
+
+To report a crash, open an issue on this repository with the bug report form, which asks for:
 
 - the address, from the popup or from `sr status`, and the build that `sr status` names with it;
 - the whole `sr status` output;
+- the firmware's version and commit, and where the build came from: a release, a continuous build
+  or a build of your own;
 - what was open on the device when it crashed.
 
-The address leads to a line of code only together with its build, which is why both matter.
+The address leads to a line of code only together with its build, which is why both matter. Each
+release carries the elf of its firmware, which turns the address of a crash in that release into a
+line of code.
 
 ## Building from source
 
@@ -732,15 +976,27 @@ whole routine, from the fetch to the tag, is under Merging Momentum in `docs/dev
 ## Licence and credits
 
 The firmware fork is licensed under the GPL-3.0, like Momentum and the official firmware, and so
-is everything in this repository; the text is in `LICENSE`. A release's voice pack carries its own
-licence.
+is everything in this repository; the text is in `LICENSE`, and the install zip of each release
+carries it too. The voice pack carries its own licence, as described under Licensing in The voice:
+the Apache License 2.0 for Kokoro's model, and CC0 1.0 for what the project adds.
+
+Each release offers the source of its binaries beside them, as its asset
+`sonar-<version>-source.tar.gz`, such as `sonar-0.1.0-source.tar.gz`. It holds the fork at the
+release's tag with every submodule, nested ones included, each at the commit the release was built
+from, Momentum's apps among them, whose builds the update package puts on the card. The release
+notes name the fork's commit, the Momentum commit it builds on, and the commit of each submodule.
+The source stays in the same place as the binaries for as long as they are offered there. The
+fork's history is at https://github.com/robin24/Momentum-Firmware, where each release's tag is too.
 
 Credits:
 
-- Momentum and its contributors, whose firmware Sonar is built on.
+- Momentum and its contributors, whose firmware Sonar is built on. The install's file transfer,
+  `tools/flipper_storage.py`, is adapted from Momentum's `scripts/flipper/storage.py`.
 - Flipper Devices, for the device and the official firmware.
-- Kokoro, the open speech model by hexgrad (https://huggingface.co/hexgrad/Kokoro-82M), under the
-  Apache License 2.0, which the release's `heart` voice set is made with, and the kokoro-onnx
-  project, which runs it.
-- eSpeak-NG, under the GPL-3.0, which the release's `espeak` voice set is made with.
+- Kokoro-82M, the open speech model by hexgrad (https://huggingface.co/hexgrad/Kokoro-82M), under
+  the Apache License 2.0, which the release's voice, `heart`, is made with. Its card credits the
+  StyleTTS 2 architecture by Li et al. (arXiv 2306.07691), and the training audio of Koniwa, under
+  CC BY 3.0, and of SIWIS, under CC BY 4.0. The kokoro-onnx project runs the model on a computer.
+- eSpeak-NG, under the GPL-3.0, which the generator's `espeak` backend uses for the voices users
+  make.
 - The Black Magic Probe project, whose firmware on the Wi-Fi dev board serves as the crash catcher.
