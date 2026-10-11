@@ -25,9 +25,9 @@ Where a change goes:
 - A fix that belongs in Momentum itself goes to Momentum, under its own rules, which do not accept
   AI-written code.
 
-A pull request is merged once its continuous build is green. A commit's message is one sentence
-that says what is true after the change, ending with a short tag in parentheses, such as
-"(install)" or "(docs)".
+A pull request is merged after review, once its continuous build is green. A commit's message is
+one sentence that says what is true after the change, ending with a short tag in parentheses, such
+as "(install)" or "(docs)".
 
 ## Writing for a screen reader
 
