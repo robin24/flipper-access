@@ -134,6 +134,9 @@ DENIED = "Storage error: access denied\r\n"
 # filesystem_api.c)
 NOT_READY = "Storage error: filesystem not ready\r\n"
 NOT_FOUND = "\x1b[31mcould not find command `{}`, try `help`\x1b[0m\r\n"
+# What the shell says, in red and without a line end, to a command that needs the loader while an
+# application is open (cli_shell.c); of the install's commands only update is such a command
+APP_OPEN = "\x1b[31mthis command cannot be run while an application is open\x1b[0m"
 UPDATE_OK = "Verifying update package at '{}'\r\nOK.\r\nRestarting to apply update. BRB\r\n"
 UPDATE_REFUSED = "Verifying update package at '{}'\r\nError: Invalid manifest data. Stopping update.\r\n"
 PORT = "/dev/cu.usbmodemflip_R0skie1"
@@ -162,6 +165,7 @@ class Flipper:
         self.extract_fails = False
         self.backup_result = "OK"
         self.connections = []
+        self.app_open = None  # the update command whose word follows update is refused: an app is open
         self.card_out = False  # the card is in the user's hand or a card reader, not in the slot
         self.back_in = None  # storage commands that say not ready before the card is back; None: never
         self.card_back = None  # called when the card is put back
@@ -298,6 +302,8 @@ class Connection:
             f.card_back()
         if command == "info device":
             self.say(command, f.running())
+        elif words[0] == "update" and words[1:2] == [f.app_open]:
+            self.say(command, APP_OPEN)
         elif words[:2] == ["update", "backup"]:
             f.files[words[2]] = bytearray(b"a backup of /int")
             self.say(command, f"Backup /int to '{words[2]}'\r\nResult: {f.backup_result}\r\n")
@@ -929,6 +935,30 @@ with tempfile.TemporaryDirectory() as tmp:
     code, lines, err = run(flipper, full_run)
     check(code == 1 and "back up" in lines[-1] and main_commands(flipper.sent)[-1].startswith("update backup"),
           f"a failed backup stops the run: {lines[-1:]}")
+
+    # An application is open on the Flipper: the update commands are refused, and the sentence says
+    # to press Back until the Flipper says Home screen, then to run the script again
+    def home_screen_advice(line):
+        return ("application is open" in line and "press Back" in line and "Home screen" in line
+                and "run this script again" in line and line.count(". ") == 0 and line.endswith("."))
+
+    flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+    flipper.app_open = "backup"
+    code, lines, err = run(flipper, full_run)
+    check(code == 1 and "back up" in lines[-1] and home_screen_advice(lines[-1]) and no_traceback(lines, err),
+          f"update backup refused while an app is open: {lines[-1:]}")
+    check(not [c for c in flipper.sent if c.startswith("storage write_chunk")], "and nothing was sent")
+    flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+    flipper.app_open = "install"
+    code, lines, err = run(flipper, full_run)
+    check(code == 1 and "start the update" in lines[-1] and home_screen_advice(lines[-1]),
+          f"update install refused while an app is open: {lines[-1:]}")
+    flipper = Flipper(OFFICIAL)
+    flipper.files["/ext/backup-2026-10-01.tar"] = bytearray(b"an older backup")
+    flipper.app_open = "restore"
+    code, lines, err = run(flipper, ["--restore", "/ext/backup-2026-10-01.tar", "--yes"])
+    check(code == 1 and "restore" in lines[-1] and home_screen_advice(lines[-1]),
+          f"update restore refused while an app is open: {lines[-1:]}")
 
     # Files that are not what they should be: refused before the Flipper is touched
     no_fuf_root = os.path.join(tmp, "nofuf")

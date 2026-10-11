@@ -5,7 +5,8 @@
 
 It needs Python 3.10 or newer and pyserial (python3 -m pip install pyserial), and the three files
 that come with it: flipper_cli.py, flipper_storage.py and card_prune.py. Plug the Flipper in with
-a USB cable, unlock it, and close qFlipper. The script says each step on its own line, for the
+a USB cable, unlock it, leave it on its home screen, since the update commands refuse to run while
+an application is open, and close qFlipper. The script says each step on its own line, for the
 computer's screen reader; the Flipper itself says nothing until Sonar runs with its voice on the
 card.
 
@@ -97,6 +98,9 @@ MARKER_PREFIX = ".sonar-install-"  # the marker on the card is this and 8 hex di
 REMOVE_SECONDS_EACH = 0.04
 LOST = "the connection was lost"  # how flipper_storage's sentence for a port that is gone begins
 TIMED_OUT = "the Flipper had not finished"  # and its sentence for a command that took too long
+# The shell's refusal of a command that needs the loader, such as update backup, while an
+# application is open on the Flipper (cli_shell.c)
+APP_OPEN = "this command cannot be run while an application is open"
 
 
 class InstallError(Exception):
@@ -160,7 +164,12 @@ def _step(what):
 
 
 def _device_reason(reply):
-    """What the Flipper said when a command did not end in "Result: OK"."""
+    """What the Flipper said when a command did not end in "Result: OK". A command that needs the
+    loader, as the update commands do, is refused while an application is open on the Flipper; the
+    reason then says what to do."""
+    if APP_OPEN in reply:
+        return (f"the Flipper said that {APP_OPEN}; press Back on the Flipper until it says Home screen, "
+                "then run this script again")
     if "Result: FAIL" in reply:
         return "the Flipper said that it failed"
     lines = [line.strip() for line in reply.splitlines() if line.strip()]
