@@ -97,8 +97,8 @@ PLATFORM = sys.platform  # darwin, linux or win32
 CARD_LOOK_SECONDS = 30
 # The seconds the script waits for the Flipper to see the card with the voice on it, once the user
 # has pressed Enter to say it is back in the Flipper: as long as the wait for the update. On
-# 2026-10-11 the Flipper's USB port vanished a second after the card went in, and stayed away for
-# about ten minutes without a restart.
+# 2026-10-11 the Flipper's USB port vanished within two seconds of the card going in, and stayed
+# away for about ten minutes without a restart.
 CARD_BACK_SECONDS = 15 * 60
 # The seconds the Flipper's port must stay listed before it is opened, after the card is back
 PORT_STEADY_SECONDS = 5
