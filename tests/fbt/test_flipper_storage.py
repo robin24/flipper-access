@@ -37,6 +37,11 @@ if importlib.util.find_spec("serial") is None:
 
 import serial
 
+try:
+    import termios
+except ImportError:  # Windows: pyserial raises SerialException there
+    termios = None
+
 import flipper_storage as fs
 
 NOT_EXIST = "Storage error: file/dir not exist\r\n"
@@ -68,6 +73,7 @@ class Device:
         self.not_ready = False  # no card: stat and mkdir say so
         self.quiet = None  # a reply stops: "silent" after a line, "partial" in a line, "unplugged" and the cable is out
         self.unplugged = False
+        self.flush_fails = False  # clearing the input buffer fails as it does on a Mac or Linux without the port
         self.extract_output = EXTRACT_OK
 
     # The serial port
@@ -87,6 +93,9 @@ class Device:
         return data
 
     def reset_input_buffer(self):
+        if self.flush_fails:
+            # pyserial calls termios.tcflush bare, and its error is not an OSError
+            raise termios.error(5, "Input/output error")
         self.out.clear()
 
     def write(self, data):
@@ -423,6 +432,23 @@ with tempfile.TemporaryDirectory() as tmp:
     write(path, small)
     error = raised(storage(device).send_file, path, "/ext/small.bin")
 check(lost(error), f"a file sent to a port whose cable is out: {error!r}")
+
+# A cable pulled between two commands: the call that clears the input buffer fails first, and
+# on a Mac or Linux its error is a termios.error, which is not an OSError
+if termios is not None:
+    device = Device()
+    device.flush_fails = True
+    s = storage(device)
+    error = raised(s.command, "info device")
+    check(lost(error) and not isinstance(error, termios.error), f"a port gone before a command: {error!r}")
+    error = raised(s.exists, "/ext")
+    check(lost(error), f"and before a stat: {error!r}")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = os.path.join(tmp, "small.bin")
+        write(path, small)
+        error = raised(s.send_file, path, "/ext/small.bin")
+    check(lost(error), f"and before a file: {error!r}")
+    check(not device.sent, f"nothing was sent: {device.sent}")
 
 # A command that goes on for longer than its time
 device = Device()

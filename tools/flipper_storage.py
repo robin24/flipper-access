@@ -27,6 +27,15 @@ import time
 
 from flipper_cli import ANSI, PROMPT  # exits with one sentence when pyserial is missing
 
+# What a port that is gone raises. pyserial's SerialException is an OSError, but on a Mac or Linux
+# the call that clears the input buffer is a bare termios call, whose termios.error is not one.
+try:
+    import termios
+
+    PORT_ERRORS = (OSError, termios.error)
+except ImportError:  # Windows has no termios
+    PORT_ERRORS = (OSError,)
+
 # The bytes of one `storage write_chunk`. The device takes a chunk of any size and appends it to
 # the file, so this only sets how often the host waits for the device's prompt.
 DEFAULT_CHUNK = 8192
@@ -98,7 +107,7 @@ class Storage:
         try:
             self.ser.reset_input_buffer()
             self.ser.write(line.encode() + b"\r")
-        except OSError as e:  # pyserial's SerialException is one
+        except PORT_ERRORS as e:
             raise _lost(e) from e
         return self._reply(line, timeout)
 
@@ -128,7 +137,7 @@ class Storage:
                 raise StorageError(f"the Flipper had not finished {line} after {timeout:g} seconds")
             try:
                 data = self.ser.read(max(1, self.ser.in_waiting))
-            except OSError as e:
+            except PORT_ERRORS as e:
                 raise _lost(e) from e
             if data:
                 self._buffer += data
@@ -255,7 +264,7 @@ class Storage:
             raise StorageError(f"the Flipper did not say it was ready for {remote}, it said: {answer or 'nothing'}")
         try:
             self.ser.write(data)
-        except OSError as e:
+        except PORT_ERRORS as e:
             raise _lost(e) from e
         _raise_error("\n".join(lines), remote)  # what it says after the bytes, such as a full card
 
