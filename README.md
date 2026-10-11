@@ -82,8 +82,9 @@ Sonar, and with a blank card too. To build the firmware yourself instead, see Bu
 ### What you need
 
 - The Flipper Zero with a microSD card in it, and a USB cable to the computer. The Flipper must be
-  unlocked, since a Flipper locked with a PIN closes its console, and qFlipper must be closed,
-  since only one program at a time can use the Flipper's port.
+  unlocked, since a Flipper locked with a PIN closes its console, and on its home screen, since it
+  refuses the backup and the update while an application is open. qFlipper must be closed, since
+  only one program at a time can use the Flipper's port.
 - A computer with macOS, Linux or Windows, and Python 3.10 or newer. The script needs one Python
   package, pyserial, and nothing else.
 - A card reader for microSD cards in the computer, if you have one. It is not needed, but the
@@ -160,7 +161,10 @@ and `.venv/bin/python` in these commands.
 
 ### Running the install
 
-Plug the Flipper in, unlock it, and run the script from the same folder:
+Start on the Flipper's home screen, with no application open: plug the Flipper in, unlock it, and
+press Back until it is on its home screen, which Sonar says as Home screen. Then run the script
+from the same folder. When an application is open, the Flipper refuses the backup, and the script
+stops and tells you to press Back until the Flipper says Home screen and to run it again.
 
 ```bash
 .venv/bin/python install.py --package flipper-z-f7-update-sonar-0.1.0.tgz --voice voice-heart-sonar-0.1.0.tar --release release.json
@@ -229,12 +233,36 @@ When a step fails, the script says in one sentence which step it was and the rea
 gave, and stops. Running it again is safe: the clips of the voice are overwritten, the folders are
 kept, and the update package is replaced.
 
-Through a card reader, the script first writes a small marker file to the card. Then it asks you
-to take the microSD card out of the Flipper and put it into the computer's card reader, leaving the
-Flipper plugged in and unlocked. It finds the card by the marker, unpacks the voice onto it, removes
-the marker and the `._` files that macOS puts beside everything it writes, and ejects the card.
-Then it asks you to put the card back into the Flipper, and waits until the Flipper sees the voice.
-When no card turns up within 5 minutes, it says so and offers to send the voice over USB instead.
+Through a card reader, the steps go like this:
+
+1. The script writes a small marker file to the card, and says to leave the Flipper plugged in and
+   unlocked while its card is out.
+2. It asks you to move the card and press Enter. No time runs out while you do this:
+
+   ```text
+   Take the microSD card out of the Flipper and put it into this computer's card reader, then press Enter.
+   ```
+
+3. It looks for the card on the computer for 30 seconds, and finds it by the marker. When the card
+   does not turn up, the script stops, and says to put the card back into the Flipper and run the
+   script again, and to answer U for USB if the computer does not show the card. It never sends the
+   voice over USB by itself.
+4. When the computer mounted the card read-only, the script stops before it writes anything. A
+   microSD adapter whose lock slider is down does that: push the slider up, towards the contacts,
+   put the card back into the Flipper, and run the script again.
+5. It copies the voice onto the card, removes the marker, any marker that an earlier run left, and
+   the `._` files that macOS puts beside everything it writes, and ejects the card.
+6. It asks you to put the card back and press Enter:
+
+   ```text
+   Put the card back into the Flipper, then press Enter.
+   ```
+
+7. It waits until the Flipper sees the voice, up to 15 minutes, and says a line about once a
+   minute. The Flipper's USB connection can drop for some minutes just after the card goes back in;
+   the script then says that the connection was lost, and waits for it to come back. Then it
+   removes, through the Flipper, any `._` file that is left.
+
 On a Mac, macOS may first ask whether the terminal may use the files on a removable volume; allow
 it.
 
