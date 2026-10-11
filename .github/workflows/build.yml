@@ -103,8 +103,12 @@ jobs:
 
       # With the package, the elf and its map, which alone decode this build's crash addresses,
       # and the SDK, which builds apps against this build's API (R6). In the artifact they keep
-      # their folders below Momentum-Firmware, dist/f7-C and build/f7-firmware-C
+      # their folders below Momentum-Firmware, dist/f7-C and build/f7-firmware-C. Such an
+      # artifact is about 47 MB, so it is kept 14 days, and a pull request's build uploads
+      # nothing, as the push of the same commit has uploaded it already. CI builds are not handed
+      # to users, and each release keeps its elf, its map and its SDK as permanent release assets.
       - name: Upload the package, the elf, its map and the SDK
+        if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v7
         with:
           name: ${{ env.DIST_SUFFIX }}
@@ -114,3 +118,4 @@ jobs:
             Momentum-Firmware/build/f7-firmware-C/firmware.elf.map
             Momentum-Firmware/dist/f7-C/flipper-z-f7-sdk-*.zip
           if-no-files-found: error
+          retention-days: 14
