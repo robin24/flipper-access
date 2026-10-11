@@ -1334,6 +1334,45 @@ with tempfile.TemporaryDirectory() as tmp:
               f"and both counts are said: {[l for _, l in lines if 'helper' in l]}")
         console.ser.close()
 
+    # A card that this computer mounted read-only, as a microSD adapter with its lock slider down
+    # makes it: one sentence that names the slider, before anything is written
+    def statvfs_with(flags):
+        return lambda path: SimpleNamespace(f_flag=flags)
+
+    check(install.volume_read_only("/Volumes/FLIPPER", statvfs=statvfs_with(1 | 4), flag=1) is True, "a volume mounted read-only")
+    check(install.volume_read_only("/Volumes/FLIPPER", statvfs=statvfs_with(4), flag=1) is False, "a volume that takes writes")
+    check(install.volume_read_only("E:\\", statvfs=None, flag=None) is None, "no statvfs, as on Windows: cannot tell")
+
+    def statvfs_fails(path):
+        raise OSError(errno.ENOENT, "No such file or directory", path)
+
+    check(install.volume_read_only("/Volumes/gone", statvfs=statvfs_fails, flag=1) is None, "a volume that cannot be asked: cannot tell")
+    if hasattr(os, "statvfs"):
+        check(install.volume_read_only(tmp) is False, f"this computer's temporary folder takes writes: {install.volume_read_only(tmp)}")
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+        asked.clear()
+        saved_read_only = install.volume_read_only
+        with card_reader(root, flipper) as reader:
+            install.volume_read_only = lambda volume: volume == reader.volume
+            try:
+                install.voice_through_reader(storage, [pack], say, reader.ask)
+                error = None
+            except install.InstallError as e:
+                error = e
+            finally:
+                install.volume_read_only = saved_read_only
+        said = str(error)
+        check(error is not None and "read-only" in said and "lock slider" in said and "towards the contacts" in said
+              and "put the card back into the Flipper" in said and "run this script again" in said and "\n" not in said,
+              f"a read-only card: {error}")
+        check(reader.unpacked == 0 and not reader.made and not reader.ejected and asked == [TAKE_OUT]
+              and [n for n in os.listdir(reader.volume) if n.startswith(".sonar-install-")],
+              "nothing is written to it, the marker included, and nothing more is asked")
+        storage.ser.close()
+
     # The card turns up a few looks after Enter, as a Mac mounts it within a few seconds
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV)
@@ -1533,6 +1572,20 @@ with tempfile.TemporaryDirectory() as tmp:
               f"no card: the run ends without the voice going over USB, and without the update: {code}, {lines[-2:]}")
         check("card" in lines[-1] and "run this script again" in lines[-1] and "\n" not in lines[-1] and asked[-1] == TAKE_OUT,
               f"in one sentence, after no further question: {lines[-1]}, {asked}")
+
+    # In a whole run, a read-only card ends the run before the update
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+        answers[:] = ["y", "r"]
+        saved_read_only = install.volume_read_only
+        with card_reader(root, flipper) as reader:
+            install.volume_read_only = lambda volume: volume == reader.volume
+            try:
+                code, lines, err = run(flipper, full_run[:-1])
+            finally:
+                install.volume_read_only = saved_read_only
+        check(code == 1 and "read-only" in lines[-1] and update not in flipper.sent and no_traceback(lines, err),
+              f"a read-only card in a whole run: {code}, {lines[-1:]}")
 
     # A card that does not come back ends the run before the update
     with tempfile.TemporaryDirectory() as root:

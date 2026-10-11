@@ -408,6 +408,18 @@ def find_card(marker, volumes):
     return None
 
 
+def volume_read_only(volume, statvfs=getattr(os, "statvfs", None), flag=getattr(os, "ST_RDONLY", None)):
+    """Whether this computer mounted the volume read-only, as macOS mounts a card whose microSD
+    adapter has its lock slider down: True or False, or None when it cannot tell. Windows has no
+    statvfs, so there it cannot tell, and a write that fails says so in one sentence instead."""
+    if statvfs is None or flag is None:
+        return None
+    try:
+        return bool(statvfs(volume).f_flag & flag)
+    except OSError:
+        return None
+
+
 def pack_sets(pack):
     """The voice sets that the voice pack holds, in the pack's order: the folders under
     sr/voices. An InstallError for a pack that holds none."""
@@ -608,8 +620,9 @@ def voice_through_reader(storage, packs, say, ask):
     to go on with. The steps: a marker file, /ext/.sonar-install-<8 hex digits>, is written to the
     card over the console; the user takes the card out of the Flipper, puts it into the reader and
     presses Enter, with no clock running meanwhile; the card is looked for among the mounted
-    volumes by the marker for CARD_LOOK_SECONDS; the packs are unpacked onto it, the marker and
-    the `._` files under the sets' folders are removed, and it is ejected; the user puts it back
+    volumes by the marker for CARD_LOOK_SECONDS; a card mounted read-only is refused before
+    anything is written to it; the packs are unpacked onto it, the marker and the `._` files under
+    the sets' folders are removed, and it is ejected; the user puts it back
     and presses Enter, and the console polls `storage stat /ext/sr/voices/<set>/voice.txt` until
     the Flipper sees the voice; then the `._` files that are left are removed through the console.
     The voice never goes over USB instead: a card that does not turn up, like every other failure,
@@ -631,6 +644,12 @@ def voice_through_reader(storage, packs, say, ask):
             "the Flipper and run this script again, and answer U for USB if this computer does not show the card",
         ))
     say(f"Found the card at {volume}.")
+    if volume_read_only(volume):
+        raise InstallError(_sentence(
+            "copy the voice onto the card",
+            "the card is read-only on this computer; on a microSD adapter, push the lock slider up, towards the "
+            "contacts, put the card back into the Flipper, and run this script again",
+        ))
     try:
         _copy_to_card(packs, sets, volume, marker, say, ask)
     except InstallError as e:
