@@ -9,6 +9,8 @@ What this folder holds, for a reader who wants more than the project's README.
   release mechanics.
 - `device-notes.md`: the working notes for the one device Sonar is developed on, and the
   developer's routine: flashing, the console commands, crash diagnosis and rolling back.
+- `install-protocol.md`: what the install script says to the Flipper's USB console, command by
+  command, and how it reads the replies, for a desktop app that does the same install.
 - `measurements/`: what the device and the tools reported in each round, as plain text: the RAM
   probes, the image sizes, the speech timings and the checks run on the device.
 
