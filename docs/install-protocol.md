@@ -25,7 +25,8 @@ When there is no port, the Flipper may be unplugged, locked with its PIN (the lo
 console's USB off), in the updater, or held by qFlipper. The script says all four in one sentence.
 
 The port is opened for one program alone, at 230400 baud with a read time-out of 0.1 seconds. When
-qFlipper or another tool has it, the open fails at once, and the script says so instead of waiting.
+qFlipper or another tool has it, the open fails at once, and the script says so instead of waiting,
+in one sentence that ends by saying to close qFlipper or any other tool that uses the port.
 
 Right after opening, the script starts a fresh console session. It drops the DTR line of the port,
 waits 0.5 seconds, throws away everything that arrived, and raises DTR again. The Flipper's console
@@ -35,8 +36,8 @@ everything up to that prompt and throws it away, for at most 5 seconds, so that 
 banner is taken for the reply to the first command. When no prompt comes, it sends one carriage
 return and waits for a prompt for at most 2 more seconds. When none comes then either, the open
 fails with one sentence that names the port and says to restart the Flipper by holding Left and Back
-together for five seconds. A port that goes away during all this also fails the open with one
-sentence.
+together for five seconds. A port that goes away during all this also fails the open, with one
+sentence that says to check that the Flipper is still plugged in.
 
 The script does this on every open of the port, and so do the other tools that open the console
 the same way, such as `tools/card_prune.py`. On 2026-10-11, after about ten idle hours, Robin's
@@ -78,7 +79,8 @@ seconds hold while the script asks whether the Flipper sees the card after it wa
 the answer to `storage stat` comes at once.
 
 A read or write that fails on the port also means that the connection was lost. This happens when
-the cable is pulled or the Flipper restarts.
+the cable is pulled or the Flipper restarts. The sentence for a lost connection says to check that
+the Flipper is still plugged in.
 
 When the limit for a whole reply passes, the Flipper may still deliver its reply later, and the
 connection is out of step with the commands. The script then does not use it for more commands, and
@@ -115,9 +117,12 @@ application, so an open application does not stop them. The refusal is one line 
 this command cannot be run while an application is open
 ```
 
-When a reply holds this sentence, the script stops, and its sentence says so and tells the user to
-press Back on the Flipper until it says Home screen, and then to run the script again. Sonar's
-reader says Home screen on the home screen.
+When a reply holds this sentence, the script stops, and its sentence says so and tells the user
+what to do, which depends on the firmware that runs at that moment, as `info device` gave it.
+When it is Sonar, whose reader says Home screen on the home screen, the user is told to press Back
+on the Flipper until it says Home screen. Other firmware says nothing, so the user is told to
+press Back on the Flipper a few times to reach the home screen. Either way, the sentence ends by
+saying to run the script again.
 
 ### Paths
 
@@ -518,7 +523,11 @@ itself.
     once a minute with the time so far. Every 2 seconds it does the next of these steps:
     - The Flipper's port must be listed, as when the console is opened, and stay listed for 5
       seconds, which is the constant `PORT_STEADY_SECONDS`. A port that vanishes meanwhile starts
-      this over. When the user named a port, that port is waited for.
+      this over. When the user named a port, that port is waited for. A named port counts as
+      listed when the Flipper's list or the system's list of serial ports has it, compared without
+      case on Windows, or when its device file exists. That covers a `/dev/tty.` name on a Mac and
+      a `/dev/serial/by-id` link on Linux, which pyserial does not list, and which vanish with the
+      device as well.
     - Then the console is opened as described under Opening it, with DTR dropped and raised and
       the banner read, and the quiet limit is 5 seconds.
     - On that console, for each set that the packs hold, the script asks:
@@ -538,9 +547,12 @@ itself.
       This also holds during step 14.
 
     When the time runs out, the script stops with one sentence. It says whether the Flipper's
-    console was not back, or whether the Flipper did not see the file, and it keeps the Flipper's
-    last error sentence when there was one. It says to check that the card sits in the Flipper and
-    that the Flipper is plugged in and unlocked, and to run the script again, which is safe.
+    console was not back, or whether the Flipper did not see the file, and it keeps the last reason
+    when there was one: the Flipper's last error sentence, or the sentence of the last open of a
+    port that was there but could not be opened, such as a port that qFlipper holds. A later
+    answer of the Flipper takes the place of an earlier reason. It says to check that the card sits
+    in the Flipper and that the Flipper is plugged in and unlocked, and to run the script again,
+    which is safe.
 
 14. The Flipper may still list some `._` files, because they can be made again when the card is
     ejected, or because they could not be removed on the computer. The script looks for them
