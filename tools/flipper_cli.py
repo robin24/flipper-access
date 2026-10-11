@@ -47,7 +47,8 @@ def flipper_ports(ports=None):
 def find_port(explicit=None):
     """The port to use: explicit, else FLIPPER_PORT, else the first with the Flipper's USB id,
     else the first /dev/cu.usbmodemflip_* (a Mac whose listing lacks the id). Exits with one
-    sentence when there is none."""
+    sentence when there is none, which names each state the Flipper may be in: unplugged,
+    PIN-locked (the lock turns the console's USB off), in the updater, or held by qFlipper."""
     if explicit:
         return explicit
     env = os.environ.get("FLIPPER_PORT")
@@ -55,7 +56,10 @@ def find_port(explicit=None):
         return env
     ports = flipper_ports() or sorted(glob.glob("/dev/cu.usbmodemflip_*"))
     if not ports:
-        sys.exit("No Flipper serial port found. Is the device plugged in and not in the updater? Or name it with --port.")
+        sys.exit(
+            "No Flipper serial port found. Is it plugged in, unlocked, not in the updater, and not used by qFlipper? "
+            "Or name it with --port."
+        )
     return ports[0]
 
 

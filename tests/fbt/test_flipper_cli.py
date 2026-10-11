@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """tools/flipper_cli.py's port: found by the Flipper's USB id, a port that names Flipper before
 another board with ST's id, others left out; an explicit port, then FLIPPER_PORT, then the id,
-then the Mac's device name; one sentence and exit without any; and opened for one tool alone, so a
+then the Mac's device name; one sentence and exit without any, which names the PIN lock, the
+updater and qFlipper; and opened for one tool alone, so a
 second open of the same port stops with one sentence instead of sharing it. Needs pyserial. Run
 from the project root: python3 tests/fbt/test_flipper_cli.py"""
 import importlib.util
@@ -65,7 +66,10 @@ else:
         check(fc.find_port() == "/dev/cu.usbmodemflip_Rover1", "then the Mac's device name")
         fc.glob.glob = lambda pattern: []
         said = exits(fc.find_port)
-        check(said is not None and "No Flipper serial port found" in said and "\n" not in said, f"none: one sentence: {said}")
+        # A PIN-locked Flipper has no port at all, so the sentence names the lock beside the
+        # updater and qFlipper
+        check(said == "No Flipper serial port found. Is it plugged in, unlocked, not in the updater, and not used by "
+                      "qFlipper? Or name it with --port.", f"none: the sentence that names every reason: {said}")
     finally:
         fc.flipper_ports, fc.glob.glob = saved[0], saved[1]
         if saved[2] is not None:
