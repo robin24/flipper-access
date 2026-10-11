@@ -200,6 +200,7 @@ class Flipper:
         self.looks = 0  # the looks at the port list
         self.opened_at = []  # the looks at the port list before each open
         self.aliases = set()  # other names that open the port, such as a /dev/serial/by-id link
+        self.taken = 0  # this many opens find the port held by another tool, as qFlipper holds it
 
     def running(self):
         """The reply to info device now."""
@@ -224,6 +225,10 @@ class Flipper:
 
     def open_port(self, port, timeout=0.1):
         """flipper_cli.open_port: the port, or its one sentence and exit when it is not there."""
+        if self.taken:
+            self.taken -= 1
+            sys.exit(f"cannot open {port}: [Errno 35] Could not exclusively lock port {port}: [Errno 35] Resource "
+                     "temporarily unavailable; close qFlipper or any other tool that uses it.")
         if port not in {PORT, *self.aliases} or (self.updated and self.never_back) or self.absent:
             self.absent = max(0, self.absent - 1)
             sys.exit(f"cannot open {port}: [Errno 2] could not open port {port}; close qFlipper or any other tool that uses it.")
@@ -1677,6 +1682,37 @@ with tempfile.TemporaryDirectory() as tmp:
               and "internal error" in str(error) and "run this script again" in str(error) and "\n" not in str(error),
               f"a card that is not put back: the sentence keeps the Flipper's last reason: {error}")
         check(len(reader.ejected) == 1 and not any(c.is_open for c in flipper.connections), "it was ejected first, and no console is left open")
+    # The port is there, but another tool holds it for the whole wait: the sentence keeps what the open said
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        storage = console_of(flipper)
+        flipper.taken = 10 ** 9
+        lines, say = collector(flipper)
+        with card_reader(root, flipper) as reader, waiting(CARD_BACK_SECONDS=0.3):
+            try:
+                install.voice_through_reader(storage, [pack], say, reader.ask)
+                error = None
+            except install.InstallError as e:
+                error = e
+        said = str(error)
+        check(error is not None and "console was not back" in said and "Resource temporarily unavailable" in said
+              and "close qFlipper or any other tool that uses it" in said and "run this script again" in said
+              and len(re.findall(r"[.?!](?=\s|$)", said)) == 1, f"a port that another tool holds: {error}")
+    # Held for the first opens, then free while the card is out: the Flipper's own answer is the last reason
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        storage = console_of(flipper)
+        flipper.taken = 2
+        lines, say = collector(flipper)
+        with card_reader(root, flipper, never_back=True) as reader, waiting(CARD_BACK_SECONDS=0.3):
+            try:
+                install.voice_through_reader(storage, [pack], say, reader.ask)
+                error = None
+            except install.InstallError as e:
+                error = e
+        check(error is not None and "internal error" in str(error) and "qFlipper" not in str(error),
+              f"a later answer of the Flipper takes the place of what an earlier open said: {error}")
+
     # The port goes and does not come back
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV)

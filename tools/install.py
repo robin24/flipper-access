@@ -682,12 +682,15 @@ def _port_listed(port=None):
 
 
 def _open_console(port):
-    """A Storage on the console at port, opened as flipper_cli.open_cli opens it, DTR dropped and
-    raised and the banner read; None when it cannot be opened, goes away or gives no prompt."""
+    """(a Storage on the console at port, opened as flipper_cli.open_cli opens it, DTR dropped and
+    raised and the banner read, None), or (None, the sentence that says why not) when it cannot be
+    opened, goes away or gives no prompt."""
     try:
-        return Storage(flipper_cli.open_cli(port))
-    except (SystemExit, *PORT_ERRORS):
-        return None
+        return Storage(flipper_cli.open_cli(port)), None
+    except SystemExit as e:  # flipper_cli's one sentence, such as a port that qFlipper holds
+        return None, str(e.code or "the port could not be opened")
+    except PORT_ERRORS as e:
+        return None, str(e)
 
 
 def wait_for_card(sets, say, port=None):
@@ -701,7 +704,8 @@ def wait_for_card(sets, say, port=None):
     that vanishes, a console that cannot be opened or stops answering, closes the console and goes
     back to waiting for the port. port: the port to wait for, else any Flipper's. After
     CARD_BACK_SECONDS in all, with a line about once a minute meanwhile, an InstallError in one
-    sentence that keeps the Flipper's last reason."""
+    sentence that keeps the last reason: what the Flipper last said instead of the voice, or why
+    its port, though there, could not be opened, as when qFlipper holds it."""
     paths = [f"{VOICE_DEST}/sr/voices/{name}/voice.txt" for name in sets]
     what = paths[0] if len(paths) == 1 else "the voice sets"
     say(f"Waiting for the Flipper to see the card with the voice, at most {_duration(CARD_BACK_SECONDS)}.")
@@ -710,7 +714,7 @@ def wait_for_card(sets, say, port=None):
     next_note = started + PROGRESS_SECONDS
     storage = None
     listed_since = None  # since when the port has been listed without a break
-    reason = None  # what the Flipper last said instead of the voice, in its own words
+    reason = None  # the last reason why there is no voice yet: the Flipper's own words, or the open's
 
     def lost():
         nonlocal storage
@@ -728,17 +732,20 @@ def wait_for_card(sets, say, port=None):
                     listed_since = listed_since if listed_since is not None else time.monotonic()
                     if time.monotonic() - listed_since >= PORT_STEADY_SECONDS:
                         listed_since = None
-                        storage = _open_console(found)
-                        if storage is not None:
+                        storage, failed = _open_console(found)
+                        if storage is None:
+                            reason = f"the last try to open its port said {failed.rstrip().removesuffix('.')}"
+                        else:
                             storage.idle_timeout = PROBE_IDLE_SECONDS  # a stat answers at once, or the console is stuck
             if storage is not None:
                 try:
                     missing = [path for path in paths if not storage.exists(path)]
                 except StorageError as e:
                     if _in_step(e):
-                        reason = str(e)
+                        said = str(e)
                         for path in paths:  # the device's sentence is enough, the path is named anyway
-                            reason = reason.removesuffix(f": {path}")
+                            said = said.removesuffix(f": {path}")
+                        reason = f"its last answer was {said}"
                     else:
                         lost()
                 else:
@@ -755,7 +762,7 @@ def wait_for_card(sets, say, port=None):
                             return console
             now = time.monotonic()
             if now >= deadline:
-                said = f", and its last answer was {reason}" if reason else ""
+                said = f", and {reason}" if reason else ""
                 if storage is None:
                     why = f"the Flipper's console was not back within {_duration(CARD_BACK_SECONDS)}{said}"
                 else:
