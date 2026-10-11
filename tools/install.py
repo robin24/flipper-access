@@ -95,8 +95,12 @@ PLATFORM = sys.platform  # darwin, linux or win32
 # runs while the user moves the card.
 CARD_LOOK_SECONDS = 30
 # The seconds the script waits for the Flipper to see the card with the voice on it, once the user
-# has pressed Enter to say it is back in the Flipper
-CARD_WAIT_SECONDS = 5 * 60
+# has pressed Enter to say it is back in the Flipper: as long as the wait for the update. On
+# 2026-10-11 the Flipper's USB port vanished a second after the card went in, and stayed away for
+# about ten minutes without a restart.
+CARD_BACK_SECONDS = 15 * 60
+# The seconds the Flipper's port must stay listed before it is opened, after the card is back
+PORT_STEADY_SECONDS = 5
 EJECT_SECONDS = 120  # the most `diskutil eject` is given
 MARKER_PREFIX = ".sonar-install-"  # the marker on the card is this and 8 hex digits
 # `storage remove` took 37 to 39 milliseconds a file on 2026-10-11 (docs/measurements/
@@ -167,6 +171,18 @@ def _step(what):
         raise InstallError(_sentence(what, _os_reason(e))) from None
     except Exception as e:  # noqa: BLE001  no traceback ever reaches the user
         raise InstallError(_sentence(what, f"{type(e).__name__}: {e}")) from None
+
+
+@contextlib.contextmanager
+def _device_step(what):
+    """As _step for the console alone, except that a lost or stuck connection goes on as the
+    StorageError it is, for a caller that closes the console and waits for the Flipper again."""
+    try:
+        yield
+    except StorageError as e:
+        if not _in_step(e):
+            raise
+        raise InstallError(_sentence(what, e)) from None
 
 
 def _device_reason(reply):
@@ -509,9 +525,10 @@ def _find_appledouble(storage, path, found):
 def remove_appledouble_over_console(storage, sets, say):
     """Remove every `._` file under /ext/sr/voices/<set>/ on the card in the Flipper, for each set,
     with `storage list` and `storage remove`, and return how many were removed. An InstallError
-    that names the step when the console says no."""
+    that names the step when the Flipper says no; a lost or stuck connection is the StorageError
+    it is."""
     found = []
-    with _step("look for the helper files in the voice folders on the card"):
+    with _device_step("look for the helper files in the voice folders on the card"):
         say("Looking through the voice folders on the Flipper for helper files that are left.")
         progress = _Progress(say, "{percent} percent of the voice folders are looked through.")
         for name in sets:
@@ -527,7 +544,7 @@ def remove_appledouble_over_console(storage, sets, say):
     say(f"The Flipper lists {_count(len(found), 'more helper file')}. Removing them over the console. "
         f"This takes {_about(len(found) * REMOVE_SECONDS_EACH)}.")
     progress = _Progress(say, "{percent} percent of the helper files are removed.")
-    with _step("remove the helper files from the card"):
+    with _device_step("remove the helper files from the card"):
         for done, path in enumerate(found, 1):
             storage.remove(path)
             progress(done, len(found))
@@ -615,23 +632,134 @@ def _copy_to_card(packs, sets, volume, marker, say, ask):
     eject(volume, say, ask)
 
 
-def voice_through_reader(storage, packs, say, ask):
-    """Put the voice packs on the card through the computer's card reader, and return the console
-    to go on with. The steps: a marker file, /ext/.sonar-install-<8 hex digits>, is written to the
-    card over the console; the user takes the card out of the Flipper, puts it into the reader and
-    presses Enter, with no clock running meanwhile; the card is looked for among the mounted
-    volumes by the marker for CARD_LOOK_SECONDS; a card mounted read-only is refused before
-    anything is written to it; the packs are unpacked onto it, the marker and the `._` files under
-    the sets' folders are removed, and it is ejected; the user puts it back
-    and presses Enter, and the console polls `storage stat /ext/sr/voices/<set>/voice.txt` until
-    the Flipper sees the voice; then the `._` files that are left are removed through the console.
-    The voice never goes over USB instead: a card that does not turn up, like every other failure,
-    is an InstallError in one sentence that says what to do."""
+def _serial_devices():
+    """Every serial port this computer lists now."""
+    from serial.tools import list_ports
+
+    return [p.device for p in list_ports.comports()]
+
+
+def _port_listed(port=None):
+    """The Flipper's port when this computer lists it now, else None: port when one was named,
+    else the first Flipper port flipper_cli finds."""
+    listed = _list_ports()
+    if port:
+        return port if port in listed or port in _serial_devices() else None
+    return listed[0] if listed else None
+
+
+def _open_console(port):
+    """A Storage on the console at port, opened as flipper_cli.open_cli opens it, DTR dropped and
+    raised and the banner read; None when it cannot be opened, goes away or gives no prompt."""
+    try:
+        return Storage(flipper_cli.open_cli(port))
+    except (SystemExit, *PORT_ERRORS):
+        return None
+
+
+def wait_for_card(sets, say, port=None):
+    """After the user put the card back into the Flipper and pressed Enter: wait until the Flipper
+    sees each set's voice on it, remove the `._` files that are left through the console, and
+    return a Storage on the console. The Flipper's USB connection can drop just after the card
+    goes in and stay away for minutes, so nothing is taken for granted: the Flipper's port must be
+    listed and stay listed for PORT_STEADY_SECONDS; it is opened as flipper_cli opens it, with DTR
+    dropped and raised; and `storage stat /ext/sr/voices/<set>/voice.txt` is asked for each set.
+    Any storage error means not yet: the Flipper says internal error while it has no card. A port
+    that vanishes, a console that cannot be opened or stops answering, closes the console and goes
+    back to waiting for the port. port: the port to wait for, else any Flipper's. After
+    CARD_BACK_SECONDS in all, with a line about once a minute meanwhile, an InstallError in one
+    sentence that keeps the Flipper's last reason."""
+    paths = [f"{VOICE_DEST}/sr/voices/{name}/voice.txt" for name in sets]
+    what = paths[0] if len(paths) == 1 else "the voice sets"
+    say(f"Waiting for the Flipper to see the card with the voice, at most {_duration(CARD_BACK_SECONDS)}.")
+    started = time.monotonic()
+    deadline = started + CARD_BACK_SECONDS
+    next_note = started + PROGRESS_SECONDS
+    storage = None
+    listed_since = None  # since when the port has been listed without a break
+    reason = None  # what the Flipper last said instead of the voice, in its own words
+
+    def lost():
+        nonlocal storage
+        _close(storage)  # a console out of step is never used again
+        storage = None
+        say("The connection to the Flipper was lost; waiting for it to come back.")
+
+    try:
+        while True:
+            if storage is None:
+                found = _port_listed(port)
+                if found is None:
+                    listed_since = None
+                else:
+                    listed_since = listed_since if listed_since is not None else time.monotonic()
+                    if time.monotonic() - listed_since >= PORT_STEADY_SECONDS:
+                        listed_since = None
+                        storage = _open_console(found)
+                        if storage is not None:
+                            storage.idle_timeout = PROBE_IDLE_SECONDS  # a stat answers at once, or the console is stuck
+            if storage is not None:
+                try:
+                    missing = [path for path in paths if not storage.exists(path)]
+                except StorageError as e:
+                    if _in_step(e):
+                        reason = str(e)
+                        for path in paths:  # the device's sentence is enough, the path is named anyway
+                            reason = reason.removesuffix(f": {path}")
+                    else:
+                        lost()
+                else:
+                    reason = None
+                    if not missing:
+                        say("The Flipper sees the card with the voice on it.")
+                        storage.idle_timeout = IDLE_SECONDS
+                        try:
+                            remove_appledouble_over_console(storage, sets, say)
+                        except StorageError:  # lost or stuck, while the Flipper's own errors are an InstallError
+                            lost()
+                        else:
+                            console, storage = storage, None  # handed over, so not closed below
+                            return console
+            now = time.monotonic()
+            if now >= deadline:
+                said = f", and its last answer was {reason}" if reason else ""
+                if storage is None:
+                    why = f"the Flipper's console was not back within {_duration(CARD_BACK_SECONDS)}{said}"
+                else:
+                    why = f"the Flipper did not see {what} within {_duration(CARD_BACK_SECONDS)}{said}"
+                raise InstallError(_sentence(
+                    "find the voice on the card after it was put back",
+                    f"{why}; check that the card sits in the Flipper and that the Flipper is plugged in and unlocked, "
+                    "then run this script again",
+                ))
+            if now >= next_note:
+                say(f"Still waiting for the Flipper, {_duration(now - started)} so far.")
+                next_note = now + PROGRESS_SECONDS
+            time.sleep(POLL_SECONDS)
+    finally:
+        if storage is not None:
+            _close(storage)
+
+
+def voice_through_reader(storage, packs, say, ask, port=None):
+    """Put the voice packs on the card through the computer's card reader, and return a Storage on
+    the console to go on with. The steps: a marker file, /ext/.sonar-install-<8 hex digits>, is
+    written to the card over the console, and the console is closed for the whole trip of the
+    card; the user takes the card out of the Flipper, puts it into the reader and presses Enter,
+    with no clock running meanwhile; the card is looked for among the mounted volumes by the
+    marker for CARD_LOOK_SECONDS; a card mounted read-only is refused before anything is written
+    to it; the packs are unpacked onto it, the marker and the `._` files under the sets' folders
+    are removed, and it is ejected; the user puts it back and presses Enter; and wait_for_card
+    waits, on port or any Flipper's, until the Flipper sees the voice, and removes the `._` files
+    that are left through a new console. The voice never goes over USB instead: a card that does
+    not turn up, like every other failure, is an InstallError in one sentence that says what to
+    do."""
     sets = [name for pack in packs for name in pack_sets(pack)]
     marker = MARKER_PREFIX + secrets.token_hex(4)
     say("Writing a small marker file to the card, so that this computer can tell the card from other drives.")
     with _step("write the marker file to the card"):
         _write_marker(storage, marker)
+    _close(storage)  # no console session while the card is out, nor across its return
     say("Leave the Flipper plugged in and unlocked while its card is out.")
     ask("Take the microSD card out of the Flipper and put it into this computer's card reader, then press Enter.")
     say("Looking for the card on this computer.")
@@ -655,32 +783,7 @@ def voice_through_reader(storage, packs, say, ask):
     except InstallError as e:
         raise InstallError(f"{e} Put the card back into the Flipper before running this script again.") from None
     ask("Put the card back into the Flipper, then press Enter.")
-    waited = _duration(CARD_WAIT_SECONDS)
-    say(f"Waiting for the Flipper to see the card with the voice, at most {waited}.")
-    paths = [f"{VOICE_DEST}/sr/voices/{name}/voice.txt" for name in sets]
-
-    def seen():
-        """True when the Flipper sees every set's voice.txt, else None: the card is out, or not yet read."""
-        try:
-            return True if all(storage.exists(path) for path in paths) else None
-        except StorageError as e:
-            if not _in_step(e):  # the connection is gone
-                raise
-            return None  # the Flipper says that its filesystem is not ready while the card is out
-
-    with _step("look for the voice on the card in the Flipper"):
-        found = _wait_for(seen, CARD_WAIT_SECONDS, say,
-                          "Still waiting for the Flipper to see the card, {time} so far.")
-    if not found:
-        what = paths[0] if len(paths) == 1 else "the voice sets"
-        raise InstallError(_sentence(
-            "find the voice on the card after it was put back",
-            f"the Flipper did not see {what} within {waited}. "
-            "Put the card into the Flipper, then run this script again",
-        ))
-    say("The Flipper sees the card with the voice on it.")
-    remove_appledouble_over_console(storage, sets, say)
-    return storage
+    return wait_for_card(sets, say, port)
 
 
 def package_folder(package, work):
@@ -1071,7 +1174,7 @@ def _install(args, say):
             say("Backing up the Flipper's internal storage to the card.")
             say(f"The backup is {backup(storage, today())}.")
             if by_reader:
-                storage = voice_through_reader(storage, packs, say, ask)
+                storage = voice_through_reader(storage, packs, say, ask, port=args.port or os.environ.get("FLIPPER_PORT"))
             else:
                 for pack in packs:
                     voice_over_usb(storage, pack, sonar, say)

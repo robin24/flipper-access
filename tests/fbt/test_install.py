@@ -171,6 +171,14 @@ class Flipper:
         self.card_out = False  # the card is in the user's hand or a card reader, not in the slot
         self.out_reply = CARD_OUT  # what a storage command gets while there is no card to use
         self.mounting = 0  # storage commands that still get out_reply after the card is put back
+        # The USB connection drops after the card goes back, as on 2026-10-11: once the Flipper has
+        # said that it sees a voice.txt, the port vanishes for this many looks at the port list
+        self.drop_after_seen = None
+        self.dropped = False
+        self.port_script = []  # whether the port list shows the port, one look each, before the rest
+        self.silent_opens = 0  # this many opens give a console that answers no command
+        self.looks = 0  # the looks at the port list
+        self.opened_at = []  # the looks at the port list before each open
 
     def running(self):
         """The reply to info device now."""
@@ -183,6 +191,9 @@ class Flipper:
 
     def ports(self, ports=None):
         """flipper_cli.flipper_ports, as this computer would list the port."""
+        self.looks += 1
+        if self.port_script:
+            return [PORT] if self.port_script.pop(0) else []
         if self.updated and self.never_back:
             return []
         if self.absent:
@@ -192,10 +203,15 @@ class Flipper:
 
     def open_port(self, port, timeout=0.1):
         """flipper_cli.open_port: the port, or its one sentence and exit when it is not there."""
-        if port != PORT or (self.updated and self.never_back):
+        if port != PORT or (self.updated and self.never_back) or self.absent:
+            self.absent = max(0, self.absent - 1)
             sys.exit(f"cannot open {port}: [Errno 2] could not open port {port}. Is qFlipper or another tool using it?")
         connection = Connection(self)
+        if self.silent_opens:
+            self.silent_opens -= 1
+            connection.silent = True
         self.connections.append(connection)
+        self.opened_at.append(self.looks)
         return connection
 
 
@@ -215,6 +231,7 @@ class Connection:
         self.need = 0
         self.gone = False  # the Flipper restarted: the port is dead
         self.is_open = True
+        self.silent = False  # the console takes commands and answers none
         self.session = False
         self.events = []  # the DTR changes and the first command, in order
         self._dtr = False
@@ -294,6 +311,8 @@ class Connection:
         if not any(e[0] == "command" for e in self.events):
             self.events.append(("command", len(self.out)))  # with the bytes not yet read
         f.sent.append(command)
+        if self.silent:
+            return
         words = shlex.split(command)
         if words[0] == "storage" and (f.card_out or f.mounting):
             if not f.card_out:
@@ -339,6 +358,10 @@ class Connection:
                 self.say(command, "Storage, 62496768KiB total, 58080768KiB free\r\n")
             elif path in f.files:
                 self.say(command, f"File, size: {len(f.files[path])}b\r\n")
+                if path.endswith("/voice.txt") and f.drop_after_seen is not None and not f.dropped:
+                    f.dropped = True
+                    f.absent = f.drop_after_seen
+                    self.gone = True  # its answer is read, and then the port is gone
             elif path in f.dirs:
                 self.say(command, "Directory\r\n")
             else:
@@ -422,6 +445,9 @@ def stub_ask(question):
 
 
 install.ask = stub_ask
+install._serial_devices = lambda: []  # this computer's own serial ports are never looked at
+STEADY_DEFAULT = getattr(install, "PORT_STEADY_SECONDS", None)
+install.PORT_STEADY_SECONDS = 0
 
 
 def plug(flipper):
@@ -552,10 +578,13 @@ class Reader:
         self.made = []  # the ._ files made beside what was unpacked, relative to the volume
         self.recreated = []  # the ._ files the eject made again
         self.put_back = None  # the commands the Flipper had had when the user was asked to put the card back
+        self.open_when_asked = []  # for each move of the card, whether each connection was open when it was asked
 
     def ask(self, question):
         """The user: Enter after moving the card as asked, else the next of answers."""
         asked.append(question)
+        if question in (TAKE_OUT, PUT_BACK):
+            self.open_when_asked.append([c.is_open for c in self.flipper.connections])
         if question == TAKE_OUT:
             self.looks_before_enter = self.looks
             if not self.stays:
@@ -1301,6 +1330,13 @@ with tempfile.TemporaryDirectory() as tmp:
               f"it asks to put the card back, then asks the Flipper for voice.txt: {reader.put_back}, {polls}")
         check(len(polls) == reader.mounting + 1,
               f"and asks again while the Flipper says internal error, until it sees the file: {len(polls)} polls")
+        check(reader.open_when_asked == [[False], [False]],
+              f"the console is closed before the card leaves the Flipper and stays closed until it is back: {reader.open_when_asked}")
+        check(len(flipper.connections) == 2 and console.ser is flipper.connections[1] and console.ser.is_open
+              and console.ser.events[:3] == [("dtr", True), ("dtr", False), ("dtr", True)],
+              f"after Enter one console is opened, with DTR dropped and raised, and it is the one to go on with: {len(flipper.connections)}")
+        check(line_with(lines, "Waiting for the Flipper", "15 minutes") is not None,
+              f"the wait says its limit: {[l for _, l in lines if 'Waiting' in l]}")
         check(all(bytes(flipper.files[f"/ext/{name}"]) == data for name, data in clips.items()),
               "the voice is on the Flipper's card with the pack's bytes")
         check("/ext/update/f7-update-1.4.3/update.fuf" in flipper.files and f"/ext/voice-heart-sonar-0.1.0.tar" not in flipper.files,
@@ -1420,54 +1456,135 @@ with tempfile.TemporaryDirectory() as tmp:
         storage.ser.close()
     check(install.CARD_LOOK_SECONDS == 30, f"the card is looked for for 30 seconds after Enter: {install.CARD_LOOK_SECONDS}")
 
-    # The card is found but never comes back
+    # After Enter: the port must be listed and stay listed before it is opened, the Flipper's storage
+    # errors mean not yet, and a port that vanishes or a console that stops answering is closed and
+    # waited for again (findings D and E of 2026-10-11)
+    check(getattr(install, "CARD_BACK_SECONDS", None) == 15 * 60 and STEADY_DEFAULT is not None and 2 <= STEADY_DEFAULT <= 10,
+          f"the wait has 15 minutes, and the port must stay a few seconds: {getattr(install, 'CARD_BACK_SECONDS', None)}, "
+          f"{STEADY_DEFAULT}")
+    for reply in (CARD_OUT, NOT_READY):
+        with tempfile.TemporaryDirectory() as root:
+            flipper = Flipper(SONAR_DEV)
+            flipper.out_reply = reply
+            storage = console_of(flipper)
+            lines, say = collector(flipper)
+            with card_reader(root, flipper, mounting=5) as reader:
+                console = install.voice_through_reader(storage, [pack], say, reader.ask)
+            polls = [c for c in flipper.sent if c == poll]
+            check(len(polls) == 6 and len(flipper.connections) == 2 and console.ser.is_open,
+                  f"{reply.strip()!r} while the card mounts is not yet, on the same console: {len(polls)}, {len(flipper.connections)}")
+            console.ser.close()
+    # The port vanishes after the Flipper's first answer and comes back later
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        flipper.drop_after_seen = 6
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+        with card_reader(root, flipper) as reader:
+            try:
+                console = install.voice_through_reader(storage, [pack], say, reader.ask)
+                error = None
+            except install.InstallError as e:
+                console, error = None, e
+        check(error is None and isinstance(console, fs.Storage), f"a port that vanishes after the first answer: {error}")
+        check(len(flipper.connections) == 3 and console is not None and console.ser is flipper.connections[2] and console.ser.is_open
+              and not flipper.connections[1].is_open, f"the lost console is closed and a new one opened: {len(flipper.connections)}")
+        check(len(flipper.opened_at) == 3 and flipper.opened_at[2] - flipper.opened_at[1] > 6,
+              f"only once the port is back: {flipper.opened_at}")
+        check(line_with(lines, "connection to the Flipper was lost") is not None, f"it says so: {[l for _, l in lines][-8:]}")
+        check(not apple_files(flipper) and line_with(lines, "no helper files", "Flipper") is not None,
+              "and then looks for the ._ files over the new console")
+        check(all(c.events[:3] == [("dtr", True), ("dtr", False), ("dtr", True)] for c in flipper.connections),
+              "each open drops DTR and raises it")
+        if console is not None:
+            console.ser.close()
+    # A port that is listed and then vanishes again before it stayed long enough is not opened
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV)
         storage = console_of(flipper)
         lines, say = collector(flipper)
-        install.PROGRESS_SECONDS = 0
-        with card_reader(root, flipper, never_back=True) as reader, waiting(CARD_WAIT_SECONDS=0.3):
-            try:
-                install.voice_through_reader(storage, [pack], say, reader.ask)
-                error = None
-            except install.InstallError as e:
-                error = e
-        install.PROGRESS_SECONDS = 60
-        check(line_with(lines, "Still waiting for the Flipper") is not None, "and it says that it is still waiting")
-        check(error is not None and "/ext/sr/voices/heart/voice.txt" in str(error) and "within" in str(error) and "\n" not in str(error),
-              f"a card that is not put back: {error}")
-        check(len(reader.ejected) == 1, "it was ejected first")
-        storage.ser.close()
-
-    # The cable is pulled while the card is waited for: the connection was lost, at once
+        with card_reader(root, flipper) as reader, waiting(PORT_STEADY_SECONDS=0.2):
+            flipper.looks = 0
+            flipper.port_script = [True, True, False, False]
+            console = install.voice_through_reader(storage, [pack], say, reader.ask)
+        check(len(flipper.connections) == 2 and len(flipper.opened_at) == 2 and flipper.opened_at[1] > 4,
+              f"the port is opened only after it stayed listed: opened after look {flipper.opened_at[1:]}")
+        console.ser.close()
+    # A console that opens and then answers nothing: closed, and the port waited for again
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        storage = console_of(flipper)
+        flipper.silent_opens = 1
+        lines, say = collector(flipper)
+        with card_reader(root, flipper) as reader, waiting(PROBE_IDLE_SECONDS=0.1):
+            started = time.monotonic()
+            console = install.voice_through_reader(storage, [pack], say, reader.ask)
+        check(len(flipper.connections) == 3 and not flipper.connections[1].is_open and console.ser is flipper.connections[2],
+              f"a console that stops answering is closed, and a new one is opened: {len(flipper.connections)}")
+        check(time.monotonic() - started < 5 and line_with(lines, "connection to the Flipper was lost") is not None,
+              "after a few quiet seconds, not 30")
+        console.ser.close()
+    # The cable is pulled while the card is waited for: closed, and waited for again
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV)
         storage = console_of(flipper)
         lines, say = collector(flipper)
         original = Connection.handle
+        pulled = []
 
         def pulled_at_poll(self, command):
-            if command == poll:
+            if command == poll and not pulled:
+                pulled.append(command)
                 self.flipper.sent.append(command)
                 self.gone = True
+                self.flipper.absent = 3
                 self.out += f"{command}\r\n".encode()
                 return
             original(self, command)
 
         Connection.handle = pulled_at_poll
         try:
-            with card_reader(root, flipper) as reader, waiting(CARD_WAIT_SECONDS=30):
-                started = time.monotonic()
-                try:
-                    install.voice_through_reader(storage, [pack], say, reader.ask)
-                    error = None
-                except install.InstallError as e:
-                    error = e
+            with card_reader(root, flipper) as reader:
+                console = install.voice_through_reader(storage, [pack], say, reader.ask)
         finally:
             Connection.handle = original
-        check(error is not None and "connection was lost" in str(error) and "\n" not in str(error) and time.monotonic() - started < 5,
-              f"a cable pulled while the card is waited for: {error}")
-        storage.ser.close()
+        check(pulled and len(flipper.connections) == 3 and console.ser.is_open,
+              f"a cable pulled during a poll: the console is opened again once the port is back: {len(flipper.connections)}")
+        console.ser.close()
+
+    # The card is never put back: after the limit, one sentence with the Flipper's last reason
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+        install.PROGRESS_SECONDS = 0
+        with card_reader(root, flipper, never_back=True) as reader, waiting(CARD_BACK_SECONDS=0.3):
+            try:
+                install.voice_through_reader(storage, [pack], say, reader.ask)
+                error = None
+            except install.InstallError as e:
+                error = e
+        install.PROGRESS_SECONDS = 60
+        check(line_with(lines, "Still waiting for the Flipper", "so far") is not None, "it says meanwhile that it is still waiting")
+        check(error is not None and "/ext/sr/voices/heart/voice.txt" in str(error) and "within" in str(error)
+              and "internal error" in str(error) and "run this script again" in str(error) and "\n" not in str(error),
+              f"a card that is not put back: the sentence keeps the Flipper's last reason: {error}")
+        check(len(reader.ejected) == 1 and not any(c.is_open for c in flipper.connections), "it was ejected first, and no console is left open")
+    # The port goes and does not come back
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        flipper.drop_after_seen = 10 ** 9
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+        with card_reader(root, flipper) as reader, waiting(CARD_BACK_SECONDS=0.3):
+            try:
+                install.voice_through_reader(storage, [pack], say, reader.ask)
+                error = None
+            except install.InstallError as e:
+                error = e
+        check(error is not None and "console" in str(error) and "within" in str(error) and "plugged in" in str(error)
+              and "\n" not in str(error) and not any(c.is_open for c in flipper.connections),
+              f"a port that never comes back: {error}")
 
     # The copy fails with the card in the reader: the marker goes, and the sentence says to put the card back
     with tempfile.TemporaryDirectory() as root:
@@ -1591,10 +1708,19 @@ with tempfile.TemporaryDirectory() as tmp:
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
         answers[:] = ["y", "r"]
-        with card_reader(root, flipper, never_back=True), waiting(CARD_WAIT_SECONDS=0.3):
+        with card_reader(root, flipper, never_back=True), waiting(CARD_BACK_SECONDS=0.3):
             code, lines, err = run(flipper, full_run[:-1])
         check(code == 1 and "voice.txt" in lines[-1] and update not in flipper.sent and no_traceback(lines, err),
               f"a card that is not put back: {code}, {lines[-1:]}")
+    # A whole run whose port vanishes after the card is back, and comes back
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+        flipper.drop_after_seen = 5
+        answers[:] = ["y", "r"]
+        with card_reader(root, flipper):
+            code, lines, err = run(flipper, full_run[:-1])
+        check(code == 0 and update in flipper.sent and no_traceback(lines, err) and not any(c.is_open for c in flipper.connections),
+              f"a whole run survives the port that drops after the card goes back: {code}, {lines[-2:]}")
     # Progress lines while the voice pack is copied
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
