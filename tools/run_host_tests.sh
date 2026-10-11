@@ -7,11 +7,11 @@
 # the device looks up in a text, for the check of the generator's words against them,
 # tests/fbt/test_voice_parity.py. Then the Python checks: the build's
 # exclusion filter, the built-in Sub-GHz app's source list, the first boot without Momentum's
-# tutorial, and the tests of twelve tools:
+# tutorial, and the tests of thirteen tools:
 # tests/fbt/test_card_prune.py, test_flash_headroom.py, test_flipper_cli.py,
-# test_flipper_storage.py, test_install.py, test_momentum_base.py, test_selfupdate.py,
-# test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py, test_voice_build.py
-# and test_voice_pack.py.
+# test_flipper_storage.py, test_install.py, test_momentum_base.py, test_release_tag_check.py,
+# test_selfupdate.py, test_strip_js_symbols.py, test_subghz_manifest.py, test_upstream_check.py,
+# test_voice_build.py and test_voice_pack.py.
 # Each Python check prints its skip lines, then its summary, so a run shows what it left out, such
 # as the golden checks without the pinned base commit, or the voice generator's resampler checks
 # without numpy and scipy. With --no-skips, as the continuous build runs it with the packages of
@@ -207,6 +207,13 @@ if ! python3 "$ROOT/tests/fbt/test_momentum_base.py" > "$OUT/momentum_base.txt";
   exit 1
 fi
 summary "$OUT/momentum_base.txt"
+
+if ! python3 "$ROOT/tests/fbt/test_release_tag_check.py" > "$OUT/release_tag_check.txt"; then
+  cat "$OUT/release_tag_check.txt"
+  echo "release tag check checks failed"
+  exit 1
+fi
+summary "$OUT/release_tag_check.txt"
 
 if ! python3 "$ROOT/tests/fbt/test_selfupdate.py" > "$OUT/selfupdate.txt"; then
   cat "$OUT/selfupdate.txt"
