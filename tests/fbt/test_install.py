@@ -199,6 +199,7 @@ class Flipper:
         self.silent_opens = 0  # this many opens give a console that answers no command
         self.looks = 0  # the looks at the port list
         self.opened_at = []  # the looks at the port list before each open
+        self.aliases = set()  # other names that open the port, such as a /dev/serial/by-id link
 
     def running(self):
         """The reply to info device now."""
@@ -223,7 +224,7 @@ class Flipper:
 
     def open_port(self, port, timeout=0.1):
         """flipper_cli.open_port: the port, or its one sentence and exit when it is not there."""
-        if port != PORT or (self.updated and self.never_back) or self.absent:
+        if port not in {PORT, *self.aliases} or (self.updated and self.never_back) or self.absent:
             self.absent = max(0, self.absent - 1)
             sys.exit(f"cannot open {port}: [Errno 2] could not open port {port}; close qFlipper or any other tool that uses it.")
         connection = Connection(self)
@@ -1551,6 +1552,40 @@ with tempfile.TemporaryDirectory() as tmp:
               "each open drops DTR and raises it")
         if console is not None:
             console.ser.close()
+    # A port named with --port or FLIPPER_PORT counts as there when the Flipper's list or the system's
+    # list of serial ports has it, or when its device file exists, as a /dev/tty. name on a Mac or a
+    # /dev/serial/by-id link on Linux does, which pyserial never lists; on Windows names are compared
+    # without case
+    with tempfile.TemporaryDirectory() as devices:
+        by_id = os.path.join(devices, "usb-Flipper_Devices_Inc._Flipper_R0skie_flip_R0skie-if00")
+        write(by_id, b"")
+        flipper = Flipper(SONAR_DEV)
+        plug(flipper)
+        check(install._port_listed(PORT) == PORT, "a named port on the Flipper's list")
+        check(install._port_listed(by_id) == by_id, f"a named port that no list has but whose device file exists: {by_id}")
+        check(install._port_listed(os.path.join(devices, "gone")) is None, "a named port that is nowhere")
+        saved = install.PLATFORM, install._serial_devices
+        install.PLATFORM, install._serial_devices = "win32", lambda: ["COM4"]
+        try:
+            check(install._port_listed("com4") == "com4" and install._port_listed("COM5") is None,
+                  "on Windows a named port is compared without case")
+        finally:
+            install.PLATFORM, install._serial_devices = saved
+        # And the card-back wait finds it
+        flipper.aliases.add(by_id)
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+        with card_reader(devices, flipper) as reader, waiting(CARD_BACK_SECONDS=0.5):
+            try:
+                console = install.voice_through_reader(storage, [pack], say, reader.ask, port=by_id)
+                error = None
+            except install.InstallError as e:
+                console, error = None, e
+        check(error is None and console is not None and len(flipper.connections) == 2,
+              f"the card-back wait opens a named port that only exists as a device file: {error}")
+        if console is not None:
+            console.ser.close()
+
     # A port that is listed and then vanishes again before it stayed long enough is not opened
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV)

@@ -663,12 +663,20 @@ def _serial_devices():
 
 
 def _port_listed(port=None):
-    """The Flipper's port when this computer lists it now, else None: port when one was named,
-    else the first Flipper port flipper_cli finds."""
+    """The Flipper's port when this computer has it now, else None: port when one was named, else
+    the first Flipper port flipper_cli finds. A named port is there when the Flipper's list or the
+    system's list of serial ports has it, compared without case on Windows, or when its device file
+    exists: pyserial lists only /dev/cu.* on a Mac and never a /dev/serial/by-id link on Linux, and
+    those vanish with the device too."""
     listed = _list_ports()
-    if port:
-        return port if port in listed or port in _serial_devices() else None
-    return listed[0] if listed else None
+    if not port:
+        return listed[0] if listed else None
+    names = listed + _serial_devices()
+    if PLATFORM == "win32":
+        there = port.upper() in (name.upper() for name in names)
+    else:
+        there = port in names
+    return port if there or os.path.exists(port) else None
 
 
 def _open_console(port):
