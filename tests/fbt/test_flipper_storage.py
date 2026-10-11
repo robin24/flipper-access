@@ -213,27 +213,28 @@ def write(path, data):
         f.write(data)
 
 
-check(fs.DEFAULT_CHUNK == 8192, f"the chunk size until the spike on the device sets it: {fs.DEFAULT_CHUNK}")
+check(fs.DEFAULT_CHUNK == 32768, f"the chunk size the spike of 2026-10-11 set: {fs.DEFAULT_CHUNK}")
+check(fs.EXTRACT_SECONDS_PER_MB == 13, f"the extract's seconds a megabyte, as the spike set them: {fs.EXTRACT_SECONDS_PER_MB}")
 
 with tempfile.TemporaryDirectory() as tmp:
-    # A file of 20,000 bytes goes over in chunks of 8,192, 8,192 and 3,616, and the bytes are the file's
-    data = bytes(i % 251 for i in range(20000))
+    # A file of 70,000 bytes goes over in chunks of 32,768, 32,768 and 4,464, and the bytes are the file's
+    data = bytes(i % 251 for i in range(70000))
     big = os.path.join(tmp, "big.bin")
     write(big, data)
     device = Device()
     seen = []
     storage(device).send_file(big, "/ext/big.bin", lambda sent, total: seen.append((sent, total)))
-    check(device.chunks == [8192, 8192, 3616], f"chunks of 8,192, 8,192 and 3,616: {device.chunks}")
+    check(device.chunks == [32768, 32768, 4464], f"chunks of 32,768, 32,768 and 4,464: {device.chunks}")
     check(bytes(device.files["/ext/big.bin"]) == data, "the stand-in received the file's bytes")
-    check(seen == [(8192, 20000), (16384, 20000), (20000, 20000)], f"progress after each chunk: {seen}")
+    check(seen == [(32768, 70000), (65536, 70000), (70000, 70000)], f"progress after each chunk: {seen}")
     check(device.sent == ['storage stat "/ext/big.bin"'] + ['storage write_chunk "/ext/big.bin" %d' % n for n in device.chunks],
           f"a file that is not there is asked for, then written: {device.sent}")
     check(not device.out, "and the reply to the last chunk is read to the prompt")
 
     # The chunk size is the caller's
     device = Device()
-    storage(device, chunk_size=10000).send_file(big, "/ext/big.bin")
-    check(device.chunks == [10000, 10000], f"a chunk size of 10,000: {device.chunks}")
+    storage(device, chunk_size=30000).send_file(big, "/ext/big.bin")
+    check(device.chunks == [30000, 30000, 10000], f"a chunk size of 30,000: {device.chunks}")
     check(bytes(device.files["/ext/big.bin"]) == data, "the bytes are the file's, and no progress function is fine")
 
     # A file already there goes first, since a chunk is appended to the file

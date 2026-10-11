@@ -37,8 +37,19 @@ except ImportError:  # Windows has no termios
     PORT_ERRORS = (OSError,)
 
 # The bytes of one `storage write_chunk`. The device takes a chunk of any size and appends it to
-# the file, so this only sets how often the host waits for the device's prompt.
-DEFAULT_CHUNK = 8192
+# the file, so this only sets how often the host waits for the device's prompt. 32 KB, from the
+# spike of 2026-10-11 (docs/measurements/2026-10-11-transfer-spike.txt): a file of 5,242,880
+# bytes took 35.7 seconds in chunks of 8 KB and 28.5 in chunks of 32 KB, and the sizes from 64 KB
+# to 4 MB were no faster. So it is the smallest of the fast sizes, which leaves the fewest bytes
+# behind as keystrokes in the console when a write fails halfway. All but 3 of the heart set's
+# 10,535 clips go in one chunk of this size, where most need two at 8 KB.
+DEFAULT_CHUNK = 32768
+# Seconds that `storage extract` takes for a megabyte (1,048,576 bytes) of tar archive, with half
+# again on top, for the timed mute before an extract. The spike unpacked the 111.3 MB heart pack
+# in 963.7 seconds onto a card with nothing of the set (8.66 a megabyte) and in 786.3 over the
+# set; 13 is 8.66 times 1.5, rounded. It holds for a pack like those, about 10,500 clips of 10 KB:
+# most of the time goes to the card's writes, and a pack of many small files costs more a megabyte.
+EXTRACT_SECONDS_PER_MB = 13
 # Seconds without a byte from the device in the middle of a reply before the connection is lost
 IDLE_SECONDS = 30
 # Two of the sentences after "Storage error: " (storage_error_get_desc in the firmware): a path

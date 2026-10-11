@@ -231,12 +231,17 @@ Re-running is safe: the unpack overwrites every clip and keeps the folders that 
 there; the package folder is replaced.
 
 Time goal: a fresh install in under 15 minutes on a Mac, voice included. Through a card reader
-the voice takes about a minute. Over USB, the measured baseline is 6.4 files per second over the
-console (2,828 clips in 442 s on 2026-09-24), which puts the current 10,789 clips at about 28
-minutes. Two levers, measured in the spike, ship as needed:
+the voice takes about a minute. Over USB it takes 25 to 28 minutes, whichever of the two levers
+below is used (the spike of 2026-10-11, `docs/measurements/2026-10-11-transfer-spike.txt`), so
+the goal is met only through the card reader, which stays the default answer. The two levers,
+measured:
 
-- Larger transfer chunks: `storage.py` sends 8 KB per round trip; the spike measures 8, 32 and
-  64 KB on a 5 MB file and on a folder of small files.
+- Larger transfer chunks: `storage.py` sent 8 KB per round trip and `flipper_storage.py` sends
+  32 KB. On a file of 5 MB that is 35.7 s against 28.5 s, and on a folder of 500 clips 88.4 s
+  against 78.9 s (6.3 files per second; the baseline of 2026-09-24 was 6.4, 2,828 clips in 442
+  s). 64 KB and sizes up to 4 MB are no faster and the device refused none, since it writes what
+  it reads at about 180 KB per second. The whole heart set sent file by file, 10,537 files and
+  103.6 MB, took 26 minutes 21 seconds, a quarter of it the `storage stat` before each file.
 - One archive instead of 11,000 files: the console's own `storage extract <archive>
   <destination>`, in the official firmware since June 2024 and so in 1.4.3, Momentum and
   Sonar, calls `tar_archive_unpack_to`, the unpacker the updater uses for the resources. The
@@ -244,15 +249,23 @@ minutes. Two levers, measured in the spike, ship as needed:
   line it prints for every entry without showing them, says the result, and removes the tar.
   The unpacker makes a folder only from a folder entry and opens every file with create-always,
   so the pack is USTAR with an entry for every folder first (`tools/voice_pack.py`, whose test
-  unpacks it with the firmware's own tar reader, `tests/host/tar_unpack.c`). The device unpacks
-  at card speed, without the console's per-file round trips; the spike measures a full pack.
-  This replaces the earlier plan of a new `sr voice unpack` command: it would have been Sonar's
-  own, so missing from the firmware the script starts from (review of 2026-09-28, R4).
+  unpacks it with the firmware's own tar reader, `tests/host/tar_unpack.c`). Measured with a
+  full pack (111.3 MB, 10,604 entries): 653 s to send it and 964 s to unpack it onto a card
+  without the set, 786 s over a set that is there, 24 to 27 minutes in all. That is no faster
+  than the files: the limit is the card's writes, not the console's round trips, and the pack
+  writes the bytes twice. The unpacker prints an entry line every 0.1 s and never went more
+  than 3.1 s between two. This replaces the earlier plan of a new `sr voice unpack` command: it
+  would have been Sonar's own, so missing from the firmware the script starts from (review of
+  2026-09-28, R4).
+
+The update package (11.8 MB) adds 72 s over USB. A MB here is 1,048,576 bytes, a KB 1,024.
 
 Held back: clips at 11,025 samples a second instead of 16,000, which would make the pack about a
 third smaller. It changes the sound, so it waits for a listening test through the piezo, and that
 test is made only if USB is still too slow once the spike has measured the two levers above
-(Robin, 2026-09-28, the review's question 3).
+(Robin, 2026-09-28, the review's question 3). The spike has measured them and USB is still too
+slow; by its figures a pack a third smaller would take about 20 to 23 minutes, so this change
+alone would not reach 15 either (an estimate, not measured).
 
 Rejected: shipping the voice inside the update package's resources tarball. The updater would
 carry a manifest of 11,000 more entries and process it at every update, forever, and that path
