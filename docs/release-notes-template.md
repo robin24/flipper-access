@@ -26,7 +26,8 @@ For the install:
 
 For checking, crash reports and developers:
 
-- `SHA256SUMS`: the SHA-256 checksum of every other file.
+- `SHA256SUMS`: the SHA-256 checksum of every file here but `release.json` and `SHA256SUMS`
+  itself. `release.json` lists the same checksums of the other files.
 - `{{TAG}}-firmware.elf` and `{{TAG}}-firmware.map`: the firmware's symbols, which turn the address
   on a crash popup of this release into a line of code.
 - `flipper-z-f7-sdk-{{TAG}}.zip`: the SDK, for building apps for this firmware.

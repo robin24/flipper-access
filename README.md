@@ -102,19 +102,21 @@ release has its own version in their names:
 - `release.json`, the release's description, which the script checks the installed firmware
   against.
 
-A release has more files, which the install does not need: `SHA256SUMS`, the checksums of all the
-others; the firmware's elf and map, which turn a crash address into a line of code; the SDK, for
-building apps; and the source bundle, the source of every binary, described under Licence and
-credits.
+A release has more files, which the install does not need: `SHA256SUMS`, the checksums of every
+file of the release but `release.json` and `SHA256SUMS` itself; the firmware's elf and map, which
+turn a crash address into a line of code; the SDK, for building apps; and the source bundle, the
+source of every binary, described under Licence and credits.
 
 To check your downloads, download `SHA256SUMS` into the same folder too, and run this command
-there. Each file you downloaded should say OK:
+there:
 
 ```bash
 shasum -a 256 -c --ignore-missing SHA256SUMS
 ```
 
-On Linux, the same check is:
+The three downloads other than `release.json` should each say OK. `release.json` is not among the
+checksums, though it lists the same checksums of the other files itself. On Linux, the same check
+is:
 
 ```bash
 sha256sum -c --ignore-missing SHA256SUMS
