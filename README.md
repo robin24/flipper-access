@@ -15,11 +15,11 @@ such as Reddit whether a screen reader or a similar accessibility solution was a
 developers even offered to look into building a screen reader for the Flipper, but nothing ever came
 of it. Sonar began as an experiment of mine.
 
-I am not a C developer myself, but I decided to take up the challenge anyway, and I called on
-Claude, the AI, to help with the planning, the testing and the implementation. With the Flipper's
-very constrained resources, it was always going to be a tough challenge. Claude wrote almost all of
-the code, working under my direction: I tested every change on the device and decided what it should
-do. I also wrote [a post about this adventure on my Mastodon
+I am not a C developer myself, but I decided to take up the challenge anyway, and I called on Claude
+to help with the planning, the testing and the implementation. With the Flipper's very constrained
+resources, it was always going to be a tough challenge. Claude wrote almost all of the code, working
+under my direction: I tested every change on the device and decided what it should do. I also wrote
+[a post about this adventure on my Mastodon
 account](https://kipp.social/@robin/statuses/01M3ADPYYW5NFDPA7J36QP34M5), and I was absolutely
 stunned by the overwhelming, positive response from the Fedi community.
 
