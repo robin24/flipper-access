@@ -306,6 +306,80 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
     since the continuous build compares the new firmware with the pinned commit. Then tag the
     release on both repositories, as section 7 of the release spec describes.
 
+## Making a release
+
+A release is made in two parts. The workflow `.github/workflows/release.yml` builds the firmware
+from a pushed tag and leaves a draft release with six assets. This Mac then adds the one voice
+pack, the checksums and `release.json`, and the draft is published by hand. Run the steps from the
+project folder. `sonar-0.1.0` stands for the tag and `0.1.0` for its version; for a release
+candidate the tag is `sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
+
+1. Tag the fork's commit and push the tag. The fork's checkout must be on the commit that the
+   project records, so `git status` shows no change for `Momentum-Firmware`. Then tag the project
+   with the same name and push that tag, which starts the workflow. The workflow fails before the
+   build unless the fork has the tag on the recorded commit, and it fails if a release of the tag
+   exists already, a draft included.
+
+   ```bash
+   git -C Momentum-Firmware tag -a sonar-0.1.0 -m "sonar-0.1.0"
+   git -C Momentum-Firmware push origin sonar-0.1.0
+   git tag -a sonar-0.1.0 -m "sonar-0.1.0"
+   git push origin sonar-0.1.0
+   ```
+
+2. When the workflow has finished, the draft lists the update package, the install zip, the elf
+   and its map, the SDK and the source bundle:
+
+   ```bash
+   gh release view sonar-0.1.0
+   ```
+
+3. Make the voice pack by its explicit name. Heart is the only voice pack a release ships, and the
+   default voice. The generator's set `heart` must be complete in `voices/heart`. The pack is
+   written to the project folder as `voice-heart-sonar-0.1.0.tar`, which is `voice-heart-<tag>.tar`,
+   and is about 111 megabytes:
+
+   ```bash
+   .venv/bin/python tools/voice_pack.py --set heart --version 0.1.0
+   ```
+
+4. Upload the pack to the draft:
+
+   ```bash
+   gh release upload sonar-0.1.0 voice-heart-sonar-0.1.0.tar
+   ```
+
+5. Finish the draft. The tool downloads every asset of the draft again, so that the checksums are
+   those of the bytes a user will download. It checks that the draft holds the seven assets of a
+   release and no other file, and reads the voice of the pack from its own `voice.txt`. It takes
+   the fork's commit and the Momentum base from the tag, and the API version from the fork's
+   table at that commit. It then writes `SHA256SUMS` and `release.json` and uploads both with
+   `--clobber`, so it can be run again. It uses only Python's standard library and the `gh`
+   command, signed in:
+
+   ```bash
+   tools/release_finalise.py sonar-0.1.0
+   ```
+
+   It refuses, with one sentence and without uploading anything, when an asset is missing, when a
+   second voice pack or another file is in the draft, when the pack was made with a backend other
+   than kokoro or espeak, when the tag is not in this checkout, and when the release is published
+   already. Add `--dry` to see the two files first; it still downloads, and uploads nothing:
+
+   ```bash
+   tools/release_finalise.py sonar-0.1.0 --dry
+   ```
+
+6. Check the draft as a user would, by downloading it into an empty folder and checking it against
+   `SHA256SUMS`. Every line should say OK:
+
+   ```bash
+   dir=$(mktemp -d) && gh release download sonar-0.1.0 --dir "$dir" && (cd "$dir" && shasum -a 256 -c SHA256SUMS)
+   ```
+
+7. Read the release notes on the draft's page on GitHub, then publish the draft there by hand. No
+   script publishes a release, and a release that is published is not finalised again.
+
 ## The voice on this card
 
 - The vocabulary here is made with `say` and the Samantha voice, the generator's defaults, so it
