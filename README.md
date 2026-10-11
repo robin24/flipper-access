@@ -164,7 +164,8 @@ and `.venv/bin/python` in these commands.
 Start on the Flipper's home screen, with no application open: plug the Flipper in, unlock it, and
 press Back until it is on its home screen, which Sonar says as Home screen. Then run the script
 from the same folder. When an application is open, the Flipper refuses the backup, and the script
-stops and tells you to press Back until the Flipper says Home screen and to run it again.
+stops and tells you to press Back until the Flipper says Home screen, or, from other firmware,
+which says nothing, to press Back a few times to reach the home screen, and then to run it again.
 
 ```bash
 .venv/bin/python install.py --package flipper-z-f7-update-sonar-0.1.0.tgz --voice voice-heart-sonar-0.1.0.tar --release release.json
