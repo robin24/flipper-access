@@ -27,8 +27,22 @@ console's USB off), in the updater, or held by qFlipper. The script says all fou
 The port is opened for one program alone, at 230400 baud with a read time-out of 0.1 seconds. When
 qFlipper or another tool has it, the open fails at once, and the script says so instead of waiting.
 
-Right after opening, the script sends one carriage return, waits 0.4 seconds, and throws away
-everything that arrived. That is the welcome banner and the first prompt.
+Right after opening, the script starts a fresh console session. It drops the DTR line of the port,
+waits 0.5 seconds, throws away everything that arrived, and raises DTR again. The Flipper's console
+ends its session when DTR drops and starts a new one when DTR rises, and the new session prints the
+welcome banner and then the prompt. This is in the firmware's `cli_vcp.c`. The script reads
+everything up to that prompt and throws it away, for at most 5 seconds, so that no part of the
+banner is taken for the reply to the first command. When no prompt comes, it sends one carriage
+return and waits for a prompt for at most 2 more seconds. When none comes then either, the open
+fails with one sentence that names the port and says to restart the Flipper by holding Left and Back
+together for five seconds. A port that goes away during all this also fails the open with one
+sentence.
+
+The script does this on every open of the port, and so do the other tools that open the console
+the same way, such as `tools/card_prune.py`. On 2026-10-11, after about ten idle hours, Robin's
+Flipper answered nothing to a fresh open of its port: no echo, no prompt, and every command timed
+out, though the Flipper itself worked. Dropping DTR for half a second and raising it again made it
+print its banner and its prompt, and commands worked again.
 
 ### Sending a command and reading the reply
 
@@ -59,7 +73,9 @@ extract` gets a limit worked out from the size of the pack, which is given with 
 
 Independently of that, a reply that goes quiet in the middle for 30 seconds counts as a lost
 connection. While the script waits for the Flipper to come back after an update, the quiet limit is
-5 seconds instead, because a console that has just come back may say nothing at first.
+5 seconds instead, because a console that has just come back may say nothing at first. The same 5
+seconds hold while the script asks whether the Flipper sees the card after it was put back, since
+the answer to `storage stat` comes at once.
 
 A read or write that fails on the port also means that the connection was lost. This happens when
 the cable is pulled or the Flipper restarts.
@@ -77,14 +93,31 @@ sentences that the script knows, from the firmware's `filesystem_api.c`, are the
 - `file/dir not exist` and `invalid name/path`: the path is not there.
 - `file/dir already exist`: the folder that is to be made is there already.
 - `access denied`: for example, removing a folder that still has something in it.
-- `internal error`.
-- `filesystem not ready`: there is no card in the Flipper. This is the reply to a storage command
-  while the microSD card is out of its slot.
+- `internal error`. It is also the reply to a storage command while the microSD card is out of
+  its slot: on 2026-10-11 Robin's Flipper answered `storage stat` with `Storage error: internal
+  error` while its card was out.
+- `filesystem not ready`, the firmware's sentence for a storage that is not ready.
 - `invalid parameter`, `function not implemented` and `file is already open`.
 
 The script turns an error line into one sentence for the user, made of the Flipper's sentence and
 the path the command was about. A write that fails, such as one to a full card, prints its error
 line after the bytes were sent.
+
+### An application open on the Flipper
+
+A command that needs the Flipper's loader is refused while an application is open on the Flipper.
+Of the commands that the script sends, these are `update backup`, `update install` and `update
+restore`. The firmware marks the `storage`, `info` and `sr` commands as safe to run beside an
+application, so an open application does not stop them. The refusal is one line in red, with no
+`Result` line, and then the prompt comes back. This is in the firmware's `cli_shell.c`:
+
+```
+this command cannot be run while an application is open
+```
+
+When a reply holds this sentence, the script stops, and its sentence says so and tells the user to
+press Back on the Flipper until it says Home screen, and then to run the script again. Sonar's
+reader says Home screen on the home screen.
 
 ### Paths
 
@@ -222,7 +255,9 @@ Copy the voice through a card reader (faster) or over USB? [R/u]
 An answer that starts with R means the card reader and one that starts with U means USB. Anything
 else is asked again. With `--yes`, nothing is asked and the voice goes over USB. When no one can
 answer because the input has ended, nothing is changed at the first question, and the voice goes
-over USB at the second.
+over USB at the second. The card reader way then asks the user twice more to press Enter: once the
+card is in the computer's card reader, and once it is back in the Flipper. Both are described
+below.
 
 ### The backup
 
@@ -372,129 +407,164 @@ path can be quoted before it sends the first byte.
 
 This takes the place of the voice over USB, at the same position in the order. It is faster, because
 the card's writes limit the USB way. It needs a card reader on the computer, and the user moves the
-card. The script says each step on its own line.
+card. The script says each step on its own line, and it asks the user to press Enter after each move
+of the card. No clock runs while the user moves the card. When something fails on this way, the
+script stops with one sentence that says what to do. It never sends the voice over USB instead by
+itself.
 
 1. A marker is written to the card over the console. It is an empty file named like this, where the
    eight hexadecimal digits are random. This is the chunked write of the previous section, with a
    chunk of 0 bytes: the device says `Ready`, takes no bytes, and has made the empty file. First the
    script looks at the name:
 
-```
-storage stat "/ext/.sonar-install-<8 hex digits>"
-```
+   ```
+   storage stat "/ext/.sonar-install-<8 hex digits>"
+   ```
 
    Then it makes the file:
 
-```
-storage write_chunk "/ext/.sonar-install-<8 hex digits>" 0
-```
+   ```
+   storage write_chunk "/ext/.sonar-install-<8 hex digits>" 0
+   ```
 
-2. The script tells the user to take the microSD card out of the Flipper and put it into the
-   computer's card reader, and to leave the Flipper plugged in and unlocked. The Flipper must not
-   lock itself while the card is out, because the console of a Flipper that is locked with its PIN
-   is off.
+2. The script closes the console. It opens a new one only after the card is back in the Flipper, as
+   step 13 describes. On 2026-10-11, with a console session open while the card went back into the
+   Flipper, `storage stat` found the file 0.67 seconds after the card went in, and a second later
+   the Flipper's USB port vanished and stayed away for about ten minutes, without a restart. The
+   cause is not known yet.
 
-3. The script looks for the card every 2 seconds, for at most 300 seconds. The constant that holds
-   this time is `CARD_WAIT_SECONDS`. On each look it lists the mounted volumes:
+3. The script tells the user to leave the Flipper plugged in and unlocked while its card is out.
+   The Flipper must not lock itself meanwhile, because the console of a Flipper that is locked with
+   its PIN is off. Then it asks, and waits for Enter:
+
+   ```
+   Take the microSD card out of the Flipper and put it into this computer's card reader, then press Enter.
+   ```
+
+4. After Enter, the script looks for the card every 2 seconds, for at most 30 seconds, since a Mac
+   mounts a card within a few seconds. The constant that holds this time is `CARD_LOOK_SECONDS`. On
+   each look it lists the mounted volumes:
    - On macOS, every folder that matches `/Volumes/*`.
    - On Linux, every folder that matches `/media/<user name>/*` or `/run/media/<user name>/*`.
    - On Windows, the drive letters D to Z that exist, as `D:\` and so on.
 
    The card is the first volume that holds a file named `.sonar-install-<8 hex digits>`, with the
-   digits that were written. A folder of that name does not count. While it waits, the script says a
-   line about once a minute.
+   digits that were written. A folder of that name does not count.
 
-4. When no card was found in time, the script says so in one sentence and asks:
+5. When no card was found in time, the script stops with one sentence. It says that no drive with
+   the marker file turned up within 30 seconds, to put the card back into the Flipper and run the
+   script again, and to answer U for USB if the computer does not show the card. The marker stays
+   on the card then, and the next run through a card reader removes it, as step 9 describes.
 
-```
-Put the card back into the Flipper if it is out, and copy the voice over USB instead? [Y/n]
-```
+6. When the card was found, the script first asks the system whether it mounted the volume
+   read-only, before it writes anything. On macOS and Linux this is the flag `ST_RDONLY` that
+   `statvfs` gives for the volume. A microSD adapter whose lock slider is down makes the computer
+   mount the card read-only, as it did on 2026-10-11. The script then stops with one sentence: the
+   card is read-only on this computer; on a microSD adapter, push the lock slider up, towards the
+   contacts, put the card back into the Flipper, and run the script again. Windows has no `statvfs`,
+   so there the script cannot tell, and the first write that fails gives the sentence of step 8
+   instead.
 
-   After the answer, the marker is removed from the card in the Flipper. This is best effort, since
-   the card may still be out, and its failure is ignored:
+7. Every entry of every pack is checked before any is written. An entry must be a plain file or a
+   folder, and the real path of where it would be written, with links and `..` resolved, must stay
+   inside the real path of the volume. This also holds for the names that Windows reads
+   differently, those with a drive letter such as `C:\x` or with backslashes. A pack with one bad
+   entry leaves the card as it was.
 
-```
-storage remove "/ext/.sonar-install-<8 hex digits>"
-```
-
-   A yes, Enter alone, or no answer at all, takes the USB way for all the packs. A no ends the
-   install with one sentence that says that the voice was not copied.
-
-5. When the card was found, every entry of every pack is checked first, before any is written. An
-   entry must be a plain file or a folder, and the real path of where it would be written, with
-   links and `..` resolved, must stay inside the real path of the volume. This also holds for the
-   names that Windows reads differently, those with a drive letter such as `C:\x` or with
-   backslashes. A pack with one bad entry leaves the card as it was.
-
-6. The packs are written onto the volume in the order of their entries, which is the order of the
+8. The packs are written onto the volume in the order of their entries, which is the order of the
    clips. Each folder entry makes a folder, and each file entry writes a file and replaces one that
    is there. The script copies no dates, modes or owners. It says the progress about once a minute.
 
    When the system refuses a write because the card is read-only or the access is denied, the
-   sentence adds that the card may be locked. The lock slider of the microSD adapter must be towards
-   the contacts, or the computer mounts the card as read-only.
+   sentence adds that the card may be locked, and that on a microSD adapter the lock slider must be
+   pushed up, towards the contacts.
 
-   When the writing fails, the marker is removed from the volume as far as possible, and the script
-   says to put the card back into the Flipper before it is run again.
+   When the writing fails, every marker file is removed from the volume as far as possible, and the
+   sentence ends by saying to put the card back into the Flipper before the script is run again.
 
-7. The marker is removed from the volume.
+9. Every file at the top of the volume whose name starts with `.sonar-install-` is removed: the
+   marker of this run, and any marker that an earlier run left, for example a run that stopped while
+   the card was out of the Flipper. A folder of that name stays. When there were older markers, the
+   script says how many it removed.
 
-8. macOS puts a 4 KB helper file named `._<name>` beside every file and folder that a process writes
-   to an exFAT card. It gives each of them the attribute `com.apple.provenance`, which exFAT keeps
-   only in such a file. The script removes every file whose name starts with `._` below
-   `sr/voices/<set>/` on the volume, for each set that the packs hold, and nothing else. A file that
-   cannot be removed is left, and is not an error. The script says how many it removed. Files beside
-   the set's folder, such as `sr/voices/._<set>`, are not touched.
+10. macOS puts a 4 KB helper file named `._<name>` beside every file and folder that a process
+    writes to an exFAT card. It gives each of them the attribute `com.apple.provenance`, which exFAT
+    keeps only in such a file. The script removes every file whose name starts with `._` below
+    `sr/voices/<set>/` on the volume, for each set that the packs hold, and nothing else. A file
+    that cannot be removed is left, and is not an error. The script says how many it removed. Files
+    beside the set's folder, such as `sr/voices/._<set>`, are not touched.
 
-9. The card is ejected, so that everything the computer still holds back is written. On macOS the
-   script runs this, with a limit of 120 seconds:
+11. The card is ejected, so that everything the computer still holds back is written. On macOS the
+    script runs this, with a limit of 120 seconds:
 
-```
-diskutil eject <volume>
-```
+    ```
+    diskutil eject <volume>
+    ```
 
-   An exit code of 0 means that it worked. When it fails, or the program is not found, the script
-   says why in one sentence, which is the last line of the output of `diskutil`, and asks the user
-   to eject the card by hand and press Enter. On other systems it asks the user to eject the card
-   safely and press Enter.
+    An exit code of 0 means that it worked. When it fails, or the program is not found, the script
+    says why in one sentence, which is the last line of the output of `diskutil`, and asks the user
+    to eject the card by hand and press Enter. On other systems it asks the user to eject the card
+    safely and press Enter.
 
-10. The script tells the user to put the card back into the Flipper, and then asks the console every
-    2 seconds, for at most 300 seconds, for each set that the packs hold, until all of them are
-    found:
+12. The script asks, and waits for Enter:
 
-```
-storage stat "/ext/sr/voices/<set>/voice.txt"
-```
+    ```
+    Put the card back into the Flipper, then press Enter.
+    ```
 
-    While the card is out, or still being mounted again, the reply is an error line, usually
-    `Storage error: filesystem not ready`. Any such error, and `file/dir not exist`, mean "not yet",
-    and the script asks again. A lost connection is not "not yet" and ends the install. When the
-    file is there, the reply is `File, size: <n>b`, and the Flipper sees the card with the voice on
-    it. When the time runs out, the script stops with a sentence that names the file and says to put
-    the card into the Flipper and run the script again, which is safe.
+13. After Enter, the script waits for the Flipper to see the card, for at most 15 minutes, which is
+    900 seconds, as long as the wait after an update. The constant that holds this time is
+    `CARD_BACK_SECONDS`. It says that it waits and how long that may take, and then a line about
+    once a minute with the time so far. Every 2 seconds it does the next of these steps:
+    - The Flipper's port must be listed, as when the console is opened, and stay listed for 5
+      seconds, which is the constant `PORT_STEADY_SECONDS`. A port that vanishes meanwhile starts
+      this over. When the user named a port, that port is waited for.
+    - Then the console is opened as described under Opening it, with DTR dropped and raised and
+      the banner read, and the quiet limit is 5 seconds.
+    - On that console, for each set that the packs hold, the script asks:
 
-11. The Flipper may still list some `._` files, because they can be made again when the card is
-    ejected, or because they could not be removed on the computer. The script looks for them through
-    the console. For each set, it lists the set's folder and then every folder below it, depth
-    first, each with `storage list`, and collects every file whose name starts with `._`:
+      ```
+      storage stat "/ext/sr/voices/<set>/voice.txt"
+      ```
 
-```
-storage list "/ext/sr/voices/<set>"
-```
+    - While the card is out, or still being mounted again, the reply is an error line, such as the
+      `Storage error: internal error` that Robin's Flipper gave while its card was out. Any error
+      line, and `file/dir not exist`, mean "not yet", and the script asks again on the same
+      console. When the file is there, the reply is `File, size: <n>b`. When every set's file is
+      there, the Flipper sees the card with the voice on it.
+    - A port that vanishes, a console that cannot be opened or gives no prompt, and a reply that
+      goes quiet or takes too long, close the console, and the wait goes back to waiting for the
+      port. The script says that the connection was lost and that it waits for it to come back.
+      This also holds during step 14.
+
+    When the time runs out, the script stops with one sentence. It says whether the Flipper's
+    console was not back, or whether the Flipper did not see the file, and it keeps the Flipper's
+    last error sentence when there was one. It says to check that the card sits in the Flipper and
+    that the Flipper is plugged in and unlocked, and to run the script again, which is safe.
+
+14. The Flipper may still list some `._` files, because they can be made again when the card is
+    ejected, or because they could not be removed on the computer. The script looks for them
+    through the console, with the usual quiet limit of 30 seconds again. For each set, it lists the
+    set's folder and then every folder below it, depth first, each with `storage list`, and collects
+    every file whose name starts with `._`:
+
+    ```
+    storage list "/ext/sr/voices/<set>"
+    ```
 
     It says how many it found and about how long the removal takes, which it works out at 0.04
     seconds for a file, since `storage remove` took 37 to 39 milliseconds a file in the spike. Then
     it removes each of them:
 
-```
-storage remove "/ext/sr/voices/<set>/<folder>/._<name>"
-```
+    ```
+    storage remove "/ext/sr/voices/<set>/<folder>/._<name>"
+    ```
 
     It reports how many it removed over the console. It reported the number it removed on the
-    computer before, so the user can see whether the removal on the computer worked.
+    computer before, so the user can see whether the removal on the computer worked. An error line
+    from the Flipper here stops the script with one sentence that names the step.
 
-The console stays open through the whole trip of the card, and the same connection is used
-afterwards for the update.
+The console that is open at the end of step 14 is used afterwards for the update.
 
 ### The update package
 
