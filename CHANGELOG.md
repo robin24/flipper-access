@@ -12,12 +12,12 @@ screen through the device's own speaker, from recorded word clips on the SD card
 
 This release holds:
 
-- The firmware. The screen reader is on from the first boot, with the Back chords, the
-  Accessibility settings, spoken names for the screens that draw only icons, the dolphin's level
-  and mood in words, and an address on the crash popup that locates the crash. The games, the
-  JavaScript engine and the reader's SAM voice are left out, and the home screen's animations are
-  off by default, so that Sub-GHz is built into the firmware again and works with the reader on.
-  Momentum's first boot tutorial is left out too, since the reader cannot read its pictures.
+- The firmware. The screen reader is on from the first boot, with the Back chords, the Accessibility
+  settings, spoken names for the screens that draw only icons, the dolphin's level and mood in
+  words, and an address on the crash popup that locates the crash. The games and the JavaScript
+  engine are left out, and the home screen's animations are off by default, so that Sub-GHz is built
+  into the firmware again and works with the reader on. Momentum's first boot tutorial is left out
+  too, since the reader cannot read its pictures.
 - The voice, heart, made with Kokoro's voice af_heart: 10,535 clips, one for each word, letter
   and digit.
 - The install script, which installs Sonar from the official firmware, Momentum or an earlier

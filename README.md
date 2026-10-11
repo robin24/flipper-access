@@ -9,13 +9,24 @@ install. The firmware's source is the fork at https://github.com/robin24/Momentu
 
 ## How it was made
 
-Sonar was written almost entirely by AI coding agents (Claude) working under the direction of
-Robin Kipp, a blind developer, who tested every change on the device and decided what it should
-do. Momentum's repository does not accept AI-written contributions, and the reader's memory needs
-would sit behind a build flag there in any case, so this is a separate firmware rather than a pull
-request. The specs, plans and build logs under `docs/` are the full record of how it was built.
+I am Robin Kipp, and I am blind. Sonar began as an experiment of mine. I have wanted to use a
+Flipper Zero ever since it was released, but I knew that it was completely inaccessible to me. Other
+users had asked in places such as Reddit whether a screen reader or a similar accessibility solution
+was available, and some developers even offered to look into building a screen reader for the
+Flipper, but nothing ever came of it.
 
-The reasoning behind the separate firmware is in `docs/roadmap.md`, and `docs/README.md` is the
+I am not a C developer myself, but I decided to take up the challenge anyway, and I called on
+Claude, the AI, to help with the planning, the testing and the implementation. With the Flipper's
+very constrained resources, it was always going to be a tough challenge. Claude wrote almost all of
+the code, as AI coding agents working under my direction: I tested every change on the device and
+decided what it should do. I also wrote [a post about this adventure on my Mastodon
+account](https://kipp.social/@robin/statuses/01M3ADPYYW5NFDPA7J36QP34M5), and I was absolutely
+stunned by the overwhelming, positive response from the Fedi community.
+
+Momentum's repository does not accept AI-written contributions, and the reader's memory needs would
+sit behind a build flag there in any case, so Sonar is a separate firmware rather than a pull
+request to Momentum. The specs, plans and build logs under `docs/` are the full record of how it was
+built. My reasoning for the separate firmware is in `docs/roadmap.md`, and `docs/README.md` is the
 index of everything under `docs/`.
 
 ## What changed against Momentum
@@ -33,15 +44,13 @@ Added:
 - The crash popup ends with an address that locates the crash in the code, the failed check or,
   after a hardware fault, the instruction that faulted, and the reader speaks it.
 - The reader speaks in a recorded voice, one clip per word from the SD card, made with a generator
-  in this repository.
+  in this repository. It speaks only from these clips, so without them it is silent.
 
 Removed:
 
 - The games are gone from the build and from the card.
 - The JavaScript engine, its script runner and its modules are gone from the firmware and the
   card.
-- The screen reader's own SAM synthesizer is gone. The reader speaks only from the recorded clips,
-  so without them it is silent.
 - Momentum's tutorial of seven pictures at the first boot is gone, from the update package, the
   card and the Momentum app's Misc screen, since the reader cannot read its pictures. A first boot
   shows the picture that every update shows, which the reader speaks.
@@ -835,8 +844,7 @@ resends everything.
 
 ## Known limits
 
-- Without the SD card, or without a voice set under `/ext/sr/voices` on it, the reader is silent,
-  since SAM is gone.
+- Without the SD card, or without a voice set under `/ext/sr/voices` on it, the reader is silent.
   Without a card most main apps are missing too, since they load from the card, as in Momentum.
 - Momentum keeps its settings on the card, in `/ext/.int`, where `/int` leads, and the device's
   name too, in `/ext/dolphin/name.settings`. Without a card the device starts with the default
