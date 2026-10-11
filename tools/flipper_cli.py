@@ -77,8 +77,8 @@ def find_port(explicit=None):
     ports = flipper_ports() or sorted(glob.glob("/dev/cu.usbmodemflip_*"))
     if not ports:
         sys.exit(
-            "No Flipper serial port found. Is it plugged in, unlocked, not in the updater, and not used by qFlipper? "
-            "Or name it with --port."
+            "No Flipper serial port found; check that the Flipper is plugged in, unlocked, not in the updater and not "
+            "used by qFlipper, or name its port with --port."
         )
     return ports[0]
 

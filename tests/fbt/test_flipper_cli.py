@@ -74,8 +74,9 @@ else:
         said = exits(fc.find_port)
         # A PIN-locked Flipper has no port at all, so the sentence names the lock beside the
         # updater and qFlipper
-        check(said == "No Flipper serial port found. Is it plugged in, unlocked, not in the updater, and not used by "
-                      "qFlipper? Or name it with --port.", f"none: the sentence that names every reason: {said}")
+        check(said == "No Flipper serial port found; check that the Flipper is plugged in, unlocked, not in the "
+                      "updater and not used by qFlipper, or name its port with --port.",
+              f"none: the one sentence that names every reason: {said}")
     finally:
         fc.flipper_ports, fc.glob.glob = saved[0], saved[1]
         if saved[2] is not None:

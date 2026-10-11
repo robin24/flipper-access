@@ -146,6 +146,12 @@ def _sentence(what, reason):
     return text if text.endswith((".", "?", "!")) else text + "."
 
 
+def _and(sentence, more):
+    """The sentence, one that ends in a full stop, with more added after a semicolon: still one
+    sentence."""
+    return f"{sentence.rstrip().removesuffix('.')}; {more}."
+
+
 def _os_reason(error):
     """An OSError of a file on this computer, in words."""
     if error.strerror and error.filename:
@@ -799,7 +805,7 @@ def voice_through_reader(storage, packs, say, ask, port=None):
     try:
         _copy_to_card(packs, sets, volume, say, ask)
     except InstallError as e:
-        raise InstallError(f"{e} Put the card back into the Flipper before running this script again.") from None
+        raise InstallError(_and(str(e), "put the card back into the Flipper before running this script again")) from None
     ask("Put the card back into the Flipper, then press Enter.")
     return wait_for_card(sets, say, port)
 

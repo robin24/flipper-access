@@ -61,6 +61,19 @@ import flipper_cli as fc
 import flipper_storage as fs
 import install
 
+# Every InstallError message the checks below make install.py say, for the last check: each failure
+# is one sentence, with one sentence-ending full stop
+made_errors = []
+made_error = install.InstallError.__init__
+
+
+def recorded(self, *args):
+    made_errors.append(str(args[0]) if args else "")
+    made_error(self, *args)
+
+
+install.InstallError.__init__ = recorded
+
 # info device, as furi_hal_info.c prints it with "%-30s: %s". The hardware, radio and system lines
 # are the device's of 2026-09-24 (docs/superpowers/build-logs/2026-09-24-clip-voice-spelling/
 # task-1-report.md) with the unique id and the MAC address made up.
@@ -1080,8 +1093,8 @@ with tempfile.TemporaryDirectory() as tmp:
     flipper = Flipper(SONAR_DEV)
     flipper.updated = flipper.never_back = True
     code, lines, err = run(flipper, full_run)
-    check(code == 1 and lines and lines[-1] == "No Flipper serial port found. Is it plugged in, unlocked, not in the "
-          "updater, and not used by qFlipper? Or name it with --port.", f"no port: {lines[-1:]}")
+    check(code == 1 and lines and lines[-1] == "No Flipper serial port found; check that the Flipper is plugged in, "
+          "unlocked, not in the updater and not used by qFlipper, or name its port with --port.", f"no port: {lines[-1:]}")
     check(no_traceback(lines, err) and not err, f"on stdout, without a traceback: {err!r}")
 
     # A cable pulled in the middle of a step: the connection was lost, in one sentence
@@ -1762,6 +1775,13 @@ with tempfile.TemporaryDirectory() as tmp:
             code, lines, err = run(flipper, full_run[:-1], progress=0)
         check(code == 0 and any("percent of the voice pack is copied" in line for line in lines),
               f"progress lines while the pack is copied: {[x for x in lines if 'percent' in x][:3]}")
+
+# Each failure is one sentence: one full stop that ends a sentence, that is one followed by a space
+# or the end, so that the dots in paths and versions do not count
+SENTENCE_END = re.compile(r"\.(?=\s|$)")
+several = [m for m in made_errors if len(SENTENCE_END.findall(m)) != 1 or "\n" in m]
+check(len(made_errors) > 30 and not several,
+      f"every failure the checks made, {len(made_errors)} in all, is one sentence: {several[:3]}")
 
 print(f"install: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)
