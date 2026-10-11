@@ -130,8 +130,10 @@ NOT_EXIST = "Storage error: file/dir not exist\r\n"
 EXISTS = "Storage error: file/dir already exist\r\n"
 FULL = "Storage error: internal error\r\n"
 DENIED = "Storage error: access denied\r\n"
-# What the device says of any storage command while the card is out of its slot (FSE_NOT_READY in
-# filesystem_api.c)
+# What the device says of a storage command while the card is out of its slot: internal error, as
+# Robin's Flipper said on 2026-10-11, and FSE_NOT_READY's sentence in filesystem_api.c, which the
+# firmware's source suggests
+CARD_OUT = "Storage error: internal error\r\n"
 NOT_READY = "Storage error: filesystem not ready\r\n"
 NOT_FOUND = "\x1b[31mcould not find command `{}`, try `help`\x1b[0m\r\n"
 # What the shell says, in red and without a line end, to a command that needs the loader while an
@@ -167,8 +169,8 @@ class Flipper:
         self.connections = []
         self.app_open = None  # the update command whose word follows update is refused: an app is open
         self.card_out = False  # the card is in the user's hand or a card reader, not in the slot
-        self.back_in = None  # storage commands that say not ready before the card is back; None: never
-        self.card_back = None  # called when the card is put back
+        self.out_reply = CARD_OUT  # what a storage command gets while there is no card to use
+        self.mounting = 0  # storage commands that still get out_reply after the card is put back
 
     def running(self):
         """The reply to info device now."""
@@ -293,13 +295,11 @@ class Connection:
             self.events.append(("command", len(self.out)))  # with the bytes not yet read
         f.sent.append(command)
         words = shlex.split(command)
-        if words[0] == "storage" and f.card_out:
-            if f.back_in is None or f.back_in > 0:
-                if f.back_in is not None:
-                    f.back_in -= 1
-                self.say(command, NOT_READY)
-                return
-            f.card_back()
+        if words[0] == "storage" and (f.card_out or f.mounting):
+            if not f.card_out:
+                f.mounting -= 1
+            self.say(command, f.out_reply)
+            return
         if command == "info device":
             self.say(command, f.running())
         elif words[0] == "update" and words[1:2] == [f.app_open]:
@@ -512,16 +512,23 @@ def card_path(root, path):
     return os.path.join(root, *path[len("/ext/"):].split("/"))
 
 
-class Reader:
-    """The computer's card reader and the drives mounted beside it, round a stand-in Flipper. Once the
-    script has written its marker and looks times have passed, the user moves the card: it leaves the
-    Flipper, whose storage commands then say that the filesystem is not ready, and it appears among the
-    volumes as FLIPPER, holding what the card held. Like macOS, the stand-in puts a 4 KB ._ file beside
-    everything unpacked onto it. After the eject the card goes back into the Flipper once
-    back_after storage commands have been answered with not ready. recreate: the eject makes a ._ file
-    beside every file again, as a Mac that removed them may do. never_back: the card stays out."""
+# The two things the card reader way asks the user to do, each answered with Enter
+TAKE_OUT = "Take the microSD card out of the Flipper and put it into this computer's card reader, then press Enter."
+PUT_BACK = "Put the card back into the Flipper, then press Enter."
 
-    def __init__(self, root, flipper, looks=2, back_after=3, recreate=False, never_back=False):
+
+class Reader:
+    """The computer's card reader and the drives mounted beside it, round a stand-in Flipper, and
+    the user who moves the card when asked to. Asked to take the card out, the user does: it leaves
+    the Flipper, whose storage commands then get the Flipper's out_reply, and it appears among the
+    volumes as FLIPPER, holding what the card held, on the script's mount_looks-th look. Like macOS,
+    the stand-in puts a 4 KB ._ file beside everything unpacked onto it. Asked to put the card back,
+    the user does, and the Flipper's storage commands get out_reply for mounting more commands
+    while it mounts the card. The other questions get the next of answers. recreate: the eject makes
+    a ._ file beside every file again, as a Mac that removed them may do. stays: the card stays in
+    the Flipper. never_back: the card stays out."""
+
+    def __init__(self, root, flipper, mount_looks=1, mounting=3, recreate=False, stays=False, never_back=False):
         self.flipper = flipper
         self.drives = []
         for name in ("Backup", "Camera"):
@@ -530,22 +537,42 @@ class Reader:
             write(os.path.join(drive, "photos", "a.jpg"), b"x")
             self.drives.append(drive)
         self.volume = os.path.join(root, "FLIPPER")
-        self.looks_before = looks
-        self.back_after = back_after
+        self.mount_looks = mount_looks
+        self.mounting = mounting
         self.recreate = recreate
+        self.stays = stays
         self.never_back = never_back
         self.looks = 0  # how often the script has looked at the volumes
+        self.looks_before_enter = None  # and how often before the user pressed Enter to say the card was moved
+        self.out = False  # the card has left the Flipper
+        self.out_looks = 0  # the looks since then
         self.mounted = False
         self.ejected = []
         self.unpacked = 0
         self.made = []  # the ._ files made beside what was unpacked, relative to the volume
         self.recreated = []  # the ._ files the eject made again
+        self.put_back = None  # the commands the Flipper had had when the user was asked to put the card back
+
+    def ask(self, question):
+        """The user: Enter after moving the card as asked, else the next of answers."""
+        asked.append(question)
+        if question == TAKE_OUT:
+            self.looks_before_enter = self.looks
+            if not self.stays:
+                self.move_out()
+            return ""
+        if question == PUT_BACK:
+            self.put_back = len(self.flipper.sent)
+            if not self.never_back:
+                self.move_back()
+            return ""
+        return answers.pop(0) if answers else None
 
     def card_volumes(self):
         self.looks += 1
-        marker = any(p.startswith("/ext/.sonar-install-") for p in self.flipper.files)
-        if not self.mounted and not self.ejected and self.looks > self.looks_before and marker:
-            self.move_out()
+        if self.out and not self.mounted and not self.ejected:
+            self.out_looks += 1
+            self.mounted = self.out_looks >= self.mount_looks
         return self.drives + ([self.volume] if self.mounted else [])
 
     def move_out(self):
@@ -559,9 +586,7 @@ class Reader:
                 os.makedirs(os.path.dirname(card_path(self.volume, path)), exist_ok=True)
                 write(card_path(self.volume, path), bytes(data))
         f.card_out = True
-        f.back_in = None if self.never_back else self.back_after
-        f.card_back = self.move_back
-        self.mounted = True
+        self.out = True
 
     def unpack(self, pack, volume, progress=None):
         written = real_unpack(pack, volume, progress)
@@ -588,6 +613,9 @@ class Reader:
     def move_back(self):
         f = self.flipper
         f.card_out = False
+        f.mounting = self.mounting
+        if not self.out:
+            return
         f.files.clear()
         f.dirs.clear()
         f.dirs.add("/ext")
@@ -598,29 +626,36 @@ class Reader:
             for name in names:
                 with open(os.path.join(here, name), "rb") as file:
                     f.files[f"{base}/{name}"] = bytearray(file.read())
+        self.out = False
 
 
 @contextlib.contextmanager
 def card_reader(root, flipper, **settings):
-    """A Reader in place of this computer's volumes, its eject and the unpacking onto the card."""
+    """A Reader in place of this computer's volumes, its eject, the unpacking onto the card and the
+    user who answers the questions."""
     reader = Reader(root, flipper, **settings)
-    saved = install.card_volumes, install.eject, install.unpack_to_card
-    install.card_volumes, install.eject, install.unpack_to_card = reader.card_volumes, reader.eject, reader.unpack
+    names = ("card_volumes", "eject", "unpack_to_card", "ask")
+    saved = [getattr(install, name) for name in names]
+    for name, stand_in in zip(names, (reader.card_volumes, reader.eject, reader.unpack, reader.ask)):
+        setattr(install, name, stand_in)
     try:
         yield reader
     finally:
-        install.card_volumes, install.eject, install.unpack_to_card = saved
+        for name, value in zip(names, saved):
+            setattr(install, name, value)
 
 
 @contextlib.contextmanager
-def waiting(seconds):
-    """install.CARD_WAIT_SECONDS for the length of a with block."""
-    saved = install.CARD_WAIT_SECONDS
-    install.CARD_WAIT_SECONDS = seconds
+def waiting(**seconds):
+    """install's constants named in seconds, such as CARD_LOOK_SECONDS=0.2, for a with block."""
+    saved = {name: getattr(install, name) for name in seconds}
+    for name, value in seconds.items():
+        setattr(install, name, value)
     try:
         yield
     finally:
-        install.CARD_WAIT_SECONDS = saved
+        for name, value in saved.items():
+            setattr(install, name, value)
 
 
 def collector(flipper):
@@ -1232,7 +1267,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check(not calls and len(questions) == 1 and "eject" in questions[0].lower() and "Enter" in questions[0],
           f"elsewhere the user is asked to eject safely and press Enter: {questions}")
 
-    # voice_through_reader, the whole way: marker, card out, copy, eject, card back, ._ files
+    # voice_through_reader, the whole way: marker, Enter, card found, copy, eject, Enter, card back, ._ files
     install.PROGRESS_SECONDS = 60
     marker_write = re.compile(r'^storage write_chunk "/ext/\.sonar-install-[0-9a-f]{8}" 0$')
     poll = 'storage stat "/ext/sr/voices/heart/voice.txt"'
@@ -1242,22 +1277,30 @@ with tempfile.TemporaryDirectory() as tmp:
         asked.clear()
         lines, say = collector(flipper)
         with card_reader(root, flipper) as reader:
-            result = install.voice_through_reader(storage, [pack], say, stub_ask)
-        check(result is True, f"voice_through_reader gives True once the voice is on the card: {result}")
+            console = install.voice_through_reader(storage, [pack], say, reader.ask)
+        check(isinstance(console, fs.Storage), f"voice_through_reader gives the console to go on with: {console!r}")
         markers = [c for c in flipper.sent if marker_write.match(c)]
         check(len(markers) == 1, f"the marker is written over the console, an empty file: {markers}")
         marker = re.search(r"\.sonar-install-[0-9a-f]{8}", markers[0]).group(0)
         first = flipper.sent.index(markers[0])
-        take_out = line_with(lines, "take the microsd card out")
-        check(take_out is not None and take_out[0] > first, f"the user is told to move the card after the marker is written: {take_out}")
+        check(asked == [TAKE_OUT, PUT_BACK], f"the user is asked to move the card and press Enter, out and back: {asked}")
+        leave = line_with(lines, "plugged in and unlocked")
+        check(leave is not None and leave[0] > first, f"after the marker the user is told to leave the Flipper plugged in: {leave}")
+        looking = line_with(lines, "Looking for the card on this computer")
+        check(looking is not None and reader.looks_before_enter == 0,
+              f"the volumes are looked at only after Enter: {reader.looks_before_enter} looks before")
+        before_enter = [line for _, line in lines[:lines.index(looking)]] if looking else []
+        check(not [line for line in before_enter if re.search(r"\bminutes?\b|\bseconds?\b", line)],
+              f"and no clock runs while the user moves the card: {before_enter}")
         check(line_with(lines, "Found the card", reader.volume) is not None, "and the card is found among the volumes")
         check(not os.path.exists(os.path.join(reader.volume, marker)) and f"/ext/{marker}" not in flipper.files,
               "the marker is gone from the volume and so from the card")
         check(reader.ejected == [reader.volume] and reader.unpacked == 1, f"the card is ejected once, after one unpacking: {reader.ejected}")
-        put_back = line_with(lines, "put the card back")
         polls = [i for i, c in enumerate(flipper.sent) if c == poll]
-        check(put_back is not None and polls and put_back[0] <= polls[0], f"it asks to put the card back, then polls voice.txt: {put_back}, {polls}")
-        check(len(polls) == reader.back_after + 1, f"and polls until the console sees the file: {len(polls)} polls")
+        check(reader.put_back is not None and polls and reader.put_back <= polls[0],
+              f"it asks to put the card back, then asks the Flipper for voice.txt: {reader.put_back}, {polls}")
+        check(len(polls) == reader.mounting + 1,
+              f"and asks again while the Flipper says internal error, until it sees the file: {len(polls)} polls")
         check(all(bytes(flipper.files[f"/ext/{name}"]) == data for name, data in clips.items()),
               "the voice is on the Flipper's card with the pack's bytes")
         check("/ext/update/f7-update-1.4.3/update.fuf" in flipper.files and f"/ext/voice-heart-sonar-0.1.0.tar" not in flipper.files,
@@ -1269,11 +1312,9 @@ with tempfile.TemporaryDirectory() as tmp:
               f"the step says how many ._ files it removed from this computer: {[l for _, l in lines if 'helper' in l]}")
         check(line_with(lines, "no helper files", "Flipper") is not None, "and that the console found none")
         check(not [c for c in flipper.sent if c.startswith("storage remove") and "/._" in c], "so it removes none over the console")
-        check(not asked, f"no question on the way: {asked}")
         check(all(line.strip() and "\r" not in line for _, line in lines), "plain lines")
-        check(not [c for c in flipper.sent if c.startswith(("sr ", "storage extract"))] and flipper.connections[0].is_open,
-              "no extract and no sr command; the console is left open for the rest of the install")
-        storage.ser.close()
+        check(not [c for c in flipper.sent if c.startswith(("sr ", "storage extract"))], "no extract and no sr command")
+        console.ser.close()
 
     # The Mac could not remove them for good: the eject made them again, and the console removes the rest
     with tempfile.TemporaryDirectory() as root:
@@ -1281,62 +1322,64 @@ with tempfile.TemporaryDirectory() as tmp:
         storage = console_of(flipper)
         lines, say = collector(flipper)
         with card_reader(root, flipper, recreate=True) as reader:
-            result = install.voice_through_reader(storage, [pack], say, stub_ask)
+            console = install.voice_through_reader(storage, [pack], say, reader.ask)
         again = sorted("/ext/" + p for p in reader.recreated)
         removed_over_console = sorted(shlex.split(c)[2] for c in flipper.sent if c.startswith("storage remove") and "/._" in c)
-        check(result is True and again and removed_over_console == again,
+        check(again and removed_over_console == again,
               f"the ._ files that came back are removed over the console, and only those: {removed_over_console}")
         check(not apple_files(flipper) and "/ext/sr/voices/._heart" in flipper.files, "none is left under the set, the others stay")
         inside_set = [m for m in reader.made if m.startswith("sr/voices/heart/")]
         check(line_with(lines, f"{len(inside_set)} macOS helper files", "this computer") is not None
               and line_with(lines, f"{len(again)} helper files", "console") is not None,
               f"and both counts are said: {[l for _, l in lines if 'helper' in l]}")
-        storage.ser.close()
+        console.ser.close()
 
-    # No card within the time-out: one sentence, then USB is offered
-    for answer, expected in (("y", False), ("", False), (None, False)):
+    # The card turns up a few looks after Enter, as a Mac mounts it within a few seconds
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV)
+        storage = console_of(flipper)
+        lines, say = collector(flipper)
+        with card_reader(root, flipper, mount_looks=4) as reader:
+            console = install.voice_through_reader(storage, [pack], say, reader.ask)
+        check(reader.looks >= 4 and reader.unpacked == 1, f"a card that mounts a few looks after Enter is found: {reader.looks}")
+        console.ser.close()
+
+    # No card turns up within CARD_LOOK_SECONDS after Enter: one sentence that says what to do, and
+    # the voice goes no other way by itself
+    for settings in ({"stays": True}, {"mount_looks": 10 ** 9}):
         with tempfile.TemporaryDirectory() as root:
             flipper = Flipper(SONAR_DEV)
             storage = console_of(flipper)
             lines, say = collector(flipper)
             asked.clear()
-            answers[:] = [answer]
-            with card_reader(root, flipper, looks=10 ** 9) as reader, waiting(0.3):
+            with card_reader(root, flipper, **settings) as reader, waiting(CARD_LOOK_SECONDS=0.3):
                 started = time.monotonic()
-                result = install.voice_through_reader(storage, [pack], say, stub_ask)
-            check(result is expected and time.monotonic() - started >= 0.3, f"no card, the answer {answer!r}: USB, after the time-out: {result}")
-            check(len(asked) == 1 and "USB" in asked[0], f"USB is offered: {asked}")
-            check(line_with(lines, "no card", "marker") is not None, f"after one sentence that says so: {[l for _, l in lines][-2:]}")
-            check(not [p for p in flipper.files if ".sonar-install-" in p] and reader.unpacked == 0 and not reader.ejected,
-                  "the marker is removed again over the console, and nothing is unpacked")
-            if answer is None:
-                check(line_with(lines, "USB") is not None, "with no answer possible the voice goes over USB, and it is said")
+                try:
+                    install.voice_through_reader(storage, [pack], say, reader.ask)
+                    error = None
+                except install.InstallError as e:
+                    error = e
+            check(error is not None and time.monotonic() - started >= 0.3, f"no card with {settings}: an error after the look: {error}")
+            check(error is not None and "card" in str(error) and "put the card back into the Flipper" in str(error)
+                  and "run this script again" in str(error) and "USB" in str(error) and "\n" not in str(error),
+                  f"in one sentence that says to put the card back and run the script again: {error}")
+            check(asked == [TAKE_OUT], f"no question but the one to move the card, USB is not offered: {asked}")
+            check(reader.unpacked == 0 and not reader.ejected and not [c for c in flipper.sent if c.startswith(
+                  ("storage extract", "sr ", 'storage write_chunk "/ext/voice-heart'))],
+                  "nothing is copied, through the reader or over USB")
             storage.ser.close()
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV)
         storage = console_of(flipper)
         lines, say = collector(flipper)
-        answers[:] = ["y"]
         install.PROGRESS_SECONDS = 0
-        with card_reader(root, flipper, looks=10 ** 9), waiting(0.2):
-            install.voice_through_reader(storage, [pack], say, stub_ask)
+        with card_reader(root, flipper, mount_looks=10 ** 9) as reader, waiting(CARD_LOOK_SECONDS=0.2):
+            with contextlib.suppress(install.InstallError):
+                install.voice_through_reader(storage, [pack], say, reader.ask)
         install.PROGRESS_SECONDS = 60
-        check(line_with(lines, "Still looking for the card") is not None, f"it says meanwhile that it still looks for the card: {lines[:3]}")
+        check(line_with(lines, "Still looking for the card") is not None, f"it says meanwhile that it still looks for the card: {lines[:5]}")
         storage.ser.close()
-    with tempfile.TemporaryDirectory() as root:
-        flipper = Flipper(SONAR_DEV)
-        storage = console_of(flipper)
-        lines, say = collector(flipper)
-        answers[:] = ["n"]
-        with card_reader(root, flipper, looks=10 ** 9), waiting(0.2):
-            try:
-                install.voice_through_reader(storage, [pack], say, stub_ask)
-                error = None
-            except install.InstallError as e:
-                error = e
-        check(error is not None and "voice" in str(error) and "\n" not in str(error) and str(error).endswith("."),
-              f"a refused USB ends the run in one sentence: {error}")
-        storage.ser.close()
+    check(install.CARD_LOOK_SECONDS == 30, f"the card is looked for for 30 seconds after Enter: {install.CARD_LOOK_SECONDS}")
 
     # The card is found but never comes back
     with tempfile.TemporaryDirectory() as root:
@@ -1344,14 +1387,14 @@ with tempfile.TemporaryDirectory() as tmp:
         storage = console_of(flipper)
         lines, say = collector(flipper)
         install.PROGRESS_SECONDS = 0
-        with card_reader(root, flipper, never_back=True) as reader, waiting(0.3):
+        with card_reader(root, flipper, never_back=True) as reader, waiting(CARD_WAIT_SECONDS=0.3):
             try:
-                install.voice_through_reader(storage, [pack], say, stub_ask)
+                install.voice_through_reader(storage, [pack], say, reader.ask)
                 error = None
             except install.InstallError as e:
                 error = e
         install.PROGRESS_SECONDS = 60
-        check(line_with(lines, "Still waiting for the Flipper to see the card") is not None, "and it says that it is still waiting")
+        check(line_with(lines, "Still waiting for the Flipper") is not None, "and it says that it is still waiting")
         check(error is not None and "/ext/sr/voices/heart/voice.txt" in str(error) and "within" in str(error) and "\n" not in str(error),
               f"a card that is not put back: {error}")
         check(len(reader.ejected) == 1, "it was ejected first")
@@ -1365,7 +1408,7 @@ with tempfile.TemporaryDirectory() as tmp:
         original = Connection.handle
 
         def pulled_at_poll(self, command):
-            if command == poll and self.flipper.card_out:
+            if command == poll:
                 self.flipper.sent.append(command)
                 self.gone = True
                 self.out += f"{command}\r\n".encode()
@@ -1374,10 +1417,10 @@ with tempfile.TemporaryDirectory() as tmp:
 
         Connection.handle = pulled_at_poll
         try:
-            with card_reader(root, flipper) as reader, waiting(30):
+            with card_reader(root, flipper) as reader, waiting(CARD_WAIT_SECONDS=30):
                 started = time.monotonic()
                 try:
-                    install.voice_through_reader(storage, [pack], say, stub_ask)
+                    install.voice_through_reader(storage, [pack], say, reader.ask)
                     error = None
                 except install.InstallError as e:
                     error = e
@@ -1399,7 +1442,7 @@ with tempfile.TemporaryDirectory() as tmp:
         with card_reader(root, flipper) as reader:
             install.unpack_to_card = failing
             try:
-                install.voice_through_reader(storage, [pack], say, stub_ask)
+                install.voice_through_reader(storage, [pack], say, reader.ask)
                 error = None
             except install.InstallError as e:
                 error = e
@@ -1417,13 +1460,12 @@ with tempfile.TemporaryDirectory() as tmp:
         storage = console_of(flipper)
         lines, say = collector(flipper)
         with card_reader(root, flipper) as reader:
-            result = install.voice_through_reader(storage, [pack, second], say, stub_ask)
-        check(result is True and reader.unpacked == 2 and len(reader.ejected) == 1
-              and len([c for c in flipper.sent if marker_write.match(c)]) == 1,
+            console = install.voice_through_reader(storage, [pack, second], say, reader.ask)
+        check(reader.unpacked == 2 and len(reader.ejected) == 1 and len([c for c in flipper.sent if marker_write.match(c)]) == 1,
               f"two packs go in one trip of the card: {reader.unpacked}, {len(reader.ejected)}")
         check(all(bytes(flipper.files[f"/ext/{name}"]) == data for name, data in {**clips, **more}.items()), "both sets are on the card")
         check('storage stat "/ext/sr/voices/samantha/voice.txt"' in flipper.sent and poll in flipper.sent, "and both are looked for")
-        storage.ser.close()
+        console.ser.close()
 
     # In a whole run: without --yes the second question is the way, and the card reader is the default
     way = "Copy the voice through a card reader (faster) or over USB? [R/u]"
@@ -1435,8 +1477,8 @@ with tempfile.TemporaryDirectory() as tmp:
             with card_reader(root, flipper) as reader:
                 code, lines, err = run(flipper, full_run[:-1])
             check(code == 0, f"a whole run through the card reader with the answers {given}: {code}, {lines[-3:]}")
-            check(asked[0].endswith("Go ahead? [Y/n]") and asked[1] == way and len(asked) == len(given),
-                  f"the questions: the go-ahead, then the way: {asked}")
+            check(asked[0].endswith("Go ahead? [Y/n]") and asked[1:-2] == [way] * (len(given) - 1) and asked[-2:] == [TAKE_OUT, PUT_BACK],
+                  f"the questions: the go-ahead, the way, then the card out and back, each with Enter: {asked}")
             check(reader.unpacked == 1 and len(reader.ejected) == 1, "the voice went through the reader")
             commands = main_commands(flipper.sent)
             check(not [c for c in flipper.sent if c.startswith(("storage extract", 'storage write_chunk "/ext/voice-heart', "sr voice"))],
@@ -1457,7 +1499,7 @@ with tempfile.TemporaryDirectory() as tmp:
             commands = main_commands(flipper.sent)
             check(code == 0 and mute in commands and extract in commands and reader.looks == 0 and not reader.ejected,
                   f"the answers {given}: the voice goes over USB: {code}, {commands[:5]}")
-            check(not [c for c in flipper.sent if ".sonar-install-" in c], "and no marker is written")
+            check(not [c for c in flipper.sent if ".sonar-install-" in c] and TAKE_OUT not in asked, "and no marker is written")
             if given[1] is None:
                 check(any("USB" in line and "No answer" in line for line in lines), f"with no answer it says that the voice goes over USB: {lines[:8]}")
     with tempfile.TemporaryDirectory() as root:
@@ -1478,31 +1520,26 @@ with tempfile.TemporaryDirectory() as tmp:
         code, lines, err = run(flipper, full_run[:-1])
         check(code == 1 and len(asked) == 1, f"and a no to the go-ahead ends it before the way is asked: {asked}")
 
-    # In a whole run, no card within the time-out: USB when the user agrees, an end when not
-    for given, ends in ((["y", "r", "y"], 0), (["y", "r", ""], 0), (["y", "r", "n"], 1)):
-        with tempfile.TemporaryDirectory() as root:
-            flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
-            answers[:] = list(given)
-            with card_reader(root, flipper, looks=10 ** 9):
-                with waiting(0.2):
-                    code, lines, err = run(flipper, full_run[:-1])
-            commands = main_commands(flipper.sent)
-            if ends == 0:
-                check(code == 0 and mute in commands and extract in commands and update in commands,
-                      f"the answers {given}: no card, so the voice goes over USB after all: {code}, {lines[-2:]}")
-                check(not [p for p in flipper.files if ".sonar-install-" in p], "and the marker is gone")
-            else:
-                check(code == 1 and extract not in commands and update not in commands and no_traceback(lines, err),
-                      f"the answers {given}: a refused USB ends the run: {code}, {lines[-2:]}")
-                check("voice" in lines[-1] and "\n" not in lines[-1], f"in one sentence about the voice: {lines[-1]}")
+    # In a whole run, no card after Enter: the run ends in one sentence, and the voice goes no other way
+    with tempfile.TemporaryDirectory() as root:
+        flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+        answers[:] = ["y", "r"]
+        asked.clear()
+        with card_reader(root, flipper, stays=True), waiting(CARD_LOOK_SECONDS=0.2):
+            code, lines, err = run(flipper, full_run[:-1])
+        commands = main_commands(flipper.sent)
+        check(code == 1 and extract not in commands and update not in commands and no_traceback(lines, err)
+              and not [c for c in flipper.sent if c.startswith('storage write_chunk "/ext/voice-heart')],
+              f"no card: the run ends without the voice going over USB, and without the update: {code}, {lines[-2:]}")
+        check("card" in lines[-1] and "run this script again" in lines[-1] and "\n" not in lines[-1] and asked[-1] == TAKE_OUT,
+              f"in one sentence, after no further question: {lines[-1]}, {asked}")
 
     # A card that does not come back ends the run before the update
     with tempfile.TemporaryDirectory() as root:
         flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
         answers[:] = ["y", "r"]
-        with card_reader(root, flipper, never_back=True):
-            with waiting(0.3):
-                code, lines, err = run(flipper, full_run[:-1])
+        with card_reader(root, flipper, never_back=True), waiting(CARD_WAIT_SECONDS=0.3):
+            code, lines, err = run(flipper, full_run[:-1])
         check(code == 1 and "voice.txt" in lines[-1] and update not in flipper.sent and no_traceback(lines, err),
               f"a card that is not put back: {code}, {lines[-1:]}")
     # Progress lines while the voice pack is copied

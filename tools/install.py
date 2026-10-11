@@ -18,11 +18,13 @@ firmware, Momentum and Sonar, so a blank card works too. The steps:
    card. A backup already there is kept: the new one is then named backup-<date>-2.tar, and so on.
 3. For each --voice pack, the voice goes onto the card one of two ways. Without --yes the script
    asks which; the card reader is the default, and --yes means USB.
-   - Through a card reader: the script writes a marker file to the card, you take the microSD card
-     out of the Flipper and put it into the computer's card reader, the script finds it by the
-     marker, unpacks the packs onto it, removes the marker and the `._` files that macOS puts beside
-     everything it writes, and ejects the card. You put the card back, and the script waits until
-     the Flipper sees the voice again and removes any `._` file that is left.
+   - Through a card reader: the script writes a marker file to the card; you take the microSD card
+     out of the Flipper, put it into the computer's card reader and press Enter; the script finds it
+     by the marker, unpacks the packs onto it, removes the marker and the `._` files that macOS puts
+     beside everything it writes, and ejects the card. You put the card back and press Enter, and
+     the script waits until the Flipper sees the voice again and removes any `._` file that is left.
+     A card that does not turn up ends the install with a sentence that says what to do; the voice
+     never goes over USB instead by itself.
    - Over USB: send the pack to /ext as one file, unpack it into /ext with `storage extract`, and
      remove it. When Sonar runs, its voice is off during the unpacking (`sr voice off <seconds>`
      before, `sr voice on` after), so that it opens no clip that the unpacking replaces; if the
@@ -88,8 +90,12 @@ NORMAL_BOOT = "0"  # system.boot in info device once the updater is done (FuriHa
 TAR_FILTERS = hasattr(tarfile, "data_filter")  # Python 3.10.12 and newer: tarfile's extraction filters
 # The card reader way
 PLATFORM = sys.platform  # darwin, linux or win32
-# The seconds the script waits for the card with the marker to appear among the volumes, and again
-# for the Flipper to see the card with the voice on it after it is put back
+# The seconds the script looks for the card with the marker among the volumes, once the user has
+# pressed Enter to say it is in the card reader; a Mac mounts a card within a few seconds. No clock
+# runs while the user moves the card.
+CARD_LOOK_SECONDS = 30
+# The seconds the script waits for the Flipper to see the card with the voice on it, once the user
+# has pressed Enter to say it is back in the Flipper
 CARD_WAIT_SECONDS = 5 * 60
 EJECT_SECONDS = 120  # the most `diskutil eject` is given
 MARKER_PREFIX = ".sonar-install-"  # the marker on the card is this and 8 hex digits
@@ -571,23 +577,6 @@ def _write_marker(storage, marker):
         storage.send_file(empty, f"{VOICE_DEST}/{marker}")
 
 
-def _offer_usb(storage, remote, waited, say, ask):
-    """No card with the marker appeared: say so, offer the USB way, and take the marker off the
-    card if it is in the Flipper. Nothing is returned when the voice is to go over USB, which is
-    also so when no one can answer; an InstallError when the user says no."""
-    say(f"No card with the marker file appeared within {waited}.")
-    answer = ask("Put the card back into the Flipper if it is out, and copy the voice over USB instead? [Y/n]")
-    with contextlib.suppress(StorageError):  # a card that is still out keeps its marker
-        storage.remove(remote)
-    if answer is None:
-        say("No answer came, so the voice goes over USB.")
-    elif answer.strip().lower() not in ("", "y", "yes"):
-        raise InstallError(_sentence(
-            "copy the voice through the card reader",
-            f"no card with the marker file appeared within {waited}, and the voice was not copied",
-        ))
-
-
 def _copy_to_card(packs, sets, volume, marker, say, ask):
     """The part of the card reader way with the card in the computer: unpack the packs onto it,
     remove the marker and then the `._` files macOS made, and eject it. An InstallError that
@@ -615,35 +604,40 @@ def _copy_to_card(packs, sets, volume, marker, say, ask):
 
 
 def voice_through_reader(storage, packs, say, ask):
-    """Put the voice packs on the card through the computer's card reader. The steps: a marker
-    file, /ext/.sonar-install-<8 hex digits>, is written to the card over the console; the user
-    takes the card out of the Flipper and puts it into the reader; the card is found among the
-    mounted volumes by the marker; the packs are unpacked onto it, the marker and the `._` files
-    under the sets' folders are removed, and it is ejected; the user puts it back, and the
-    console polls `storage stat /ext/sr/voices/<set>/voice.txt` until the Flipper sees the voice;
-    then the `._` files that are left are removed through the console. True when the voice is on
-    the card. False when no card with the marker appeared within CARD_WAIT_SECONDS and the user
-    chose USB, or no one could answer: nothing was changed, and the caller sends the packs over
-    USB. An InstallError otherwise, in one sentence."""
+    """Put the voice packs on the card through the computer's card reader, and return the console
+    to go on with. The steps: a marker file, /ext/.sonar-install-<8 hex digits>, is written to the
+    card over the console; the user takes the card out of the Flipper, puts it into the reader and
+    presses Enter, with no clock running meanwhile; the card is looked for among the mounted
+    volumes by the marker for CARD_LOOK_SECONDS; the packs are unpacked onto it, the marker and
+    the `._` files under the sets' folders are removed, and it is ejected; the user puts it back
+    and presses Enter, and the console polls `storage stat /ext/sr/voices/<set>/voice.txt` until
+    the Flipper sees the voice; then the `._` files that are left are removed through the console.
+    The voice never goes over USB instead: a card that does not turn up, like every other failure,
+    is an InstallError in one sentence that says what to do."""
     sets = [name for pack in packs for name in pack_sets(pack)]
     marker = MARKER_PREFIX + secrets.token_hex(4)
-    waited = _duration(CARD_WAIT_SECONDS)
     say("Writing a small marker file to the card, so that this computer can tell the card from other drives.")
     with _step("write the marker file to the card"):
         _write_marker(storage, marker)
-    say("Now take the microSD card out of the Flipper and put it into this computer's card reader. "
-        f"Leave the Flipper plugged in and unlocked. The script looks for the card for {waited}.")
-    volume = _wait_for(lambda: find_card(marker, card_volumes()), CARD_WAIT_SECONDS, say,
+    say("Leave the Flipper plugged in and unlocked while its card is out.")
+    ask("Take the microSD card out of the Flipper and put it into this computer's card reader, then press Enter.")
+    say("Looking for the card on this computer.")
+    volume = _wait_for(lambda: find_card(marker, card_volumes()), CARD_LOOK_SECONDS, say,
                        "Still looking for the card, {time} so far.")
     if volume is None:
-        _offer_usb(storage, f"{VOICE_DEST}/{marker}", waited, say, ask)
-        return False
+        raise InstallError(_sentence(
+            "find the card on this computer",
+            f"no drive with the marker file turned up within {_duration(CARD_LOOK_SECONDS)}; put the card back into "
+            "the Flipper and run this script again, and answer U for USB if this computer does not show the card",
+        ))
     say(f"Found the card at {volume}.")
     try:
         _copy_to_card(packs, sets, volume, marker, say, ask)
     except InstallError as e:
         raise InstallError(f"{e} Put the card back into the Flipper before running this script again.") from None
-    say(f"Now put the card back into the Flipper. The script waits up to {waited} until the Flipper sees the voice.")
+    ask("Put the card back into the Flipper, then press Enter.")
+    waited = _duration(CARD_WAIT_SECONDS)
+    say(f"Waiting for the Flipper to see the card with the voice, at most {waited}.")
     paths = [f"{VOICE_DEST}/sr/voices/{name}/voice.txt" for name in sets]
 
     def seen():
@@ -667,7 +661,7 @@ def voice_through_reader(storage, packs, say, ask):
         ))
     say("The Flipper sees the card with the voice on it.")
     remove_appledouble_over_console(storage, sets, say)
-    return True
+    return storage
 
 
 def package_folder(package, work):
@@ -1057,7 +1051,9 @@ def _install(args, say):
                 by_reader = bool(packs) and _voice_way(say)
             say("Backing up the Flipper's internal storage to the card.")
             say(f"The backup is {backup(storage, today())}.")
-            if not (by_reader and voice_through_reader(storage, packs, say, ask)):
+            if by_reader:
+                storage = voice_through_reader(storage, packs, say, ask)
+            else:
                 for pack in packs:
                     voice_over_usb(storage, pack, sonar, say)
             if package_dir:
