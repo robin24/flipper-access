@@ -17,14 +17,23 @@ It is built into a temporary file beside out_path and only moved into place once
 clip, so a pack that a missing clip stops partway through never leaves a broken tar at out_path.
 A set made with the macOS voices is refused, since Apple licenses them for use on the Mac;
 --personal writes it anyway, for a backup of one's own device, and names it
-voice-<set>-personal-<version>.tar, so it is never taken for a release asset. The licence text names the
-engine, the voice and the terms: Kokoro (Apache 2.0, with attribution to the model), eSpeak-NG
-(GPL-3), and CC0 for what the fork adds.
+voice-<set>-personal-<version>.tar, so it is never taken for a release asset.
+LICENSE.txt carries the engine's licence in full, the facts first and the long terms last, for a
+reader who goes through it line by line: the Kokoro pack names the model (Kokoro-82M by hexgrad,
+v1.0), the SHA-256 of the model file and of the voices file, the voice, the credit the model's card
+gives and what the project adds (CC0 1.0), then the whole Apache License 2.0; the eSpeak-NG text,
+for a pack someone makes themselves, names the engine and the voice, says the same of the
+project's part, and ends with the whole GPL-3. The two texts are the files in tools/licences/,
+copied from the licences' own wording and never edited. The two checksums are read from the set's
+manifest (settings["model_sha256"], the model file's 64 digits and then the voices file's 64, as
+voice_build.settings_for records them when the clips were made), not worked out when packing: the
+text names the files the clips came from, which the model files on this machine may no longer be.
 """
 import argparse
 import io
 import json
 import os
+import re
 import sys
 import tarfile
 
@@ -32,19 +41,73 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tools"))
 from voice_build import bucket, clip_order, initial, set_local_dir, set_valid  # noqa: E402
 
+LICENCES_DIR = os.path.join(ROOT, "tools", "licences")
+
+# What the project adds is always CC0 1.0; the engine's terms apply beside it, to the clips that
+# come from the engine (decision of 2026-10-11). One line holds each phrase a reader or a check
+# looks for, so a wrap never splits it.
+CC0 = (
+    "What the Sonar project adds to this voice set (the selection of words, the processing, the\n"
+    "layout) is released under CC0 1.0 Universal, which dedicates it to the public domain as far\n"
+    "as the law allows: https://creativecommons.org/publicdomain/zero/1.0/\n"
+    "The licence of the engine or model named above applies beside it, to the clips made with it.\n"
+)
+
+# The text of each backend: the short facts first, then the engine's whole licence from
+# tools/licences/ (LICENCE_FILES) appended unchanged, so the file ends with the long terms. The
+# fields are {voice} and, for Kokoro, {model_sha256} and {voices_sha256}.
 LICENCES = {
     "kokoro": (
-        "This vocabulary was made with Kokoro, an open text-to-speech model by hexgrad\n"
-        "(https://huggingface.co/hexgrad/Kokoro-82M), licensed under the Apache License 2.0,\n"
-        "with the voice {voice}. The clips are derived from the model's output. What the Sonar\n"
-        "project adds (the selection of words, the processing, the layout) is dedicated to the\n"
-        "public domain under CC0 1.0.\n"
+        "Licence of this voice set\n"
+        "\n"
+        "This voice set was made with Kokoro, an open text-to-speech model, with the voice af_heart.\n"
+        "The clips are derived from the model's output.\n"
+        "\n"
+        "The model\n"
+        "\n"
+        "Name: Kokoro-82M, version v1.0, by hexgrad\n"
+        "Page: https://huggingface.co/hexgrad/Kokoro-82M\n"
+        "Licence: the Apache License 2.0, whose whole text is at the end of this file\n"
+        "Files: the ONNX files of the kokoro-onnx project, release model-files-v1.0\n"
+        "Files from: https://github.com/thewh1teagle/kokoro-onnx\n"
+        "Model file kokoro-v1.0.onnx, SHA-256: {model_sha256}\n"
+        "Voices file voices-v1.0.bin, SHA-256: {voices_sha256}\n"
+        "Voice: {voice}\n"
+        "\n"
+        "Credit, as the model's card gives it\n"
+        "\n"
+        "The card asks for no wording of its own. It credits the StyleTTS 2 architecture to @yl4579\n"
+        "(Li et al., arXiv 2306.07691), and it lists the two sets of CC BY audio that were part of the\n"
+        "data Kokoro v1.0 was trained on:\n"
+        "Koniwa tnc, CC BY 3.0 (https://github.com/koniwa/koniwa)\n"
+        "SIWIS, CC BY 4.0 (https://datashare.ed.ac.uk/handle/10283/2353)\n"
+        "\n"
+        "What the Sonar project adds\n"
+        "\n"
+        + CC0 +
+        "\n"
+        "The Apache License 2.0, in full\n"
+        "\n"
     ),
     "espeak": (
-        "This vocabulary was made with eSpeak-NG (https://github.com/espeak-ng/espeak-ng),\n"
-        "licensed under the GNU General Public License version 3, with the voice {voice}. The\n"
-        "clips are eSpeak-NG's output, processed for the Flipper's speaker. What the Sonar\n"
-        "project adds is dedicated to the public domain under CC0 1.0.\n"
+        "Licence of this voice set\n"
+        "\n"
+        "This voice set was made with eSpeak-NG, with the voice {voice}. The clips are eSpeak-NG's\n"
+        "output, processed for the Flipper's speaker.\n"
+        "\n"
+        "The engine\n"
+        "\n"
+        "Name: eSpeak-NG\n"
+        "Page: https://github.com/espeak-ng/espeak-ng\n"
+        "Licence: the GNU General Public License version 3, whose whole text is at the end of this file\n"
+        "Voice: {voice}\n"
+        "\n"
+        "What the Sonar project adds\n"
+        "\n"
+        + CC0 +
+        "\n"
+        "The GNU General Public License version 3, in full\n"
+        "\n"
     ),
     "say": (
         "This vocabulary was made with the macOS voice {voice}, which Apple licenses for use\n"
@@ -52,12 +115,46 @@ LICENCES = {
     ),
 }
 
+# The whole text that follows a backend's facts, in tools/licences/
+LICENCE_FILES = {"kokoro": "Apache-2.0.txt", "espeak": "GPL-3.0.txt"}
+
+
+def licence_file(name):
+    """The text of a licence in tools/licences/, as it is on disk."""
+    path = os.path.join(LICENCES_DIR, name)
+    try:
+        with open(path, encoding="utf-8", newline="") as f:
+            return f.read()
+    except OSError as e:
+        sys.exit(f"{path}: the licence text cannot be read ({e.strerror}); it ships with the project")
+
+
+def kokoro_checksums(settings):
+    """The SHA-256 of the model file and of the voices file, from the set's settings: 128 lower case
+    hex digits, the model file's 64 and then the voices file's 64 (voice_build.settings_for).
+    They are the manifest's record of the files the clips were made with, so they are read, not
+    recomputed here; a manifest without them has no licence text to give."""
+    joined = settings.get("model_sha256")
+    if not isinstance(joined, str) or re.fullmatch(r"[0-9a-f]{128}", joined) is None:
+        sys.exit("the set's settings hold no model_sha256 of 128 hex digits (the SHA-256 of the Kokoro model "
+                 "file and then of the voices file), which the licence names; make the set with the "
+                 "generator, with both model files in voice-models/, so its manifest records them")
+    return joined[:64], joined[64:]
+
 
 def licence_text(settings):
+    """The LICENSE.txt of a pack made with these settings (the set's manifest "settings"): the
+    engine, the model, the voice and the terms, then the engine's licence in full."""
     backend = settings["backend"]
     if backend not in LICENCES:
         sys.exit(f"no licence text for the backend {backend!r}")
-    return LICENCES[backend].format(voice=settings["voice"])
+    fields = {"voice": settings["voice"]}
+    if backend == "kokoro":
+        fields["model_sha256"], fields["voices_sha256"] = kokoro_checksums(settings)
+    text = LICENCES[backend].format(**fields)
+    if backend in LICENCE_FILES:
+        text += licence_file(LICENCE_FILES[backend])
+    return text
 
 
 def fixed_time():
