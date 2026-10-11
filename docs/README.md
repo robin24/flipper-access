@@ -1,6 +1,8 @@
 # Documentation index
 
-What this folder holds, for a reader who wants more than the project's README.
+What this folder holds, for a reader who wants more than the project's README. Beside the README,
+at the project's root, are `CHANGELOG.md`, the changes in each release, and `CONTRIBUTING.md`, how
+to report a bug and send a change.
 
 - `2026-09-14-investigation.md`: the background research that started the project, on whether a
   Flipper Zero running Momentum can be made usable without sight, checked against the firmware's
@@ -11,6 +13,13 @@ What this folder holds, for a reader who wants more than the project's README.
   developer's routine: flashing, the console commands, crash diagnosis and rolling back.
 - `install-protocol.md`: what the install script says to the Flipper's USB console, command by
   command, and how it reads the replies, for a desktop app that does the same install.
+- `release-notes-template.md`: the notes of every release, which the release workflow fills in
+  with the tag, the fork's commit, the Momentum base, the submodules' commits and the source
+  bundle's name.
+- `2026-09-28-review.md`: the review of the firmware, the tools and the release process before the
+  first release, with its findings, marked F, S, G, R and T, and the checks for the device.
+- `2026-09-28-review-fixes.md`: what was done about each finding of that review, how it was checked
+  on the device, and what is left.
 - `measurements/`: what the device and the tools reported in each round, as plain text: the RAM
   probes, the image sizes, the speech timings and the checks run on the device.
 
@@ -25,8 +34,8 @@ The designs, in `superpowers/specs/`:
 - `2026-09-25-firmware-stripdown-design.md`: steps 2 to 4 of the memory plan: animations off by
   default, the JavaScript engine out, Sub-GHz back into flash, and the games and SAM out.
 - `2026-09-26-github-release-design.md`: publishing: the two repositories, the first release, the
-  voice sets made with Kokoro and eSpeak-NG, the install script, the continuous builds and the
-  upstream merges.
+  voice made with Kokoro, of which a release ships the one set heart, the eSpeak-NG backend for
+  the sets users make, the install script, the continuous builds and the upstream merges.
 
 ## Plans
 
@@ -46,6 +55,8 @@ The implementation plans, task by task, in `superpowers/plans/`:
   continuous build and the upstream tooling.
 - `2026-09-26-publishing-plan-b.md`: publishing plan B, the voice sets on the card, the Kokoro
   and eSpeak voices, and the pack tool.
+- `2026-10-09-publishing-plan-c.md`: publishing plan C, the install script, the release workflow,
+  the public documents, the rehearsal and the first release.
 
 ## Build logs
 
