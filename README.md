@@ -276,8 +276,15 @@ Most of the time goes to the voice, which is about 111 MB. Over USB, a test inst
 2026-10-11 took 32 minutes in all, on a card that already held the voice: about 11 minutes to send
 the voice, 13 to unpack it, a minute to send the update package, and 6 for the update. On a card
 without the voice, the unpacking takes about 16 minutes, so a first install over USB takes about
-35. The card reader way is faster, since the computer writes the voice to the card itself; it has
-not been timed yet.
+35. The card reader way is faster, since the computer writes the voice to the card itself. On a Mac
+on 2026-10-11, copying the voice's 10,537 files onto the card took about 3 minutes, and removing the
+`._` files 26 seconds. On 2026-10-12, the whole of the computer's part, which is finding the card,
+copying the voice, removing the `._` files and ejecting the card, took 2 minutes 40 seconds. A whole
+install through a card reader can be put together from measured parts: the 3 minutes of the voice,
+the minute of the update package and the 6 minutes of the update, the last two from the install over
+USB. That makes about 10 minutes, plus the time it takes to move the card twice. The total is put
+together and was not timed as one run: the timed card reader run of 2026-10-12 had no update. It
+took 11 minutes in all, and about 8 of them went to moving the card.
 
 ## First boot
 

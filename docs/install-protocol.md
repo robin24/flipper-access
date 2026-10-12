@@ -726,7 +726,7 @@ are not compared.
 ## Measured figures
 
 The measurements are in `docs/measurements/2026-10-11-transfer-spike.txt`, made on the device
-R0skie.
+R0skie, and for the card reader way in `docs/measurements/2026-10-11-installer-device-checks.txt`.
 
 - The heart voice pack, 111.3 megabytes, took 653 seconds to send over USB. The unpacking took 964
   seconds on a card that had nothing of the set, and 786 seconds over a set that was there. So the
@@ -737,5 +737,11 @@ R0skie.
 - Sending the voice file by file took about the same time as sending the pack, 26 minutes. The pack
   is kept because it is what the release ships, and because the mute that goes with it ends by
   itself.
-- The card reader way is meant to take about a minute for the voice. It has not been measured on the
-  device yet.
+- The card reader way took, on 2026-10-11, about 3 minutes to copy the voice's 10,537 files onto the
+  card, 26 seconds to remove the 10,537 `._` files and 3 seconds to eject the card. On 2026-10-12
+  the whole of the computer's part, the look for the card, the copy, the removal and the eject, took
+  2 minutes 40 seconds, between the user's Enter and the question to put the card back. The whole
+  run took 11 minutes, with no update, and about 8 of them were the user moving the card twice. A
+  whole install by this way was not timed as one run. It is composed of the voice's 3 minutes, the
+  update package's minute and the update's 6 minutes from the install over USB, which makes about 10
+  minutes, plus the two moves of the card.
