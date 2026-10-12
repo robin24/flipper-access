@@ -119,9 +119,13 @@ APP_OPEN = "this command cannot be run while an application is open"
 STUCK = f"{flipper_cli.RESTART_ADVICE}, then run this script again"
 # What to check when the first command on the card, the stat in the backup step, fails with one of
 # these device sentences: a Flipper without a card, or with one it cannot read, says internal error
-# or filesystem not ready, and a full card says access denied
+# or filesystem not ready. A stat never fails because a card is full: its access denied, which the
+# device also gives for removing a folder that is not empty, gets no advice.
 NO_CARD = "check that a microSD card, formatted on the Flipper, is in the Flipper"
-CARD_ADVICE = {"internal error": NO_CARD, "filesystem not ready": NO_CARD, "access denied": "the card may be full"}
+CARD_ADVICE = {"internal error": NO_CARD, "filesystem not ready": NO_CARD}
+# A full card fails at update backup, which answers Result: FAIL, the reason _device_reason gives
+DEVICE_FAILED = "the Flipper said that it failed"
+FULL_CARD_ADVICE = "a full card can cause this, so check the card's free space"
 
 
 class InstallError(Exception):
@@ -211,7 +215,7 @@ def _device_reason(reply, sonar=False):
         back = "until it says Home screen" if sonar else "a few times to reach the home screen"
         return f"the Flipper said that {APP_OPEN}; press Back on the Flipper {back}, then run this script again"
     if "Result: FAIL" in reply:
-        return "the Flipper said that it failed"
+        return DEVICE_FAILED
     lines = [line.strip() for line in reply.splitlines() if line.strip()]
     return f"the Flipper said: {lines[-1]}" if lines else "the Flipper gave no answer"
 
@@ -338,8 +342,9 @@ def backup(storage, date, sonar=False):
     backup's path, /ext/backup-<date>.tar, or backup-<date>-2.tar and so on when that name is
     taken: an earlier backup, perhaps the one from before Sonar, is never overwritten. sonar: Sonar
     runs, for the advice when an application is open. The stat of the name is the install's first
-    command on the card, so its sentence says what to check when the card is missing, cannot be
-    read or is full (CARD_ADVICE)."""
+    command on the card, so its sentence says what to check when the card is missing or cannot be
+    read (CARD_ADVICE). A full card fails at update backup, so when that answers Result: FAIL the
+    sentence adds to check the card's free space."""
     what = "back up the Flipper's internal storage"
     with _step(what):
         path = f"/ext/backup-{date}.tar"
@@ -355,7 +360,9 @@ def backup(storage, date, sonar=False):
             raise InstallError(_and(_sentence(what, e), advice)) from None
         reply = storage.command(f"update backup {path}", timeout=COMMAND_SECONDS)
     if "Result: OK" not in reply:
-        raise InstallError(_sentence(f"{what} to {path}", _device_reason(reply, sonar)))
+        reason = _device_reason(reply, sonar)
+        sentence = _sentence(f"{what} to {path}", reason)
+        raise InstallError(_and(sentence, FULL_CARD_ADVICE) if reason == DEVICE_FAILED else sentence)
     return path
 
 

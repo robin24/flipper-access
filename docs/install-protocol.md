@@ -289,8 +289,9 @@ storage stat "/ext/backup-<date>.tar"
 
 This is the install's first command on the card. A Flipper without a card, or with one it cannot
 read, answers it with `internal error` or `filesystem not ready`, and the script's sentence then
-adds to check that a microSD card, formatted on the Flipper, is in the Flipper. When the answer is
-`access denied`, the sentence adds that the card may be full.
+adds to check that a microSD card, formatted on the Flipper, is in the Flipper. Any other answer
+gets no advice, `access denied` included: a stat never fails because a card is full, and the device
+also gives `access denied` for removing a folder that still has something in it.
 
 The first name for which the path is not there is used:
 
@@ -301,7 +302,9 @@ update backup /ext/backup-<date>.tar
 The reply starts with a line `Backup /int to '<path>'` and ends with `Result: OK` or `Result: FAIL`.
 The script counts the backup as made when `Result: OK` appears anywhere in the reply. When the reply
 has `Result: FAIL`, it says that the Flipper said that it failed. Otherwise it quotes the last line
-of the reply.
+of the reply. A full card makes the backup fail, so after a `Result: FAIL` of the backup, and of no
+other command, the sentence adds, after a semicolon, that a full card can cause this and to check the
+card's free space.
 
 ### The voice over USB
 
@@ -695,8 +698,9 @@ update restore <path on the card>
 ```
 
 The reply starts with `Restore /int from '<path>'` and ends with `Result: OK` or `Result: FAIL`,
-read as for the backup. The Flipper reads the restored settings when it restarts, so the script
-tells the user to restart it by holding Left and Back together for five seconds.
+read as for the backup, without the advice about a full card. The Flipper reads the restored
+settings when it restarts, so the script tells the user to restart it by holding Left and Back
+together for five seconds.
 
 ### Removing the older update packages
 

@@ -11,8 +11,9 @@ then info device after the wait, and never loader, power, input, sysctl or sr vo
 the extract is wrapped in sr voice off and sr voice on, from any other firmware no sr command is
 sent; verify against a release.json; the wait for the port, which names the PIN that a Flipper asks
 for again when it restarts; an update command refused while an application is open, whose sentence
-says to press Back until the Flipper says Home screen; a card that is missing, unreadable or full at
-the backup's first card command, whose sentence says what to check; a console that gives its prompt
+says to press Back until the Flipper says Home screen; a card that is missing or unreadable at the
+backup's first card command, and a backup that fails, which a full card can cause, whose sentences
+say what to check; a console that gives its prompt
 and then answers nothing, and a run stopped with Ctrl-C, whose sentences say to restart the Flipper;
 and every failure, a storage error in an upload among them, ends in one sentence that names the
 step, exit code 1, and no traceback, and the last check is that every failure message the checks
@@ -188,6 +189,7 @@ class Flipper:
         self.full_under = None  # a write to a path that starts with this fails after its data
         self.extract_fails = False
         self.backup_result = "OK"
+        self.restore_result = None  # what update restore answers; None: OK for a backup that is on the card
         self.connections = []
         self.app_open = None  # the update command whose word follows update is refused: an app is open
         self.card_out = False  # the card is in the user's hand or a card reader, not in the slot
@@ -354,7 +356,7 @@ class Connection:
             f.files[words[2]] = bytearray(b"a backup of /int")
             self.say(command, f"Backup /int to '{words[2]}'\r\nResult: {f.backup_result}\r\n")
         elif words[:2] == ["update", "restore"]:
-            result = "OK" if words[2] in f.files else "FAIL"
+            result = f.restore_result or ("OK" if words[2] in f.files else "FAIL")
             self.say(command, f"Restore /int from '{words[2]}'\r\nResult: {result}\r\n")
         elif words[:2] == ["update", "install"]:
             if f.update_reply == UPDATE_OK and words[2] in f.files:
@@ -1052,10 +1054,27 @@ with tempfile.TemporaryDirectory() as tmp:
     code, lines, err = run(flipper, full_run)
     check(code == 1 and "back up" in lines[-1] and main_commands(flipper.sent)[-1].startswith("update backup"),
           f"a failed backup stops the run: {lines[-1:]}")
-    # No card in the Flipper, one it cannot read, or a full one: the first card command, the stat in
-    # the backup step, gets the device's bare words, and the sentence adds what to check
+    # A full card fails at update backup, which answers Result: FAIL: the one sentence adds to check
+    # the card's free space, and only for this step
+    said = lines[-1] if lines else ""
+    check(said == "Could not back up the Flipper's internal storage to /ext/backup-2026-10-11.tar: the Flipper said "
+                  "that it failed; a full card can cause this, so check the card's free space."
+          and len(re.findall(r"[.?!](?=\s|$)", said)) == 1 and no_traceback(lines, err),
+          f"a failed backup adds that a full card can cause it: {said}")
+    flipper = Flipper(OFFICIAL)
+    flipper.files["/ext/backup-2026-10-01.tar"] = bytearray(b"an older backup")
+    flipper.restore_result = "FAIL"
+    code, lines, err = run(flipper, ["--restore", "/ext/backup-2026-10-01.tar", "--yes"])
+    said = lines[-1] if lines else ""
+    check(code == 1 and said.startswith("Could not restore the internal storage from /ext/backup-2026-10-01.tar: ")
+          and said.endswith("the Flipper said that it failed.") and "full" not in said and "free space" not in said,
+          f"a failed restore does not add the full card: {said}")
+    # No card in the Flipper or one it cannot read: the first card command, the stat in the backup
+    # step, gets the device's bare words, and the sentence adds what to check. A stat never fails
+    # because a card is full: access denied, which the device also gives for removing a folder that
+    # is not empty, gets no advice, as any other answer
     no_card = "check that a microSD card, formatted on the Flipper, is in the Flipper"
-    for reply, advice in ((CARD_OUT, no_card), (NOT_READY, no_card), (DENIED, "the card may be full"),
+    for reply, advice in ((CARD_OUT, no_card), (NOT_READY, no_card), (DENIED, None),
                           ("Storage error: invalid parameter\r\n", None)):
         flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
         flipper.card_out = True
@@ -1064,7 +1083,8 @@ with tempfile.TemporaryDirectory() as tmp:
         said = lines[-1] if lines else ""
         device = reply.strip().removeprefix("Storage error: ")
         check(code == 1 and said.startswith(f"Could not back up the Flipper's internal storage: {device}: /ext/backup-")
-              and (said.endswith(f"; {advice}.") if advice else "microSD" not in said and "full" not in said)
+              and (said.endswith(f"; {advice}.") if advice else "microSD" not in said and "full" not in said
+                   and "free space" not in said)
               and len(re.findall(r"[.?!](?=\s|$)", said)) == 1 and main_commands(flipper.sent) == ["info device"]
               and no_traceback(lines, err),
               f"the first card command's {device!r}: the sentence adds {advice!r}: {said}")
@@ -1076,7 +1096,8 @@ with tempfile.TemporaryDirectory() as tmp:
         said = ("press Back on the Flipper until it says Home screen" if sonar
                 else "press Back on the Flipper a few times to reach the home screen")
         return ("application is open" in line and said in line and ("Home screen" in line) == sonar
-                and "run this script again" in line and len(re.findall(r"[.?!](?=\s|$)", line)) == 1)
+                and "run this script again" in line and "free space" not in line
+                and len(re.findall(r"[.?!](?=\s|$)", line)) == 1)
 
     flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
     flipper.app_open = "backup"
