@@ -217,10 +217,14 @@ Steps:
      process makes the `com.apple.provenance` attribute, which exFAT keeps only in such a file,
      and which cannot be removed (seen on 2026-10-03,
      `docs/measurements/2026-10-02-card-settings-and-clip-order.txt`). So the script deletes
-     every `._` file under the set's folder: from the Mac before the eject, which is untried, or
-     through the console afterwards, as was done on 2026-10-03. Their free places stay between
-     the clips; with them, espeak's clips opened in a median of 25 ms. When no
-     card with the marker appears within a few minutes, the script says so and offers USB.
+     every `._` file under the set's folder: from the Mac before the eject, which took 26 seconds
+     for the voice's 10,537 files on 2026-10-11
+     (`docs/measurements/2026-10-11-installer-device-checks.txt`), and through the console
+     afterwards for any that are left, as was done on 2026-10-03. Their free places stay between
+     the clips; with them, espeak's clips opened in a median of 25 ms. When no card with the
+     marker turns up within 30 seconds of the user's Enter, the script stops with one sentence
+     that says to put the card back into the Flipper and run it again: it never falls back to USB
+     by itself, and no clock runs while the user moves the card (Robin, 2026-10-11).
    - Over USB: upload the pack as one file to `/ext`, unpack it with
      `storage extract /ext/<pack>.tar /ext`, and remove the tar (the archive lever below).
      These are commands the official firmware has, so the step works from 1.4.3, Momentum and
@@ -238,8 +242,10 @@ Steps:
 Re-running is safe: the unpack overwrites every clip and keeps the folders that are already
 there; the package folder is replaced.
 
-Time goal: a fresh install in under 15 minutes on a Mac, voice included. Through a card reader
-the voice takes about a minute, an estimate not yet measured on the device. Over USB the
+Time goal: a fresh install in under 15 minutes on a Mac, voice included. Through a card reader,
+copying the voice's 10,537 files onto the card took about 3 minutes on a Mac on 2026-10-11, and
+the whole of the computer's part 2 minutes 40 seconds on 2026-10-12
+(`docs/measurements/2026-10-11-installer-device-checks.txt`). Over USB the
 transfers alone take 25 to 28 minutes, whichever of the two levers below is used (the spike of
 2026-10-11, `docs/measurements/2026-10-11-transfer-spike.txt`). That is a lower bound, since
 the backup, the update with its restarts and the checks come on top: the whole install over USB
