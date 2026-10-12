@@ -353,8 +353,8 @@ copying the voice, removing the `._` files and ejecting the card, took 2 minutes
 install through a card reader can be put together from measured parts: the 3 minutes of the voice,
 the minute of the update package and the 6 minutes of the update, the last two from the install over
 USB. That makes about 10 minutes, plus the time it takes to move the card twice. The total is put
-together and was not timed as one run: the timed card reader run of 2026-10-12 had no update. It
-took 11 minutes in all, and about 8 of them went to moving the card.
+together and was not timed as one run: the timed card reader run of 2026-10-12 had no update.
+That run took 11 minutes in all, and about 8 of them went to moving the card.
 
 ## First boot
 
