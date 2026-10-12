@@ -25,10 +25,16 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+# plan() needs neither flipper_cli nor pyserial (the tests, CI); a run needs both, and says why not
+NO_CONSOLE = None
 try:
     from flipper_cli import find_port, open_cli, run
-except (SystemExit, ImportError):  # flipper_cli exits without pyserial; plan() needs neither (the tests, CI)
+except SystemExit as e:  # flipper_cli's one sentence for a missing pyserial, said again when the script runs
     find_port = open_cli = run = None
+    NO_CONSOLE = str(e.code)
+except ImportError:
+    find_port = open_cli = run = None
+    NO_CONSOLE = "Could not find flipper_cli.py, which this script needs in its own folder."
 
 UPDATE_DIR = "/ext/update"
 OWN_PREFIXES = ("f7-update-sonar-", "f7-update-mntm-screen-reader-", "f7-update-mntm-HEAD-", "f7-update-mntm-claude-")
@@ -97,8 +103,8 @@ def main():
     ap.add_argument("--keep", action="append", default=[], help="a folder name to keep (repeatable)")
     ap.add_argument("--port", help="serial port, default: auto-detect")
     args = ap.parse_args()
-    if run is None:
-        sys.exit("pyserial is missing. Run: .venv/bin/pip install pyserial  (or use .venv/bin/python)")
+    if NO_CONSOLE:
+        sys.exit(NO_CONSOLE)
     ser = open_cli(find_port(args.port))
     try:
         current, version = running_build(ser)

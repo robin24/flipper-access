@@ -5,9 +5,11 @@ f7-update-mntm-HEAD- or f7-update-mntm-claude- plus anything; every other folder
 f7-update-1.4.3, f7-update-mntm-012 or an Unleashed one included. Of the candidates, the running
 build's folder stays: its name ends with "-" and the firmware.commit.hash from `info device`, or,
 for a tagged build whose firmware.version is not mntm-dev, it is f7-update-<firmware.version>.
-The names given with --keep stay too, and the rest goes, sorted. Run from the project root:
-python3 tests/fbt/test_card_prune.py"""
+The names given with --keep stay too, and the rest goes, sorted. Without pyserial, a run ends in
+flipper_cli's own one sentence. Run from the project root: python3 tests/fbt/test_card_prune.py"""
 import os
+import re
+import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -72,6 +74,26 @@ check(plan(work, "ea05c6d9", "mntm-dev", set()) == ["f7-update-mntm-claude-readi
                                                     "f7-update-mntm-screen-reader-bb3a635b"],
       "a build of a claude/ work branch is the fork's own: the running one stays, the older one goes, "
       "and the rollback packages stay")
+
+# Without pyserial, the script's run ends in flipper_cli's own one sentence, which names the
+# virtual environment's pip and python as a Mac or Linux and as Windows call them
+TOOLS = os.path.join(ROOT, "tools")
+
+
+def without_pyserial(code):
+    """Run code in a Python that cannot import pyserial: (exit code, what it wrote to stderr)."""
+    found = subprocess.run(
+        [sys.executable, "-I", "-c", f"import sys; sys.modules['serial'] = None; sys.path.insert(0, {TOOLS!r}); {code}"],
+        capture_output=True, text=True,
+    )
+    return found.returncode, found.stderr.strip()
+
+
+cli_code, cli_said = without_pyserial("import flipper_cli")
+prune_code, prune_said = without_pyserial("sys.argv = ['card_prune.py', '--dry']; import card_prune; card_prune.main()")
+check(prune_code == 1 and prune_said == cli_said and cli_code == 1 and len(re.findall(r"[.?!](?=\s|$)", prune_said)) == 1
+      and ".venv/bin/pip install pyserial" in prune_said and ".venv\\Scripts\\pip install pyserial" in prune_said,
+      f"no pyserial: card_prune says flipper_cli's one sentence: {prune_code}, {prune_said!r}")
 
 print(f"card prune: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)
