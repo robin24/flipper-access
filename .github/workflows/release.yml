@@ -10,10 +10,14 @@
 # and the draft is published by hand. If a release of the tag exists already, a draft included,
 # the release job fails; delete it first.
 #
+# Three jobs: build makes the assets and the notes, attest attests the assets' provenance, and
+# release creates the draft once both have succeeded.
+#
 # Security (R16): every action is pinned by its commit, with its version in a comment; nothing is
 # cached, neither the toolchain nor pip's downloads; no run is cancelled by another; permissions
 # are given per job, contents: write only to the job that creates the draft, and the OIDC token
-# that build attestations need only to the build job.
+# that build attestations need only to the attest job, which downloads the build's assets and runs
+# nothing of the project, so that the job that installs packages and builds never holds it.
 #
 # The release notes are docs/release-notes-template.md with these placeholders filled in, each
 # written in the template as the name in double braces:
@@ -50,9 +54,6 @@ jobs:
     timeout-minutes: 90
     permissions:
       contents: read
-      # Build attestations: the OIDC token that signs them, and their upload
-      id-token: write
-      attestations: write
     env:
       TAG: ${{ github.ref_name }}
       FBT_GIT_SUBMODULE_SHALLOW: "1"
@@ -190,8 +191,39 @@ jobs:
               f.write(text.replace("{{SUBMODULES}}", block))
           EOF
 
+      # Only to carry the assets and the notes to the attest and release jobs; a week leaves time
+      # to re-run them
+      - name: Upload the assets and the notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The build's assets, attested in a job of their own: it holds the OIDC token that signs the
+  # attestations, and runs only actions pinned by commit, never the project's code or packages
+  attest:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Build attestations: the OIDC token that signs them, and their upload
+      id-token: write
+      attestations: write
+    steps:
       # GitHub makes build attestations only for public repositories on the plans below
-      # Enterprise Cloud, so a release made while this repository is private has none
+      # Enterprise Cloud, so a release made while this repository is private has none. The
+      # conditions are on the steps, not on the job, so that the job succeeds either way and the
+      # release job, which needs it, runs
+      - name: Download the assets
+        if: ${{ !github.event.repository.private }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+
       - name: Attest the assets' provenance
         if: ${{ !github.event.repository.private }}
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
@@ -202,17 +234,11 @@ jobs:
         if: ${{ github.event.repository.private }}
         run: echo "::warning::This repository is private, so GitHub made no build attestations for the release's assets."
 
-      # Only to carry the assets and the notes to the release job; a week leaves time to re-run it
-      - name: Upload the assets and the notes
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release
-          path: release/
-          if-no-files-found: error
-          retention-days: 7
-
+  # After the build and the attestations both succeeded: a draft exists only for a good build,
+  # and, in a public repository, only with its assets attested, so that a failed attestation
+  # leaves no draft to publish by mistake; a re-run of the failed jobs makes the draft then
   release:
-    needs: build
+    needs: [build, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
