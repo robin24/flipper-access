@@ -1,0 +1,265 @@
+# The release. A push of a tag sonar-X.Y.Z or sonar-X.Y.Z-rcN to this project, made after the
+# same tag on the fork's commit that the project records, builds that commit from a clean
+# checkout and leaves a draft GitHub Release, a prerelease for an -rc tag, with six assets: the
+# update package flipper-z-f7-update-<tag>.tgz, install-<tag>.zip (install.py, flipper_cli.py,
+# flipper_storage.py and card_prune.py side by side, with the project's GPL-3 LICENSE, since
+# the zip is a download of its own and flipper_storage.py is adapted from Momentum's GPL-3
+# storage.py), <tag>-firmware.elf and its map <tag>-firmware.map, the SDK
+# flipper-z-f7-sdk-<tag>.zip, and the source bundle <tag>-source.tar.gz. The voice pack,
+# SHA256SUMS and release.json are added on the Mac afterwards with tools/release_finalise.py,
+# and the draft is published by hand. If a release of the tag exists already, a draft included,
+# the release job fails; delete it first.
+#
+# Three jobs: build makes the assets and the notes, attest attests the assets' provenance, and
+# release creates the draft once both have succeeded.
+#
+# Security (R16): every action is pinned by its commit, with its version in a comment; nothing is
+# cached, neither the toolchain nor pip's downloads; no run is cancelled by another; permissions
+# are given per job, contents: write only to the job that creates the draft, and the OIDC token
+# that build attestations need only to the attest job, which downloads the build's assets and runs
+# nothing of the project, so that the job that installs packages and builds never holds it.
+#
+# The release notes are docs/release-notes-template.md with these placeholders filled in, each
+# written in the template as the name in double braces:
+#   {{TAG}}            the tag, such as sonar-0.1.0
+#   {{FORK_COMMIT}}    the fork's commit that the tag names, 9 characters
+#   {{MOMENTUM_BASE}}  the Momentum commit the fork builds on, from tools/momentum-base.txt,
+#                      9 characters
+#   {{SUBMODULES}}     the fork's submodules, nested ones included, as the source bundle has
+#                      them: one Markdown list line each, "- <path> at <9-character commit>"
+#   {{SOURCE_BUNDLE}}  the source bundle's file name, <tag>-source.tar.gz
+# A missing template, or a placeholder the workflow does not know, fails the build job with one
+# sentence before the build.
+name: Release
+
+on:
+  push:
+    tags: ["sonar-*"]
+
+# Nothing by default; each job names what it needs
+permissions: {}
+
+# One run per tag at a time, never cancelled by another
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ github.ref_name }}
+      FBT_GIT_SUBMODULE_SHALLOW: "1"
+      WORKFLOW_BRANCH_OR_TAG: screen-reader
+      # The package is then f7-update-<tag>, the name tools/card_prune.py keeps for a release
+      DIST_SUFFIX: ${{ github.ref_name }}
+    steps:
+      - name: Check out the project at the tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Only the two forms of a release tag, which names the package's folder and release.json
+      - name: Check the tag's form
+        run: |
+          if ! [[ "$TAG" =~ ^sonar-[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]]; then
+            echo "::error::The tag $TAG is not of the form sonar-X.Y.Z or sonar-X.Y.Z-rcN."
+            exit 1
+          fi
+
+      # Everything but {{SUBMODULES}}, which the source bundle gives after the build, so that a
+      # missing template or an unknown placeholder fails here, before the build
+      - name: Fill in the release notes
+        run: |
+          mkdir -p release/assets
+          FORK_COMMIT="$(git rev-parse HEAD:Momentum-Firmware)" python3 - <<'EOF'
+          import os
+          import re
+          import sys
+
+          template = "docs/release-notes-template.md"
+          if not os.path.isfile(template):
+              print(f"::error::There is no {template} to make the release notes from.")
+              sys.exit(1)
+          tag = os.environ["TAG"]
+          with open("tools/momentum-base.txt") as f:
+              base = f.read().strip()
+          values = {
+              "TAG": tag,
+              "FORK_COMMIT": os.environ["FORK_COMMIT"][:9],
+              "MOMENTUM_BASE": base[:9],
+              "SOURCE_BUNDLE": f"{tag}-source.tar.gz",
+          }
+          later = {"SUBMODULES"}
+          with open(template) as f:
+              text = f.read()
+          unknown = sorted(set(re.findall(r"\{\{(\w+)\}\}", text)) - set(values) - later)
+          if unknown:
+              print(f"::error::The release notes template has placeholders this workflow does not fill in: {', '.join(unknown)}.")
+              sys.exit(1)
+          for name, value in values.items():
+              text = text.replace("{{" + name + "}}", value)
+          with open("release/notes.md", "w") as f:
+              f.write(text)
+          EOF
+
+      - name: Check out the firmware submodule
+        run: git submodule update --init --depth 1 Momentum-Firmware
+
+      # A checkout at depth 1 carries the fork's tag only while the tagged commit is the branch
+      # tip, and with rc1 and the final tag on one commit the build could call itself rc1: the
+      # script fetches the tag, keeps it alone and checks that it names the checkout (R2, R3)
+      - name: Check the fork's tag
+        run: tools/release_tag_check.sh "$TAG"
+
+      # The host tests unpack the voice pack with the firmware's tar reader
+      - name: Check out the firmware's tar reader
+        run: git -C Momentum-Firmware submodule update --init --depth 1 lib/microtar
+
+      # For the golden checks; --no-tags, as any tag fetched now could name the build
+      - name: Fetch the Momentum commit the fork builds on
+        run: git -C Momentum-Firmware fetch --depth 1 --no-tags origin "$(cat tools/momentum-base.txt)"
+
+      # Python 3.10, as in the continuous build, without its pip cache
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.10"
+
+      - name: Install the tools' Python packages
+        run: pip install -r requirements.txt
+
+      - name: Host tests
+        run: tools/run_host_tests.sh --no-skips
+
+      - name: Lint the firmware
+        run: cd Momentum-Firmware && ./fbt lint_all
+
+      - name: Build the firmware and its update package
+        run: cd Momentum-Firmware && ./fbt COMPACT=1 DEBUG=0 updater_package
+
+      - name: Check that the build changed no tracked file
+        run: |
+          git -C Momentum-Firmware diff --exit-code
+          git diff --exit-code --ignore-submodules
+
+      - name: Flash headroom
+        run: tools/flash_headroom.sh
+
+      # A build that calls itself mntm-dev or another tag would have tools/card_prune.py delete
+      # the release just installed (R2, R3)
+      - name: Check that the build calls itself the tag
+        run: |
+          VERSION="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["firmware_version"])' \
+            Momentum-Firmware/build/f7-firmware-C/toolbox/version.json)"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error::The build calls itself $VERSION rather than $TAG."
+            exit 1
+          fi
+
+      # The source bundle after the build, which has checked out every submodule (R10); its list
+      # of submodules goes into the release notes
+      - name: Gather the assets
+        run: |
+          cp "Momentum-Firmware/dist/f7-C/flipper-z-f7-update-$TAG.tgz" release/assets/
+          cp "Momentum-Firmware/dist/f7-C/flipper-z-f7-sdk-$TAG.zip" release/assets/
+          cp Momentum-Firmware/build/f7-firmware-C/firmware.elf "release/assets/$TAG-firmware.elf"
+          cp Momentum-Firmware/build/f7-firmware-C/firmware.elf.map "release/assets/$TAG-firmware.map"
+          zip -q -j -X "release/assets/install-$TAG.zip" \
+            tools/install.py tools/flipper_cli.py tools/flipper_storage.py tools/card_prune.py LICENSE
+          tools/source_bundle.sh "$TAG" "release/assets/$TAG-source.tar.gz" > "$RUNNER_TEMP/submodules.txt"
+          ls -l release/assets
+
+      - name: Name the submodules in the release notes
+        run: |
+          python3 - "$RUNNER_TEMP/submodules.txt" <<'EOF'
+          import sys
+
+          with open(sys.argv[1]) as f:
+              listing = [line.split() for line in f if line.strip()]
+          block = "\n".join(f"- {path} at {commit[:9]}" for path, commit in listing)
+          with open("release/notes.md") as f:
+              text = f.read()
+          with open("release/notes.md", "w") as f:
+              f.write(text.replace("{{SUBMODULES}}", block))
+          EOF
+
+      # Only to carry the assets and the notes to the attest and release jobs; a week leaves time
+      # to re-run them
+      - name: Upload the assets and the notes
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: release/
+          if-no-files-found: error
+          retention-days: 7
+
+  # The build's assets, attested in a job of their own: it holds the OIDC token that signs the
+  # attestations, and runs only actions pinned by commit, never the project's code or packages
+  attest:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # Build attestations: the OIDC token that signs them, and their upload
+      id-token: write
+      attestations: write
+    steps:
+      # GitHub makes build attestations only for public repositories on the plans below
+      # Enterprise Cloud, so a release made while this repository is private has none. The
+      # conditions are on the steps, not on the job, so that the job succeeds either way and the
+      # release job, which needs it, runs
+      - name: Download the assets
+        if: ${{ !github.event.repository.private }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+
+      - name: Attest the assets' provenance
+        if: ${{ !github.event.repository.private }}
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: release/assets/*
+
+      - name: Say that the release has no attestations
+        if: ${{ github.event.repository.private }}
+        run: echo "::warning::This repository is private, so GitHub made no build attestations for the release's assets."
+
+  # After the build and the attestations both succeeded: a draft exists only for a good build,
+  # and, in a public repository, only with its assets attested, so that a failed attestation
+  # leaves no draft to publish by mistake; a re-run of the failed jobs makes the draft then
+  release:
+    needs: [build, attest]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Download the assets and the notes
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: release
+
+      # With gh, which the runner has: no third-party release action
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          PRERELEASE=""
+          case "$TAG" in *-rc*) PRERELEASE="--prerelease" ;; esac
+          # $PRERELEASE unquoted: one word or none
+          gh release create "$TAG" release/assets/* --draft $PRERELEASE --verify-tag \
+            --title "Sonar ${TAG#sonar-}" --notes-file release/notes.md

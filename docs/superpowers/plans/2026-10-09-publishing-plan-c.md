@@ -10,13 +10,13 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-26-github-release-design.md`, sections 6, 7, 9 and 10, and steps 4 to 8 of section 11. The review report `docs/2026-09-28-review.md` on the branch `claude/flipper-access-review-m87rn7`, findings R2, R3, R5 to R8, R10, R11, R13, R15 and R16 and its release checklist; their state is in `docs/2026-09-28-review-fixes.md`, "Not done". The device checks of 2026-10-09 in the same record and in `docs/measurements/2026-10-09-device-checks.txt`.
 
-## Decisions Robin makes first
+## Robin's decisions, 2026-10-11
 
-Three answers are needed before the tasks that depend on them. Ask them at the start; the tasks that do not depend on them can run meanwhile.
+1. One voice ships: heart (Kokoro af_heart). It is the only pack among the release's assets, so on a fresh card it is the only set and Auto speaks with it; the install script sets no default. `release.json` still names `"default_voice": "heart"` for the later desktop app. The espeak backend and its licence text stay for users who make a set themselves.
+2. What the project adds to a pack (the word selection, the processing, the layout) is released under CC0 1.0; the engines' own terms apply beside it (Apache 2.0 for Kokoro's model, GPL-3 for eSpeak-NG).
+3. The review report moves into main's `docs/` (Task 9), and the branch `claude/flipper-access-review-m87rn7` is deleted once that is merged.
 
-1. Which voice ships, and which is the default. The spec ships two packs, heart (Kokoro af_heart) and espeak (eSpeak-NG en-us+f3). With the setting Auto, the reader takes the first set by name, which is espeak. If the default is to be heart, `release.json` names it and the install script sets it with `sr voice use heart` once Sonar runs (Task 4). Tasks 4, 6, 7 and 9 depend on this answer.
-2. The voice packs' licence terms for what the project adds, CC0 by default (spec section 12). Task 6 depends on it.
-3. Whether the review report moves into main's `docs/`. If yes, Task 9 copies it from the review branch, points the fixes record's first line at it, and the review branch is deleted after the merge; if no, the branch stays as it is.
+Task 1 was done by the controller on 2026-10-11: pull requests robin24/Momentum-Firmware#6 and robin24/flipper-access#7 merged, their branches and the leftover `claude/blank-card-flash-2026-10-09` deleted, and the branches `claude/plan-c-2026-10-11` created in both repositories.
 
 ## Global Constraints
 
@@ -27,7 +27,7 @@ Three answers are needed before the tasks that depend on them. Ask them at the s
 - Re-running the install is always safe: the unpack overwrites clips and keeps folders, the package folder is replaced.
 - Time goal: a fresh install in under 15 minutes on a Mac, voice included (spec section 6).
 - Tags: `sonar-X.Y.Z` and `sonar-X.Y.Z-rcN`, annotated, the same name on the fork's commit and on the project's commit that records it, the fork's pushed first. The package is then `f7-update-sonar-X.Y.Z`, and `firmware.version` on the device is the tag.
-- Release asset names: `flipper-z-f7-update-sonar-X.Y.Z.tgz`, `voice-heart-sonar-X.Y.Z.tar`, `voice-espeak-sonar-X.Y.Z.tar`, `install-sonar-X.Y.Z.zip`, `sonar-X.Y.Z-firmware.elf`, `sonar-X.Y.Z-firmware.map`, `flipper-z-f7-sdk-sonar-X.Y.Z.zip`, `sonar-X.Y.Z-source.tar.gz`, `SHA256SUMS`, `release.json`.
+- Release asset names: `flipper-z-f7-update-sonar-X.Y.Z.tgz`, `voice-heart-sonar-X.Y.Z.tar`, `install-sonar-X.Y.Z.zip`, `sonar-X.Y.Z-firmware.elf`, `sonar-X.Y.Z-firmware.map`, `flipper-z-f7-sdk-sonar-X.Y.Z.zip`, `sonar-X.Y.Z-source.tar.gz`, `SHA256SUMS`, `release.json`.
 - Workflow security for `release.yml` (R16): actions pinned by commit SHA, no toolchain cache, no cancel-in-progress, `permissions` per job, `contents: write` only on the job that creates the draft.
 - Flash limit 880,640 bytes, checked by `tools/flash_headroom.sh`; a release build starts from a clean checkout.
 - Tests first, in the project's style: plain-script checks under `tests/fbt/` with `check()` and a closing "N of M checks passed" line, each added to `tools/run_host_tests.sh`; a check that needs pyserial says "skipped ..." without it. The runner is green with `--no-skips` in the venv before every commit.
@@ -131,14 +131,14 @@ Message: "The transfer spike's figures set the chunk size and the extract's time
 
 **Interfaces:**
 - Consumes: `flipper_cli.find_port`, `flipper_cli.open_port`; `Storage`, `StorageError`, `EXTRACT_SECONDS_PER_MB` from Task 2 and 3; `card_prune.plan(folders, running_hash, running_version, keep)`.
-- Produces, for Task 5 and the later desktop app: `read_info(storage) -> dict` (the `info device` keys and values), `describe(info) -> str` (one sentence: name, firmware origin and version), `backup(storage, date: str) -> str` (the backup's path), `voice_over_usb(storage, pack: str, sonar: bool, say)`, `upload_package(storage, package_dir: str, say) -> str` (the package's folder on the card), `start_update(storage, folder: str)`, `wait_for_device(timeout: float, say) -> Storage`, `verify(info: dict, release: dict) -> list[str]` (each difference as a sentence, empty when it matches), `prune(storage, say)`, `set_default_voice(storage, release: dict, say)`, and `main(argv) -> int`. `say` is a function taking one line.
+- Produces, for Task 5 and the later desktop app: `read_info(storage) -> dict` (the `info device` keys and values), `describe(info) -> str` (one sentence: name, firmware origin and version), `backup(storage, date: str) -> str` (the backup's path), `voice_over_usb(storage, pack: str, sonar: bool, say)`, `upload_package(storage, package_dir: str, say) -> str` (the package's folder on the card), `start_update(storage, folder: str)`, `wait_for_device(timeout: float, say) -> Storage`, `verify(info: dict, release: dict) -> list[str]` (each difference as a sentence, empty when it matches), `prune(storage, say)`, and `main(argv) -> int`. `say` is a function taking one line.
 
 - [ ] **Step 1: Write the failing tests**
 
 A stand-in console as in Task 2, with recorded `info device` replies of Sonar 9149fe493, Momentum mntm-012 and official 1.4.3 (record the latter two in Task 11 if they are not at hand; until then a reply made from the keys the official firmware's `furi_hal_info` prints). Checks:
 
 - `describe` names Sonar, Momentum and the official firmware from `firmware.origin.fork` and `firmware.version`.
-- The commands a whole run sends, in order, contain no `loader`, `power`, `input` or `sysctl`, and are: `info device`, `update backup /ext/backup-<date>.tar`, the pack's upload, `storage extract`, the package's upload, `update install /ext/update/<name>/update.fuf`; and after the wait `info device`, then `sr voice use <default>` only when the device runs Sonar and `release.json` names a default.
+- The commands a whole run sends, in order, contain no `loader`, `power`, `input` or `sysctl`, and are: `info device`, `update backup /ext/backup-<date>.tar`, the pack's upload, `storage extract`, the package's upload, `update install /ext/update/<name>/update.fuf`; and after the wait `info device`; no `sr voice use`, since heart is the only pack (decision 1).
 - When the first `info device` shows Sonar, the extract is wrapped in `sr voice off <seconds>` with `<seconds>` from the pack's size and `EXTRACT_SECONDS_PER_MB`, and `sr voice on` after it; from another firmware no `sr` command is sent.
 - `verify` against a `release.json` of version `sonar-0.1.0`, commit `9149fe493`, API 87.3: no difference for a matching reply; one sentence each for another version, another commit, `dirty: true`, another origin.
 - `wait_for_device` with a stand-in port list that is empty for a while returns once the port comes back, and with one that never does, says one sentence after the time-out and the run exits with 1.
@@ -224,11 +224,11 @@ Two commits: the card reader way "(install)", and the protocol document "(instal
 
 **Interfaces:**
 - Consumes: Robin's decisions 1 and 2; the set's `manifest.json` settings, which hold the Kokoro model's and voices file's SHA-256.
-- Produces: `licence_text(settings: dict, terms: str) -> str` with `terms` "CC0-1.0" by default.
+- Produces: `licence_text(settings: dict) -> str`, the project's part always CC0 1.0.
 
 - [ ] **Step 1: Write the failing test**
 
-The heart pack's `LICENSE.txt` contains the whole Apache License 2.0 text (its first and last lines checked), the model's name and URL, the model file's and the voices file's SHA-256 from the manifest, the voice's name, and the attribution the model card asks for; it states the terms of what the project adds (decision 2). The espeak pack's text says the clips are made with eSpeak-NG (GPL-3, its text included) and which terms the clips themselves carry (decision 2, reviewed by Robin). A pack whose backend is neither kokoro nor espeak is still refused without `--personal`.
+The heart pack's `LICENSE.txt` contains the whole Apache License 2.0 text (its first and last lines checked), the model's name and URL, the model file's and the voices file's SHA-256 from the manifest, the voice's name, and the attribution the model card asks for; it states that what the project adds is released under CC0 1.0 (decision 2). The espeak pack's text, for packs users make themselves, says the clips are made with eSpeak-NG (GPL-3, its text included) and that what the project adds is CC0 1.0. A pack whose backend is neither kokoro nor espeak is still refused without `--personal`.
 
 - [ ] **Step 2: Run it and see it fail; write the texts; run it and see it pass**
 
@@ -288,7 +288,7 @@ For a list of three assets with known bytes: the SHA-256 values, `SHA256SUMS` in
 
 - [ ] **Step 3: The Mac's part, in the device notes**
 
-A section "Making a release" in `docs/device-notes.md`: make the packs by explicit name with `tools/voice_pack.py --set heart --version X.Y.Z` and `--set espeak`, `gh release upload <tag> voice-heart-<tag>.tar voice-espeak-<tag>.tar`, then `tools/release_finalise.py <tag>` (R5).
+A section "Making a release" in `docs/device-notes.md`: make the pack by explicit name with `tools/voice_pack.py --set heart --version X.Y.Z`, `gh release upload <tag> voice-heart-<tag>.tar`, then `tools/release_finalise.py <tag>` (R5).
 
 - [ ] **Step 4: Commit**
 
@@ -304,7 +304,7 @@ Message: "tools/release_finalise.py writes SHA256SUMS and release.json from a dr
 
 - [ ] **Step 1: The README**
 
-Install: the release's assets, the install command with each argument in its own code block, from official firmware or Momentum, the backup it takes, the card reader question, the time it takes, what it says, and that the device stays silent until the end. First boot: already updated on 2026-10-09; check it against what Task 4 heard. A new section "Going back": `install.py --restore <backup>`, and installing the official package with the same script (R13). The voice: the shipped packs, the default (decision 1) and how to change it with the Voice row, their licences (Task 6). Known limits: the API caveat, catalog apps that import the JavaScript engine's symbols fail to load, and apps that use the reader's exports fail on other firmware (R15). Licence and credits: Momentum and its contributors, Flipper Devices, Kokoro and its model card's attribution, eSpeak-NG, the source offer for the binaries (R10). The section's sentences that still say "the first release" or "until then" are updated.
+Install: the release's assets, the install command with each argument in its own code block, from official firmware or Momentum, the backup it takes, the card reader question, the time it takes, what it says, and that the device stays silent until the end. First boot: already updated on 2026-10-09; check it against what Task 4 heard. A new section "Going back": `install.py --restore <backup>`, and installing the official package with the same script (R13). The voice: the shipped pack, heart, its licence (Task 6), and that espeak or a Mac's voice can be added with the generator and chosen in the Voice row. Known limits: the API caveat, catalog apps that import the JavaScript engine's symbols fail to load, and apps that use the reader's exports fail on other firmware (R15). Licence and credits: Momentum and its contributors, Flipper Devices, Kokoro and its model card's attribution, eSpeak-NG, the source offer for the binaries (R10). The section's sentences that still say "the first release" or "until then" are updated.
 
 - [ ] **Step 2: The new files**
 
@@ -339,11 +339,11 @@ The annotated tag `sonar-0.1.0-rc1` on the fork's `screen-reader` merge commit, 
 
 - [ ] **Step 3: The Mac's part**
 
-As written in Task 8's section: the two packs, the upload, `release_finalise.py`.
+As written in Task 8's section: the heart pack, the upload, `release_finalise.py`.
 
 - [ ] **Step 4: Install the draft's own assets**
 
-Download them with `gh release download sonar-0.1.0-rc1`, check them with `shasum -a 256 -c SHA256SUMS`, and install with the downloaded `install.py` from the downloaded zip, on Robin's device as it is (Sonar). Then: `info device` gives `sonar-0.1.0-rc1`, the commit, `dirty false`, origin Sonar; `card_prune.py --dry` keeps the running build's folder; `arm-none-eabi-addr2line` on the release's elf resolves a known function's address; `tools/sr_drive.py` and `tools/ram_probe.py` pass, and `sr status` then says "underruns 0" (R7, spec section 10); Robin listens to the first boot and the default voice.
+Download them with `gh release download sonar-0.1.0-rc1`, check them with `shasum -a 256 -c SHA256SUMS`, and install with the downloaded `install.py` from the downloaded zip, on Robin's device as it is (Sonar). Then: `info device` gives `sonar-0.1.0-rc1`, the commit, `dirty false`, origin Sonar; `card_prune.py --dry` keeps the running build's folder; `arm-none-eabi-addr2line` on the release's elf resolves a known function's address; `tools/sr_drive.py` and `tools/ram_probe.py` pass, and `sr status` then says "underruns 0" (R7, spec section 10); Robin listens to the first boot and the heart voice.
 
 - [ ] **Step 5: Record**
 

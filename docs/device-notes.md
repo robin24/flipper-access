@@ -306,6 +306,218 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
     since the continuous build compares the new firmware with the pinned commit. Then tag the
     release on both repositories, as section 7 of the release spec describes.
 
+## Making a release
+
+A release is made in two parts. The workflow `.github/workflows/release.yml` builds the firmware
+from a pushed tag and leaves a draft release with six assets. This Mac then adds the one voice
+pack, the checksums and `release.json`, and the draft is published by hand. Run the steps from the
+project folder, but for step 6 and the first part of step 7, which run in the folder of the
+download. `sonar-0.1.0` stands for the tag and `0.1.0` for its version; for a release candidate the
+tag is `sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
+
+1. Write the release's entry in `CHANGELOG.md` first: its version, with the day of the tag in place
+   of `YYYY-MM-DD`, and what the release changes, since the release notes send readers to the
+   changelog at the tag. A release candidate's tag has the entry of the version it leads to, and the
+   final tag the same entry with its own day. Merge the entry into `main` with a pull request, as
+   every change. The project's commit to tag is the merged commit on `main` whose submodule pointer
+   is the fork's commit to tag, so check that commit out, with the submodule on the commit it
+   records:
+
+   ```bash
+   git switch main
+   ```
+
+   ```bash
+   git pull
+   ```
+
+   ```bash
+   git submodule update Momentum-Firmware
+   ```
+
+   `git status` must then show no change for `Momentum-Firmware`. Tag the fork's commit and push
+   the tag, then tag the project with the same name and push that tag, which starts the workflow.
+   The workflow fails before the build unless the fork has the tag on the recorded commit, and it
+   fails if a release of the tag exists already, a draft included.
+
+   ```bash
+   git -C Momentum-Firmware tag -a sonar-0.1.0 -m "sonar-0.1.0"
+   git -C Momentum-Firmware push origin sonar-0.1.0
+   git tag -a sonar-0.1.0 -m "sonar-0.1.0"
+   git push origin sonar-0.1.0
+   ```
+
+2. When the workflow has finished, the draft lists the update package, the install zip, the elf
+   and its map, the SDK and the source bundle:
+
+   ```bash
+   gh release view sonar-0.1.0
+   ```
+
+3. Make the voice pack by its explicit name. Heart is the only voice pack a release ships, and the
+   default voice. The generator's set `heart` must be complete in `voices/heart`. The pack is
+   written to the project folder as `voice-heart-sonar-0.1.0.tar`, which is `voice-heart-<tag>.tar`,
+   and is about 111 megabytes:
+
+   ```bash
+   .venv/bin/python tools/voice_pack.py --set heart --version 0.1.0
+   ```
+
+4. Upload the pack to the draft:
+
+   ```bash
+   gh release upload sonar-0.1.0 voice-heart-sonar-0.1.0.tar
+   ```
+
+5. Finish the draft. The tool downloads every asset of the draft again, so that the checksums are
+   those of the bytes a user will download. It checks that the draft holds the seven assets of a
+   release and no other file, and reads the voice of the pack from its own `voice.txt`. It takes
+   the fork's commit and the Momentum base from the tag, and the API version from the fork's
+   table at that commit. It then writes `SHA256SUMS` and `release.json` and uploads both with
+   `--clobber`, so it can be run again. It uses only Python's standard library and the `gh`
+   command, signed in:
+
+   ```bash
+   tools/release_finalise.py sonar-0.1.0
+   ```
+
+   It refuses, with one sentence and without uploading anything, when an asset is missing, when a
+   second voice pack or another file is in the draft, when the pack was made with a backend other
+   than kokoro or espeak, when the tag is not in this checkout, and when the release is published
+   already. Add `--dry` to see the two files first; it still downloads, and uploads nothing:
+
+   ```bash
+   tools/release_finalise.py sonar-0.1.0 --dry
+   ```
+
+6. Download the draft as a user would, into a folder that does not exist yet, outside the project
+   folder. `mkdir` refuses a folder that is there already, so no file of an earlier try is checked
+   by mistake:
+
+   ```bash
+   mkdir /tmp/sonar-0.1.0-check
+   ```
+
+   ```bash
+   gh release download sonar-0.1.0 --dir /tmp/sonar-0.1.0-check
+   ```
+
+   The commands of this step and of step 7, up to its last checks, run in that folder:
+
+   ```bash
+   cd /tmp/sonar-0.1.0-check
+   ```
+
+   Check the files against `SHA256SUMS`. Each of the seven assets should say OK; `SHA256SUMS` and
+   `release.json` are not among the checksums. Every asset was downloaded, so the check has no
+   `--ignore-missing`, and an asset that is missing fails it:
+
+   ```bash
+   shasum -a 256 -c SHA256SUMS
+   ```
+
+7. Install the draft's own files on the Flipper, as the README's Install describes, so that the
+   release is the binary that was tested (review of 2026-09-28, R7) and the release notes'
+   promise holds: "Before it was published, this release's own files, downloaded from this page,
+   were installed on a Flipper with the install script and checked there." Unpack the install zip:
+
+   ```bash
+   unzip install-sonar-0.1.0.zip
+   ```
+
+   Make a virtual environment with pyserial there, as a user does. `python3` must be 3.10 or
+   newer:
+
+   ```bash
+   python3 -m venv .venv
+   ```
+
+   ```bash
+   .venv/bin/pip install pyserial
+   ```
+
+   Install with that folder's `install.py`, which uses that folder's helpers, and answer its
+   questions as a user would. Over USB it takes about half an hour:
+
+   ```bash
+   .venv/bin/python install.py --package flipper-z-f7-update-sonar-0.1.0.tgz --voice voice-heart-sonar-0.1.0.tar --release release.json
+   ```
+
+   Near its end the script says "The Flipper runs the firmware of the release.", then the lines of
+   the prune: one for each older update package it removes and one with how many it removed, or
+   "There are no older update packages to remove.". Its last line is "Done, after" with the time it
+   took, such as 32 minutes. Then check on the Flipper. `info device` gives the tag as
+   `firmware.version`, `sonar-0.1.0`; as `firmware.commit.hash`, the first 8 characters of the
+   release's commit, `firmware_commit` in `release.json`; `firmware.commit.dirty` false; and
+   `firmware.origin.fork` Sonar. Copy none of its other lines into a committed file, since they
+   name the device:
+
+   ```bash
+   .venv/bin/python flipper_cli.py "info device"
+   ```
+
+   The prune keeps the running build's folder: its first line names `f7-update-sonar-0.1.0` among
+   the folders it keeps, and no line says "would remove f7-update-sonar-0.1.0":
+
+   ```bash
+   .venv/bin/python card_prune.py --dry
+   ```
+
+   By ear: after the update, the picture is spoken, "Firmware updated, press OK to continue", and
+   OK closes it. Then the voice: on a card that holds other sets, Auto may take another, such as
+   espeak, so choose heart first, in the Voice row or with this command:
+
+   ```bash
+   .venv/bin/python flipper_cli.py "sr voice use heart"
+   ```
+
+   Back and Up on the home screen then says "Home screen" in the heart voice.
+
+   Last, the checks of R7 and of section 10 of the release spec, with the project's own virtual
+   environment and tools. They run in the project folder, and `cd -` goes back there from the
+   folder of the download:
+
+   ```bash
+   cd -
+   ```
+
+   The RAM probe restarts the Flipper and opens the core apps one by one. None may crash it, so no
+   line says "DEVICE REBOOTED" or "CONSOLE STOPPED ANSWERING":
+
+   ```bash
+   .venv/bin/python tools/ram_probe.py
+   ```
+
+   The reader's scripted check starts on the home screen and must end with "0 failures":
+
+   ```bash
+   .venv/bin/python tools/sr_drive.py
+   ```
+
+   Then the speech line of `sr status` must say "underruns 0", for all that was spoken since the
+   probe's restart:
+
+   ```bash
+   .venv/bin/python tools/flipper_cli.py "sr status"
+   ```
+
+   The release's elf must turn an address into a line of code. `nm` gives the address of a known
+   function, `screen_reader_is_enabled`, as the first word of its line, such as 0809dcc0:
+
+   ```bash
+   Momentum-Firmware/toolchain/current/bin/arm-none-eabi-nm /tmp/sonar-0.1.0-check/sonar-0.1.0-firmware.elf | grep " screen_reader_is_enabled$"
+   ```
+
+   addr2line, given that address with 0x in front of it in place of 0x0809dcc0, must name
+   `screen_reader_is_enabled` and a line of `screen_reader.c`:
+
+   ```bash
+   Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e /tmp/sonar-0.1.0-check/sonar-0.1.0-firmware.elf -f -a 0x0809dcc0
+   ```
+
+8. Read the release notes on the draft's page on GitHub, then publish the draft there by hand. No
+   script publishes a release, and a release that is published is not finalised again.
+
 ## The voice on this card
 
 - The vocabulary here is made with `say` and the Samantha voice, the generator's defaults, so it

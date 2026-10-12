@@ -1,0 +1,175 @@
+The installer's device checks, over USB and through the card reader, the six findings and what Task 5b did about them, 2026-10-11 and 2026-10-12
+
+Claude ran tools/install.py and the console; Robin did everything physical: pressing Back on the Flipper, taking the card out and putting it back, and listening. The first run, over USB, needed nothing physical, and Claude ran it alone. The installer ran on Robin's own Flipper and card, with the heart voice pack that the transfer spike made. The runs found six things, A to F, which Task 5b of plan C, the task that changed the installer after the findings of the first day, fixed or answered, and the last run, on 2026-10-12, went through from the first line to "Done" without a stop.
+
+Firmware: 9149fe493 on the device at the start of the first run, the tip of claude/device-checks-2026-10-09; then d74ea206a, the fork's merge of its pull request 6, in every run after it. The update package was f7-update-mntm-claude-plan-c-2026-10-11-d74ea206, 11.8 megabytes, built from the fork's branch claude/plan-c-2026-10-11.
+Installer: tools/install.py at 3dc3cff9b for the first run; at 9b2b22b1a, which has the card reader way of Task 5, for the runs of 15:23 to 16:15 on 2026-10-11; at abc1e2359, the end of Task 5b, for the runs from 17:45 on 2026-10-11 and for the run of 2026-10-12.
+Device: R0skie on /dev/cu.usbmodemflip_R0skie1. Host: a Mac, with the card in a microSD adapter in the Mac's built-in SD card reader, where it mounts as /Volumes/Flipper SD. Card: exFAT, label Flipper SD.
+Pack: voice-heart-sonar-0.0.0.tar, 111.3 megabytes (116,705,280 bytes), 10,604 entries: 67 folders and 10,537 files.
+The logs of the runs were kept outside the repository. Lines quoted from them are verbatim. The log of the first run has no clock but its start and its end; the logs of the runs from 15:23 to 17:45 on 2026-10-11 have the time of each line; the logs from 18:02 on, those of the runs of 18:02:59 and 18:04:28 on 2026-10-11 and of the run of 2026-10-12, have only a line with the time of their start, and the times given for those runs are the shell's, noted as the runs went. Console replies are verbatim from the console tools.
+
+Section: The first run, a whole install over USB, 2026-10-11 05:12:00 to 05:44:07
+
+Over USB, with the heart pack and the update package. The log, shortened (the progress lines between are left out: the sending from 9 to 92 percent, the unpacking from 10 to 99 percent, the minute lines of the wait):
+Found the Flipper at /dev/cu.usbmodemflip_R0skie1.
+The Flipper R0skie runs Sonar, version mntm-dev, commit 9149fe49.
+Backing up the Flipper's internal storage to the card.
+The backup is /ext/backup-2026-10-11.tar.
+Sending the voice pack voice-heart-sonar-0.0.0.tar, 111.3 megabytes, to the card. This takes about 11 minutes.
+The voice pack is on the card.
+The Flipper's voice is off while the pack is unpacked, for 25 minutes at most.
+Unpacking the voice pack on the Flipper. This takes about 16 minutes.
+The voice pack is unpacked, 10,604 files and folders in all.
+Sending the update package f7-update-mntm-claude-plan-c-2026-10-11-d74ea206, 11.8 megabytes, to the card. This takes about a minute.
+The update package is on the card.
+Starting the update.
+The Flipper is restarting to install the update.
+Waiting for the Flipper. It restarts, updates itself and restarts again, silent all the while; this takes a few minutes, and at most 15 minutes.
+Still waiting for the Flipper, 60 seconds so far.
+Still waiting for the Flipper, 6 minutes so far.
+The Flipper is back.
+The Flipper R0skie runs Sonar, version mntm-dev, commit d74ea206.
+The Flipper runs the firmware of the package.
+Removed 4 older update packages.
+Done, after 32 minutes.
+The shell's time for the run: real 1926.91 seconds, exit 0 at 05:44:07, which is 32 minutes 7 seconds.
+The log times none of the steps except the wait for the update, whose last line said 6 minutes before the Flipper was back. The 11 and 16 minutes in it are the script's own plans, from the spike's rates, not measurements. The card already held the heart set, so the spike's figures for that case apply to the three transfers: 653 seconds to send the pack, 786 seconds to unpack it over a set that was there, 72 seconds for the update package. With the wait's 6 minutes, 360 seconds, that is 1,871 seconds, about 31 of the 32 minutes; and it is the split that the README gives: about 11 minutes to send the voice, 13 to unpack it, a minute for the package, 6 for the update.
+Afterwards, not from the log: at 05:44, right after the install, Claude read the console. sr screen read "Firmware updated, press OK to continue", and sr status said "last utterance: 4029 ms played" and "underruns 0", with the voice set espeak, which Auto had chosen. So the heart voice was not listened to in this run; that was left for Robin.
+
+Section: Finding A, a console that did not answer, 2026-10-11 15:23
+
+The card reader way, the first try with Robin at the device. The log (install-reader-failed-1523.log):
+15:23:00 Looking for the Flipper.
+15:23:00 Found the Flipper at /dev/cu.usbmodemflip_R0skie1.
+15:23:30 Could not read the Flipper's device information: the Flipper had not finished info device after 30 seconds.
+The Flipper had been idle for about ten hours. Its own screen and keys worked, but its console answered nothing, no echo and no prompt. Dropping the DTR line of the port and raising it again brought the banner and the prompt back. So the console of a Flipper that has been idle for long needs a new session, which DTR starts, before the first command.
+
+Section: Finding B, an application open, 2026-10-11 15:26
+
+The log (install-reader-failed-1526.log), the last lines:
+15:26:20 The Flipper R0skie runs Sonar, version mntm-dev, commit d74ea206.
+15:26:20 Could not back up the Flipper's internal storage to /ext/backup-2026-10-11-2.tar: the Flipper said: this command cannot be run while an application is open.
+The Flipper refuses update backup while an application is open on it. The script's sentence was right about the step and the reason, but it did not say what to do, and the README did not say to start on the home screen. The backup of that name was not made; the next try made it.
+
+Section: The second and third tries, 15:27 and 15:40, findings C and D
+
+No log of these two tries was kept; this is from Claude's notes of the time.
+15:27: the backup /ext/backup-2026-10-11-2.tar was made and the marker written. Robin saw the instruction to take the card out late, since messages may reach Robin only when Claude's turn ends, and the script's five minutes passed before the card moved. The script then went on over USB, as designed, after it had removed its marker. Claude stopped it, which left the Flipper's console in the middle of a write_chunk: a DTR toggle gave the banner, but no command finished, and the Flipper had to be restarted.
+Finding C: Robin then took the card out of the running Flipper and put it into the Mac's reader, and the Mac mounted it read-only; rm said "Read-only file system". The unpacking through the card reader would have failed. Two causes were possible, the adapter's lock slider or macOS mounting a card that was not cleanly unmounted read-only. It was the slider, which was down: with it up, the volume's information showed Media Read-Only No and Volume Read-Only No. So the installer should check for a read-only volume before it writes, and name the slider.
+Finding D, a matter of process: a clock of five minutes is short for a person who follows spoken instructions that are relayed through a chat.
+15:40: the backup /ext/backup-2026-10-11-3.tar was made and the marker written. No card turned up in five minutes, and the fallback to USB ended cleanly with one sentence, saying that the Flipper's filesystem was not ready, since its card was out. At 15:47 the Mac's reader showed no card although Robin had put one in; the next try, at 16:09, found it.
+
+Section: Robin's two decisions, 2026-10-11
+
+Once the user has chosen the card reader, the installer never falls back to USB by itself. A card that does not appear in time ends the install with one sentence that says what to do. This replaces the earlier design, in which the install went on over USB after five minutes.
+The card reader way waits for the user to press Enter after each move of the card, to the computer and back to the Flipper, and then looks for it for a short while, and fails with one sentence if it is not there. No clock of five minutes runs while the user moves the card.
+
+Section: The card reader run of 16:09, before Task 5b
+
+The card reader way as Task 5 left it: no Enter, a clock of five minutes for the card to turn up, a wait of up to five minutes for the Flipper to see the card again. The log (install-reader.log), shortened:
+16:09:53 Looking for the Flipper.
+16:09:54 The Flipper R0skie runs Sonar, version mntm-dev, commit d74ea206.
+16:09:54 The backup is /ext/backup-2026-10-11-4.tar.
+16:09:54 Writing a small marker file to the card, so that this computer can tell the card from other drives.
+16:09:54 Now take the microSD card out of the Flipper and put it into this computer's card reader. Leave the Flipper plugged in and unlocked. The script looks for the card for 5 minutes.
+16:10:54 Still looking for the card, 60 seconds so far.
+16:10:58 Found the card at /Volumes/Flipper SD.
+16:10:58 Copying the voice pack voice-heart-sonar-0.0.0.tar onto the card.
+16:11:58 13 percent of the voice pack is copied.
+16:12:58 50 percent of the voice pack is copied.
+16:13:58 99 percent of the voice pack is copied.
+16:13:59 The voice is on the card, 10,537 files.
+16:14:25 Removed 10,537 macOS helper files, files whose names start with a dot and an underscore, from the card on this computer.
+16:14:28 The card is ejected.
+16:14:28 Now put the card back into the Flipper. The script waits up to 5 minutes until the Flipper sees the voice.
+16:15:54 Could not look for the voice on the card in the Flipper: the Flipper had not finished storage stat "/ext/sr/voices/heart/voice.txt" after 30 seconds.
+The times: the card turned up 64 seconds after the instruction (Robin's move). The copy of 10,537 files took 16:10:58 to 16:13:59, 3 minutes 1 second. The removal of the 10,537 helper files took 26 seconds, 16:13:59 to 16:14:25, and the eject 3 seconds. From finding the card to the eject, the computer's part took 3 minutes 30 seconds.
+The installer stopped at 16:15:54 because the storage stat did not finish in 30 seconds; the console had been open across the card's change, as in finding E below.
+The console afterwards answered (16:16; the file after-reader.txt): storage list /ext/sr/voices/heart gave .sync-id 17b, the 64 folders, voice.txt 58b and LICENSE.txt 364b. storage list /ext/sr/voices/heart/00 gave 185 files and no entry that starts with ._. Set against the pack afterwards: the 185 names, sizes and their order are the pack's, 185 of 185. That file holds only these two listings; Claude's notes of the time add that the reader was on heart and that the Flipper had no new crash.
+
+Section: Findings E and F, a console session across a card insertion, 2026-10-11 16:16 to 16:18
+
+To see what the Flipper does when the card goes back in while a console session is open, Claude ran a scratch script, mount_timing.py, outside the repository. It opens the console once and asks every half second:
+storage stat "/ext/sr/voices/heart/voice.txt"
+and prints the time and the seconds the stat took, and "present" when the reply says File. By the log the card was out for about six seconds, from 16:18:11 to 16:18:17. The log (mount-timing.log), shortened:
+16:16:54   0.18 s present
+16:16:55   0.03 s present
+(143 lines of present from 16:16:54 to 16:18:10, 0.02 or 0.03 seconds each but the first)
+16:18:10   0.03 s present
+16:18:11   1.01 s reply: Storage error: internal error
+16:18:12   0.01 s reply: Storage error: internal error
+(11 lines of the error from 16:18:11 to 16:18:16, the first after 1.01 seconds and the others after 0.01)
+16:18:16   0.01 s reply: Storage error: internal error
+16:18:17   0.67 s present
+16:18:18   0.03 s error: the connection was lost: read failed: [Errno 6] Device not configured. Is the Flipper still plugged in?
+The number after the time is how long the stat took, not the time since the card went in. Finding F: while the card was out, storage stat answered "Storage error: internal error", not "filesystem not ready". So the installer's wait for the card must take any storage error for "not yet". The 2026-10-09 file records "filesystem not ready" for storage info with no card; the run that ended at about 20:19 (below) had "filesystem not ready" as its last answer to storage stat, from a console opened after the card had been out for two hours.
+Finding E: the stat that found the file again took 0.67 seconds, and the next one, a second later, lost the connection: the Flipper's USB port vanished (ENXIO, "Device not configured") at 16:18:18. By Claude's notes it stayed away for about ten minutes and was back by 16:28:54. The Flipper had not restarted (its uptime was 48 minutes, since Robin's restart at 15:40) and there was no new crash. On 2026-10-09, card swaps made without the Mac showed nothing of the kind. The log ends at the lost connection, so the return of the port is from the notes only.
+
+Section: What Task 5b did, 9b2b22b1a to abc1e2359
+
+Task 5b made the changes below in 17 commits, 11 first and 6 after its review. Commits, in the order made, with the finding each answers:
+5d2a9d221, finding A: every open of the console by flipper_cli.open_cli drops DTR for half a second, raises it, and reads the new session's banner to its prompt, with one carriage return when no prompt comes, and ends in one sentence with the port closed when none comes at all.
+0ec273672, finding B: the sentence for a refused update command says that an application is open and tells the user to press Back on the Flipper until it says Home screen, then to run the script again; the script's help says to leave the Flipper on its home screen. de9ccc8cc, after the review: the advice depends on the firmware, "press Back until it says Home screen" from Sonar, and "press Back a few times to reach the home screen" from other firmware, which says nothing, going by the firmware that runs at the backup, the update or the restore.
+5e8fba025, finding D and Robin's two decisions: through a card reader the install asks for Enter after the card is taken out, with no clock meanwhile, looks for the card for 30 seconds, ends in one sentence that says what to do when it does not turn up, and never sends the voice over USB instead by itself; it asks for Enter again on the way back.
+38c384bb6, finding C: once the card is found, and before anything is written to it, the install checks whether the volume is mounted read-only, and ends in one sentence that says to push the adapter's lock slider up, towards the contacts. 716eaf07e makes a refused write during the copy say the same about the slider.
+dece2af7c, findings E and F: through a card reader the console is closed from the marker until the card is back; after Enter the install waits up to 15 minutes, with a line about once a minute, for the Flipper's port to be listed and stay listed for five seconds, opens it with the DTR sequence, and asks storage stat for each voice.txt; any storage error, the internal error of a Flipper without its card included, means "not yet"; and a port that vanishes or a console that stops answering closes the console and goes back to waiting for the port. Its last reason is kept for the sentence at the limit. e03f2564d, after the review: a port that is there but cannot be opened, as when qFlipper holds it, also keeps the open's sentence as the last reason.
+b2e263c02: when the card is found, every marker file at the card's top is removed before the eject, the run's own and any that an earlier run left.
+dc1440681 and 3b58cd68d: every failure is one sentence, with its advice after a semicolon, and the check counts a question mark or an exclamation mark that ends a sentence.
+840c9d959, after the review: a port named with --port or FLIPPER_PORT counts as there after the card goes back when either list of ports has it or its device file exists, so that a /dev/tty. name on a Mac is found.
+8ded1705a: the comment on CARD_BACK_SECONDS says that the port vanished within two seconds of the card going in.
+05a2bf364 and 937901bf7 are the install protocol, and 1a0f3a0cb and abc1e2359 the README, for the changes above.
+Review: Task 5b was reviewed after its 11 commits, which found two important points, fixed in the six commits that followed, and the review was clean after that.
+
+Section: The runs after Task 5b, 2026-10-11 17:45 to 20:19
+
+Three runs on 2026-10-11 were broken by Claude's own test harness, not by the installer.
+17:45 (install-reader2.log): the harness's wait loop was killed together with its logging pipeline, so the installer died of a broken pipe at the Enter, at 17:51. Its log ends at the line that says to leave the Flipper plugged in and unlocked, after the backup /ext/backup-2026-10-11-5.tar was made and the marker written. The card was ejected with that run's marker and that backup on it.
+18:02:59 (install-reader3-failed-1803.log): the run ended at once in the sentence that the Flipper's console at /dev/cu.usbmodemflip_R0skie1 did not answer, with the advice to restart the Flipper by holding Left and Back together for five seconds. Claude put this down to the harness too, since the run 89 seconds later found the Flipper at once.
+18:04:28 (install-reader3.log): the copy worked again, and it is the first run of Task 5b's code that reached the card: the installer asked for Enter and found the card, copied the 10,537 files, said "Also removed 1 marker file that an earlier run left on the card.", removed the 10,537 helper files and ejected the card. Then it waited at "Put the card back into the Flipper, then press Enter." The harness's input pipe was held open by a sleep of 7,200 seconds, which ran out at 20:04, so the installer read the end of its input as Enter, with the card still out. It waited 15 minutes, with 14 lines of "Still waiting for the Flipper, N minutes so far.", and the log's last write was at 20:19. Its last line:
+Could not find the voice on the card after it was put back: the Flipper did not see /ext/sr/voices/heart/voice.txt within 15 minutes, and its last answer was filesystem not ready; check that the card sits in the Flipper and that the Flipper is plugged in and unlocked, then run this script again.
+That is the designed ending. Robin put the card back after midnight; by Claude's notes the console then showed voice.txt present and the reader on heart, with no new crash.
+
+Section: The card reader way end to end, 2026-10-12 17:56:21 to 18:07:18
+
+The code of abc1e2359. The harness held the answer pipe open with a sleep of 604,800 seconds, and wrote the installer's output straight to a file. The log (install-reader4.log), in full but for its start line, "start 17:56:21", with the shell's times in brackets:
+Looking for the Flipper.
+Found the Flipper at /dev/cu.usbmodemflip_R0skie1.
+The Flipper R0skie runs Sonar, version mntm-dev, commit d74ea206.
+This will back up its internal storage to the card and put the voice pack voice-heart-sonar-0.0.0.tar on the card. Go ahead? [Y/n] Copy the voice through a card reader (faster) or over USB? [R/u] Backing up the Flipper's internal storage to the card.
+The backup is /ext/backup-2026-10-12.tar.
+Writing a small marker file to the card, so that this computer can tell the card from other drives.
+Leave the Flipper plugged in and unlocked while its card is out.
+Take the microSD card out of the Flipper and put it into this computer's card reader, then press Enter. Looking for the card on this computer.
+[18:02:16 Enter, with the card in the Mac]
+Found the card at /Volumes/Flipper SD.
+Copying the voice pack voice-heart-sonar-0.0.0.tar onto the card.
+48 percent of the voice pack is copied.
+95 percent of the voice pack is copied.
+The voice is on the card, 10,537 files.
+Removed 10,537 macOS helper files, files whose names start with a dot and an underscore, from the card on this computer.
+The card is ejected.
+Put the card back into the Flipper, then press Enter. Waiting for the Flipper to see the card with the voice, at most 15 minutes.
+[18:04:56 this question was there]
+[18:07:00 Enter, with the card back in the Flipper]
+The Flipper sees the card with the voice on it.
+Looking through the voice folders on the Flipper for helper files that are left.
+The Flipper lists no helper files in the voice folders.
+Done, after 11 minutes.
+[18:07:18]
+(The "Go ahead?" and "R/u" prompts stand in the log with no line end between them, since their answers came from the harness; the log of the run of 16:09 shows the same.)
+The times: the computer's part, which is the finding of the card, the copy of the 10,537 files, the removal of the 10,537 helper files and the eject, took 2 minutes 40 seconds, between the Enter at 18:02:16 and the question to put the card back, there by 18:04:56. After the Enter at 18:07:00 the Flipper saw the voice at once, the check found no helper file left on the Flipper, and the run ended at 18:07:18, 18 seconds later. The whole run took 10 minutes 57 seconds from 17:56:21, which the script calls "Done, after 11 minutes". About 8 of those minutes were Robin moving the card: from the start at 17:56:21 to the first Enter 5 minutes 55 seconds, less the seconds before the card was asked for, and from the question to the second Enter 2 minutes 4 seconds.
+This run had no --package, so there was no update. The port did not drop: no line of the wait says that the connection was lost, and the Flipper saw the voice at once after the Enter. Robin heard the heart voice speak normally afterwards.
+
+Section: Finding E settled, a faulty USB cable
+
+Robin traced the drop of the port after a card insertion to a faulty USB cable and changed the cable on 2026-10-12. In the run above, on the new cable, the Flipper saw the card at once and the port did not drop. That run also closed the console while the card was out, as the design does, so it does not by itself separate the cable from the design. Robin's ruling, 2026-10-12: finding E is shelved; the firmware is not investigated before the release. The installer's code stays as it is: it keeps the console closed while the card is out, and it keeps waiting for a port that vanishes, because any loose cable does the same.
+
+Section: The figures
+
+The voice through the card reader, 10,537 files, 111.3 megabytes:
+2026-10-11, the run of 16:09: found at 16:10:58, copy 3 minutes 1 second (16:10:58 to 16:13:59), helper files removed in 26 seconds, eject 3 seconds, 3 minutes 30 seconds from finding the card to the eject.
+2026-10-12: the whole computer's part 2 minutes 40 seconds, the look for the card included.
+Over USB the same voice took 653 seconds to send and 786 seconds to unpack over a set that was there, 24 minutes (transfer spike); so the computer's part through the card reader is between 7 and 9 times shorter.
+The whole run through the card reader, 2026-10-12, without an update: 10 minutes 57 seconds, 8 minutes of which were the two moves of the card.
+The whole install over USB, 2026-10-11: 32 minutes 7 seconds.
+Not measured as one run: a whole install through the card reader with the update. It is composed of the voice's 3 minutes, the update package's minute and the update's 6 minutes from the USB run, 10 minutes, plus the two moves of the card.
