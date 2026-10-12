@@ -26,7 +26,11 @@ console's USB off), in the updater, or held by qFlipper. The script says all fou
 
 The port is opened for one program alone, at 230400 baud with a read time-out of 0.1 seconds. When
 qFlipper or another tool has it, the open fails at once, and the script says so instead of waiting,
-in one sentence that ends by saying to close qFlipper or any other tool that uses the port.
+in one sentence that ends by saying to close qFlipper or any other tool that uses the port. When the
+system refuses the open itself, with EACCES or EPERM, the sentence says instead that this computer's
+user may not use the port, and that on Linux the user is to be added to the group that owns it,
+dialout on Debian, Ubuntu and Fedora and uucp on Arch, and to log in again. On those systems the
+port belongs to root and that group, and a desktop user is not in it by default.
 
 Right after opening, the script starts a fresh console session. It drops the DTR line of the port,
 waits 0.5 seconds, throws away everything that arrived, and raises DTR again. The Flipper's console

@@ -101,6 +101,20 @@ It must say 3.10 or newer. The `python3` that comes with the Mac's command line 
 while Homebrew's and the installer from python.org are newer. On Windows, Python comes from
 python.org, and its command is `py` where these commands say `python3`.
 
+On Linux, your user must be in the group that owns the Flipper's port, which is dialout on Debian,
+Ubuntu and Fedora and uucp on Arch, and this command adds you to dialout, from your next login on;
+on Arch, put uucp in its place:
+
+```bash
+sudo usermod -aG dialout "$USER"
+```
+
+On Debian and Ubuntu, the virtual environment of the install also needs the package python3-venv:
+
+```bash
+sudo apt install python3-venv
+```
+
 ### The downloads
 
 The releases are at https://github.com/robin24/flipper-access/releases. Download four files of

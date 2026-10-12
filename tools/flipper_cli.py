@@ -14,6 +14,7 @@ screen reader.
 """
 import argparse
 import contextlib
+import errno
 import glob
 import os
 import re
@@ -87,10 +88,18 @@ def find_port(explicit=None):
 
 def open_port(port, timeout=0.1):
     """The port, opened for this tool alone, so that qFlipper or a second tool on it is noticed at
-    once instead of a wait without a word; one sentence and exit when it cannot be opened."""
+    once instead of a wait without a word; one sentence and exit when it cannot be opened. A port
+    that this computer's user may not open (EACCES or EPERM) gets other advice than one that
+    another program holds: on Linux the port belongs to root and a group, dialout on Debian, Ubuntu
+    and Fedora and uucp on Arch, which a desktop user is not in by default."""
     try:
         return serial.Serial(port, 230400, timeout=timeout, exclusive=True)
     except serial.SerialException as e:
+        if e.errno in (errno.EACCES, errno.EPERM):
+            sys.exit(
+                f"cannot open {port}: {e}; this computer's user may not use the port, so on Linux add the user to the "
+                "group that owns it, which is dialout on Debian, Ubuntu and Fedora and uucp on Arch, then log in again."
+            )
         sys.exit(f"cannot open {port}: {e}; close qFlipper or any other tool that uses it.")
 
 

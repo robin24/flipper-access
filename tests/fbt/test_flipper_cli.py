@@ -2,14 +2,16 @@
 """tools/flipper_cli.py's port: found by the Flipper's USB id, a port that names Flipper before
 another board with ST's id, others left out; an explicit port, then FLIPPER_PORT, then the id,
 then the Mac's device name; one sentence and exit without any, which names the PIN lock, the
-updater and qFlipper; and opened for one tool alone, so a
-second open of the same port stops with one sentence instead of sharing it. The console's open,
+updater and qFlipper; and opened for one tool alone, so a second open of the same port stops with
+one sentence instead of sharing it, while a port this computer's user may not open gets a sentence
+that names the group to join on Linux instead of qFlipper. The console's open,
 against a stand-in port with the Flipper's console behind it: DTR is dropped for half a second
 and raised, the banner that the new session prints is read to its prompt and is never part of the
 first command's reply, a console that answered nothing until then answers, a console that gives
 no prompt to DTR gets one carriage return, and one that gives none at all, or whose port goes
 away, ends in one sentence with the port closed. Needs pyserial. Run from the project root:
 python3 tests/fbt/test_flipper_cli.py"""
+import errno
 import importlib.util
 import os
 import re
@@ -106,6 +108,30 @@ else:
         again.close()
         os.close(master)
         os.close(slave)
+
+    # A port this computer's user may not open, as on Linux for a user outside the group that owns
+    # it: the sentence says so, with the group, instead of sending the user to close qFlipper; a
+    # port that another program holds keeps the qFlipper advice
+    import serial
+
+    saved_serial = fc.serial.Serial
+    try:
+        for code in (errno.EACCES, errno.EPERM, errno.EBUSY):
+            def refused(port, baudrate, timeout=None, exclusive=None, code=code):
+                raise serial.SerialException(code, f"could not open port {port}: [Errno {code}] {os.strerror(code)}: '{port}'")
+
+            fc.serial.Serial = refused
+            said = exits(fc.open_port, "/dev/ttyACM0")
+            if code == errno.EBUSY:
+                check(said is not None and "close qFlipper or any other tool that uses it" in said and "dialout" not in said
+                      and one_sentence(said), f"a port another program holds: the qFlipper advice: {said}")
+            else:
+                check(said is not None and "/dev/ttyACM0" in said and "may not use the port" in said
+                      and "dialout on Debian, Ubuntu and Fedora" in said and "uucp on Arch" in said and "log in again" in said
+                      and "qFlipper" not in said and one_sentence(said),
+                      f"{errno.errorcode[code]}: the user may not use the port, and the group to join on Linux: {said}")
+    finally:
+        fc.serial.Serial = saved_serial
 
     # The console's open, against a stand-in port
     import serial
