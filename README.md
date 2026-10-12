@@ -395,7 +395,17 @@ that no browser unpacks it. For the official 1.4.3:
 curl -f -L -O https://update.flipperzero.one/builds/firmware/1.4.3/flipper-z-f7-update-1.4.3.tgz
 ```
 
-Then run the script with it and with the backup, named by its path on the card:
+For Momentum, the next command names its release `mntm-012`, the latest one when this was written. A
+later release has the same form, with its own tag in place of `mntm-012` in both places where the
+address holds it, the folder and the file name:
+
+```bash
+curl -f -L -O https://github.com/Next-Flip/Momentum-Firmware/releases/download/mntm-012/flipper-z-f7-update-mntm-012.tgz
+```
+
+Then run the script with the package and with the backup, named by its path on the card. This is for
+the official 1.4.3; for Momentum, name its package, `flipper-z-f7-update-mntm-012.tgz`, after
+`--package`:
 
 ```bash
 .venv/bin/python install.py --package flipper-z-f7-update-1.4.3.tgz --restore /ext/backup-2026-10-11.tar
