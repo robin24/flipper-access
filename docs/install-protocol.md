@@ -236,6 +236,15 @@ The script says which Flipper, firmware and version it found. A build that is no
 version `mntm-dev`, which says nothing, so its commit is named too. From here on the script knows
 whether Sonar runs, which matters for the `sr voice` commands below.
 
+A console can give its prompt on the open and then finish no command. A run that was stopped with
+Ctrl-C most often stops inside a `storage write_chunk` or a `storage extract`, and the Flipper's
+shell then still waits for the rest of it; on 2026-10-11 the new session's banner came after the
+DTR reset, but no command finished until the Flipper was restarted. So when this first command
+takes longer than its limit, or the connection is lost, the script's sentence ends by saying to
+restart the Flipper by holding Left and Back together for five seconds and to run the script
+again. The sentence for a run stopped with Ctrl-C says that a run again starts over, and that the
+Flipper is to be restarted the same way if it does not answer on that run.
+
 ### The backup to restore from, when it is on the card
 
 This is only done when the user asked to restore from a path that starts with `/ext/`. The script

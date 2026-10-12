@@ -113,6 +113,10 @@ TIMED_OUT = "the Flipper had not finished"  # and its sentence for a command tha
 # The shell's refusal of a command that needs the loader, such as update backup, while an
 # application is open on the Flipper (cli_shell.c)
 APP_OPEN = "this command cannot be run while an application is open"
+# What to do about a console that gives its prompt when it is opened and then finishes no
+# command, as one that a run stopped with Ctrl-C left in the middle of a storage write_chunk or
+# a storage extract: flipper_cli's advice for a console that gives no prompt
+STUCK = f"{flipper_cli.RESTART_ADVICE}, then run this script again"
 
 
 class InstallError(Exception):
@@ -263,6 +267,21 @@ def read_info(storage):
         if colon and key and " " not in key:
             info[key] = value.strip()
     return info
+
+
+def read_first_info(storage):
+    """read_info for the first command after the console was opened. A console can give its
+    prompt on the open and then finish no command; when this first one takes too long or the
+    connection is lost, the InstallError's sentence ends by saying to restart the Flipper and run
+    this script again."""
+    what = "read the Flipper's device information"
+    with _step(what):
+        try:
+            return read_info(storage)
+        except StorageError as e:
+            if _in_step(e):
+                raise
+            raise InstallError(_and(_sentence(what, e), STUCK)) from None
 
 
 def is_sonar(info):
@@ -1210,8 +1229,7 @@ def _install(args, say):
         storage, port = _connect(args.port)
         try:
             say(f"Found the Flipper at {port}.")
-            with _step("read the Flipper's device information"):
-                info = read_info(storage)
+            info = read_first_info(storage)
             say(describe(info))
             sonar = is_sonar(info)
             if args.restore:
@@ -1284,8 +1302,11 @@ def main(argv=None):
         return _install(args, print_line)
     except InstallError as e:
         print_line(str(e))
+    # Ctrl-C lands most often inside a storage write_chunk or a storage extract, whose end the
+    # Flipper's shell then still waits for
     except KeyboardInterrupt:
-        print_line("Stopped before the install was done; running this script again starts it over.")
+        print_line("Stopped before the install was done; running this script again starts it over, and if the "
+                   f"Flipper does not answer on that run, {STUCK}.")
     except Exception as e:  # noqa: BLE001  never a traceback, whatever went wrong
         print_line(f"The install stopped on an unexpected error: {type(e).__name__}: {e}.")
     return 1

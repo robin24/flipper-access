@@ -47,6 +47,8 @@ FLIPPER_USB_ID = (0x0483, 0x5740)
 DTR_LOW_SECONDS = 0.5
 BANNER_SECONDS = 5  # the most the banner and its prompt may take once DTR is up
 NUDGE_SECONDS = 2  # and the prompt after one carriage return, when the banner gave none
+# What to do about a console that does not answer, part of a sentence; install.py says the same
+RESTART_ADVICE = "restart the Flipper by holding Left and Back together for five seconds"
 
 
 def flipper_ports(ports=None):
@@ -141,10 +143,7 @@ def open_cli(port):
     if not answered:
         with contextlib.suppress(*PORT_ERRORS):
             ser.close()
-        sys.exit(
-            f"The Flipper's console at {port} did not answer; restart the Flipper by holding Left and Back together "
-            "for five seconds, then try again."
-        )
+        sys.exit(f"The Flipper's console at {port} did not answer; {RESTART_ADVICE}, then try again.")
     return ser
 
 

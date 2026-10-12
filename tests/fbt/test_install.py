@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 """tools/install.py, the install over USB, against a stand-in for the Flipper: its console, its
 card, and its port, which goes away while the Flipper updates and comes back. The stand-in answers
-as the device's shell does (the echo of the command and a line end, the output, then a line end
-and the prompt), unpacks a tar with storage extract as the firmware does, entry line by entry line,
-and restarts on update install after its "Restarting to apply update" line; its console session
-begins when DTR rises, and every open is checked to drop DTR and raise it again before its first
-command. The checks: describe names Sonar, Momentum and the official firmware; a whole run sends
-info device, update backup, the voice pack, storage extract, the update package and update install
-in that order, then info device after the wait, and never loader, power, input, sysctl or sr voice
-use; from Sonar the extract is wrapped in sr voice off and sr voice on, from any other firmware
-no sr command is sent; verify against a release.json; the wait for the port, which names the PIN
-that a Flipper asks for again when it restarts; an update command refused while an application is
-open, whose sentence says to press Back until the Flipper says Home screen; and every failure, a
-storage error in an upload among them, ends in one sentence that names the step, exit code 1, and
-no traceback, and the last check is that every failure message the checks made has one
-sentence-ending full stop. The voice through a card reader is
-checked with temporary folders as the volumes, a stand-in user who moves the card when asked and
-presses Enter, and a stand-in card that leaves the stand-in Flipper, whose storage commands then
-say internal error, comes back after the eject, and gets a ._ file beside everything unpacked
-onto it, as macOS does: find_card and the volumes, unpack_to_card in the pack's order and
-refusing an entry that leaves the volume (Windows names too), remove_appledouble, eject, the
-marker and the markers of earlier runs, the look for the card that starts only after Enter and
-ends in one sentence without USB, a card mounted read-only, the console closed while the card is
-out, the wait after the card is back for a port that stays listed, with internal error taken for
-not yet, a port that vanishes after the first answer and comes back, a console that stops
-answering, and the time-out with the Flipper's last reason, the ._ files removed over the
-console, and the questions of a run without --yes.
+as the device's shell does (the echo of the command and a line end, the output, then a line end and
+the prompt), unpacks a tar with storage extract as the firmware does, entry line by entry line, and
+restarts on update install after its "Restarting to apply update" line; its console session begins
+when DTR rises, and every open is checked to drop DTR and raise it again before its first command.
+The checks: describe names Sonar, Momentum and the official firmware; a whole run sends info device,
+update backup, the voice pack, storage extract, the update package and update install in that order,
+then info device after the wait, and never loader, power, input, sysctl or sr voice use; from Sonar
+the extract is wrapped in sr voice off and sr voice on, from any other firmware no sr command is
+sent; verify against a release.json; the wait for the port, which names the PIN that a Flipper asks
+for again when it restarts; an update command refused while an application is open, whose sentence
+says to press Back until the Flipper says Home screen; a console that gives its prompt and then
+answers nothing, and a run stopped with Ctrl-C, whose sentences say to restart the Flipper; and
+every failure, a storage error in an upload among them, ends in one sentence that names the step,
+exit code 1, and no traceback, and the last check is that every failure message the checks made has
+one sentence-ending full stop. The voice through a card reader is checked with temporary folders as
+the volumes, a stand-in user who moves the card when asked and presses Enter, and a stand-in card
+that leaves the stand-in Flipper, whose storage commands then say internal error, comes back after
+the eject, and gets a ._ file beside everything unpacked onto it, as macOS does: find_card and the
+volumes, unpack_to_card in the pack's order and refusing an entry that leaves the volume (Windows
+names too), remove_appledouble, eject, the marker and the markers of earlier runs, the look for the
+card that starts only after Enter and ends in one sentence without USB, a card mounted read-only,
+the console closed while the card is out, the wait after the card is back for a port that stays
+listed, with internal error taken for not yet, a port that vanishes after the first answer and comes
+back, a console that stops answering, and the time-out with the Flipper's last reason, the ._ files
+removed over the console, and the questions of a run without --yes.
 Needs pyserial. Run from the project root: python3 tests/fbt/test_install.py"""
 import contextlib
 import importlib.util
@@ -1169,6 +1169,56 @@ with tempfile.TemporaryDirectory() as tmp:
     check(code == 1 and "unpack" in lines[-1] and "connection was lost" in lines[-1] and no_traceback(lines, err),
           f"a cable pulled during the unpacking: {lines[-1:]}")
     check(main_commands(flipper.sent)[-1] == extract, "and nothing is sent after it")
+
+    # A console that gives its prompt on the open and then finishes no command, as one that a run
+    # stopped with Ctrl-C left in the middle of a write_chunk: the first command's sentence ends
+    # with open_cli's advice, to restart the Flipper, and to run the script again
+    restart = "restart the Flipper by holding Left and Back together for five seconds, then run this script again"
+    flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+    flipper.silent_opens = 1
+    saved_idle = fs.IDLE_SECONDS
+    fs.IDLE_SECONDS = 0.2  # the quiet that counts as a lost connection, 30 seconds on the device
+    try:
+        code, lines, err = run(flipper, full_run)
+    finally:
+        fs.IDLE_SECONDS = saved_idle
+    check(code == 1 and flipper.sent == ["info device"] and lines[-1].startswith("Could not read the Flipper's device information")
+          and "connection was lost" in lines[-1] and lines[-1].endswith(f"; {restart}.") and no_traceback(lines, err),
+          f"a console that answers nothing after its prompt: the sentence says to restart the Flipper: {code}, {lines[-1:]}")
+    check(flipper.connections and flipper.connections[0].events[:3] == [("dtr", True), ("dtr", False), ("dtr", True)]
+          and not flipper.connections[0].is_open, "the console was opened with DTR dropped and raised, and is closed")
+    # The first command takes longer than its limit, or the Flipper's own error, read by read_first_info
+    for raised, advised in (("the Flipper had not finished info device after 30 seconds", True),
+                            ("the connection was lost: [Errno 6] Device not configured; check that the Flipper is still "
+                             "plugged in", True),
+                            ("the console cannot take a quote or a control character in a path: 'x'", False)):
+        def stuck(line, timeout=30, raised=raised):
+            raise fs.StorageError(raised)
+
+        try:
+            install.read_first_info(SimpleNamespace(command=stuck))
+            error = None
+        except install.InstallError as e:
+            error = e
+        said = str(error)
+        check(error is not None and said.startswith("Could not read the Flipper's device information: " + raised)
+              and (f"; {restart}." in said) == advised and len(re.findall(r"[.?!](?=\s|$)", said)) == 1,
+              f"the first command's {raised[:30]!r}: the advice to restart only for a lost or stuck console: {error}")
+
+    # Stopped with Ctrl-C: one sentence that says a run again starts over, and to restart the
+    # Flipper the same way if it does not answer then
+    flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+    saved_ask = install.ask
+    install.ask = lambda question: (_ for _ in ()).throw(KeyboardInterrupt())
+    try:
+        code, lines, err = run(flipper, full_run[:-1])
+    finally:
+        install.ask = saved_ask
+    said = lines[-1] if lines else ""
+    check(code == 1 and said.startswith("Stopped before the install was done") and "starts it over" in said
+          and "if the Flipper does not answer" in said and restart in said
+          and len(re.findall(r"[.?!](?=\s|$)", said)) == 1 and no_traceback(lines, err),
+          f"Ctrl-C: one sentence that says to restart the Flipper if it does not answer on the next run: {code}, {said}")
 
     # The card reader way: the volumes, and the card among them by its marker
     marker_a, marker_b = ".sonar-install-11111111", ".sonar-install-22222222"
