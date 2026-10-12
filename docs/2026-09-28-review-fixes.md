@@ -178,8 +178,14 @@ release.
   at 24 to 27 minutes as one pack, and 26 file by file (068c27f55); a whole install over USB then
   took 32 minutes. As Robin answered the review's questions 2 and 3, `tools/install.py` asks which
   way the voice goes and writes it through the computer's card reader by default (59d324d04), and
-  the clips at 11,025 samples a second stay held back. The card reader way is not yet timed on the
-  device.
+  the clips at 11,025 samples a second stay held back. The card reader way was then tried on the
+  device, on 2026-10-11 and 2026-10-12: copying the voice's 10,537 files took about 3 minutes, the
+  computer's whole part took 2 minutes 40 seconds on 2026-10-12, and that run took 11 minutes in
+  all, without an update, about 8 of them spent moving the card. The checks found six things, A to
+  F. Robin decided that a card that does not turn up never sends the voice over USB by itself and
+  that the script waits for Enter after each move of the card instead of running a clock. Task 5b
+  answered the findings in the commits 5d2a9d221 to abc1e2359. The figures and the findings are in
+  `docs/measurements/2026-10-11-installer-device-checks.txt`.
 - R13: `tools/install.py` installs any firmware's update package, the official firmware's included,
   and `--restore` puts a backup of the internal storage back with `update restore` (3dc3cff9b). The
   README's new section Going back says how (5a1f28efb).
@@ -191,8 +197,10 @@ release.
   asks for `firmware.version` and where the build came from, are new (c37304b3b). The untagged
   builds' version stays `mntm-dev`, which `card_prune.py` relies on.
 - The note for plan C on macOS's `._` files: the card reader way removes them from the Mac before
-  the eject, and any that are left through the console once the card is back (59d324d04). Neither
-  has been tried on the device yet.
+  the eject, and any that are left through the console once the card is back (59d324d04). Both
+  were tried on the device: on 2026-10-11 the removal on the Mac took 26 seconds for 10,537 files,
+  and on 2026-10-12 it removed the 10,537 again, after which the look through the console found
+  none left (`docs/measurements/2026-10-11-installer-device-checks.txt`).
 
 ## Not done
 
