@@ -54,7 +54,9 @@ Put pyserial into it:
 .venv/bin/pip install pyserial
 ```
 
-Plug the Flipper in, unlock it, close qFlipper, and run the install:
+Plug the Flipper in, unlock it and close qFlipper. Start on the Flipper's home screen, with no
+application open: on Sonar, press Back until it says "Home screen"; on other firmware, which says
+nothing, press Back a few times. Then run the install:
 
 ```bash
 .venv/bin/python install.py --package flipper-z-f7-update-{{TAG}}.tgz --voice voice-heart-{{TAG}}.tar --release release.json
