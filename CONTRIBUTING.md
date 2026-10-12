@@ -13,9 +13,9 @@ reader says badly, or does not say at all, is a bug too.
 ## Pull requests
 
 Pull requests are welcome, and so are those made with the help of AI tools, as long as the pull
-request says so: which tool, which parts it wrote, and how you checked them. Sonar itself was
-written almost entirely by AI coding agents under Robin Kipp's direction, as the README says, so
-an AI-assisted change is no reason to hold back; it only has to be disclosed.
+request says so: which tool, which parts it wrote, and how you checked them. Claude wrote almost
+all of Sonar's code, working under Robin Kipp's direction, as the README says, so an AI-assisted
+change is no reason to hold back; it only has to be disclosed.
 
 Where a change goes:
 

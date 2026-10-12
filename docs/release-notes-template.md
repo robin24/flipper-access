@@ -1,7 +1,7 @@
 Sonar is a firmware for the Flipper Zero that a blind person can use without sight. It is built on
 Momentum, and its screen reader speaks every screen through the device's own speaker, from a
-recorded voice on the SD card. It was written almost entirely by AI coding agents (Claude) under
-the direction of Robin Kipp, a blind developer, who tested every change on the device.
+recorded voice on the SD card. Claude wrote almost all of Sonar's code, working under the direction
+of Robin Kipp, a blind developer, who tested every change on the device.
 
 This is the release {{TAG}}. The README at this release says how to install it, how to use it, how
 to go back to other firmware, and what Sonar changes against Momentum:
