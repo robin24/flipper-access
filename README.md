@@ -117,9 +117,9 @@ sudo apt install python3-venv
 
 ### The downloads
 
-The releases are at https://github.com/robin24/flipper-access/releases. Download four files of
-the newest release into one folder. For the release `sonar-0.1.0` they are these, and a later
-release has its own version in their names:
+The releases are at https://github.com/robin24/flipper-access/releases. The install needs four
+files of the newest release, in one folder. For the release `sonar-0.1.0` they are these, and a
+later release has its own version in their names:
 
 - `flipper-z-f7-update-sonar-0.1.0.tgz`, the firmware's update package, about 12 MB.
 - `voice-heart-sonar-0.1.0.tar`, the voice, about 111 MB.
@@ -132,8 +132,45 @@ file of the release but `release.json` and `SHA256SUMS` itself; the firmware's e
 turn a crash address into a line of code; the SDK, for building apps; and the source bundle, the
 source of every binary, described under Licence and credits.
 
-To check your downloads, download `SHA256SUMS` into the same folder too, and run this command
-there:
+Download the files from a terminal, not with a browser: a browser such as Safari may unpack an
+archive by itself after the download, and the install needs each file as it was published. First
+make a folder for the install, and go into it:
+
+```bash
+mkdir sonar-0.1.0
+```
+
+```bash
+cd sonar-0.1.0
+```
+
+Then download the four files and `SHA256SUMS` into it, one command each:
+
+```bash
+curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/flipper-z-f7-update-sonar-0.1.0.tgz
+```
+
+```bash
+curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/voice-heart-sonar-0.1.0.tar
+```
+
+```bash
+curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/install-sonar-0.1.0.zip
+```
+
+```bash
+curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/release.json
+```
+
+```bash
+curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/SHA256SUMS
+```
+
+For a later release, its tag takes the place of `sonar-0.1.0` in these commands. On Windows, the
+command is `curl.exe` where these commands say `curl`, since `curl` in PowerShell is another
+command.
+
+To check your downloads, run this command in the same folder:
 
 ```bash
 shasum -a 256 -c --ignore-missing SHA256SUMS
@@ -338,8 +375,14 @@ https://update.flipperzero.one/builds/firmware/1.4.3/flipper-z-f7-update-1.4.3.t
 from its releases at https://github.com/Next-Flip/Momentum-Firmware/releases, such as
 `flipper-z-f7-update-mntm-012.tgz`.
 
-Download the package into the folder of the install, and run the script with it and with the
-backup, named by its path on the card:
+Download the package into the folder of the install from a terminal, as under The downloads, so
+that no browser unpacks it. For the official 1.4.3:
+
+```bash
+curl -L -O https://update.flipperzero.one/builds/firmware/1.4.3/flipper-z-f7-update-1.4.3.tgz
+```
+
+Then run the script with it and with the backup, named by its path on the card:
 
 ```bash
 .venv/bin/python install.py --package flipper-z-f7-update-1.4.3.tgz --restore /ext/backup-2026-10-11.tar
