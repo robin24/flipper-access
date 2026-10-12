@@ -11,21 +11,22 @@ then info device after the wait, and never loader, power, input, sysctl or sr vo
 the extract is wrapped in sr voice off and sr voice on, from any other firmware no sr command is
 sent; verify against a release.json; the wait for the port, which names the PIN that a Flipper asks
 for again when it restarts; an update command refused while an application is open, whose sentence
-says to press Back until the Flipper says Home screen; a console that gives its prompt and then
-answers nothing, and a run stopped with Ctrl-C, whose sentences say to restart the Flipper; and
-every failure, a storage error in an upload among them, ends in one sentence that names the step,
-exit code 1, and no traceback, and the last check is that every failure message the checks made has
-one sentence-ending full stop. The voice through a card reader is checked with temporary folders as
-the volumes, a stand-in user who moves the card when asked and presses Enter, and a stand-in card
-that leaves the stand-in Flipper, whose storage commands then say internal error, comes back after
-the eject, and gets a ._ file beside everything unpacked onto it, as macOS does: find_card and the
-volumes, unpack_to_card in the pack's order and refusing an entry that leaves the volume (Windows
-names too), remove_appledouble, eject, the marker and the markers of earlier runs, the look for the
-card that starts only after Enter and ends in one sentence without USB, a card mounted read-only,
-the console closed while the card is out, the wait after the card is back for a port that stays
-listed, with internal error taken for not yet, a port that vanishes after the first answer and comes
-back, a console that stops answering, and the time-out with the Flipper's last reason, the ._ files
-removed over the console, and the questions of a run without --yes.
+says to press Back until the Flipper says Home screen; a card that is missing, unreadable or full at
+the backup's first card command, whose sentence says what to check; a console that gives its prompt
+and then answers nothing, and a run stopped with Ctrl-C, whose sentences say to restart the Flipper;
+and every failure, a storage error in an upload among them, ends in one sentence that names the
+step, exit code 1, and no traceback, and the last check is that every failure message the checks
+made has one sentence-ending full stop. The voice through a card reader is checked with temporary
+folders as the volumes, a stand-in user who moves the card when asked and presses Enter, and a
+stand-in card that leaves the stand-in Flipper, whose storage commands then say internal error,
+comes back after the eject, and gets a ._ file beside everything unpacked onto it, as macOS does:
+find_card and the volumes, unpack_to_card in the pack's order and refusing an entry that leaves the
+volume (Windows names too), remove_appledouble, eject, the marker and the markers of earlier runs,
+the look for the card that starts only after Enter and ends in one sentence without USB, a card
+mounted read-only, the console closed while the card is out, the wait after the card is back for a
+port that stays listed, with internal error taken for not yet, a port that vanishes after the first
+answer and comes back, a console that stops answering, and the time-out with the Flipper's last
+reason, the ._ files removed over the console, and the questions of a run without --yes.
 Needs pyserial. Run from the project root: python3 tests/fbt/test_install.py"""
 import contextlib
 import importlib.util
@@ -1045,6 +1046,22 @@ with tempfile.TemporaryDirectory() as tmp:
     code, lines, err = run(flipper, full_run)
     check(code == 1 and "back up" in lines[-1] and main_commands(flipper.sent)[-1].startswith("update backup"),
           f"a failed backup stops the run: {lines[-1:]}")
+    # No card in the Flipper, one it cannot read, or a full one: the first card command, the stat in
+    # the backup step, gets the device's bare words, and the sentence adds what to check
+    no_card = "check that a microSD card, formatted on the Flipper, is in the Flipper"
+    for reply, advice in ((CARD_OUT, no_card), (NOT_READY, no_card), (DENIED, "the card may be full"),
+                          ("Storage error: invalid parameter\r\n", None)):
+        flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+        flipper.card_out = True
+        flipper.out_reply = reply
+        code, lines, err = run(flipper, full_run)
+        said = lines[-1] if lines else ""
+        device = reply.strip().removeprefix("Storage error: ")
+        check(code == 1 and said.startswith(f"Could not back up the Flipper's internal storage: {device}: /ext/backup-")
+              and (said.endswith(f"; {advice}.") if advice else "microSD" not in said and "full" not in said)
+              and len(re.findall(r"[.?!](?=\s|$)", said)) == 1 and main_commands(flipper.sent) == ["info device"]
+              and no_traceback(lines, err),
+              f"the first card command's {device!r}: the sentence adds {advice!r}: {said}")
 
     # An application is open on the Flipper: the update commands are refused, and the sentence says
     # to press Back to the home screen and then to run the script again: until it says Home screen

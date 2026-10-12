@@ -117,6 +117,11 @@ APP_OPEN = "this command cannot be run while an application is open"
 # command, as one that a run stopped with Ctrl-C left in the middle of a storage write_chunk or
 # a storage extract: flipper_cli's advice for a console that gives no prompt
 STUCK = f"{flipper_cli.RESTART_ADVICE}, then run this script again"
+# What to check when the first command on the card, the stat in the backup step, fails with one of
+# these device sentences: a Flipper without a card, or with one it cannot read, says internal error
+# or filesystem not ready, and a full card says access denied
+NO_CARD = "check that a microSD card, formatted on the Flipper, is in the Flipper"
+CARD_ADVICE = {"internal error": NO_CARD, "filesystem not ready": NO_CARD, "access denied": "the card may be full"}
 
 
 class InstallError(Exception):
@@ -332,14 +337,22 @@ def backup(storage, date, sonar=False):
     """Back up the Flipper's internal storage to the card with `update backup` and return the
     backup's path, /ext/backup-<date>.tar, or backup-<date>-2.tar and so on when that name is
     taken: an earlier backup, perhaps the one from before Sonar, is never overwritten. sonar: Sonar
-    runs, for the advice when an application is open."""
+    runs, for the advice when an application is open. The stat of the name is the install's first
+    command on the card, so its sentence says what to check when the card is missing, cannot be
+    read or is full (CARD_ADVICE)."""
     what = "back up the Flipper's internal storage"
     with _step(what):
         path = f"/ext/backup-{date}.tar"
         number = 2
-        while storage.exists(path):
-            path = f"/ext/backup-{date}-{number}.tar"
-            number += 1
+        try:
+            while storage.exists(path):
+                path = f"/ext/backup-{date}-{number}.tar"
+                number += 1
+        except StorageError as e:
+            advice = next((more for said, more in CARD_ADVICE.items() if str(e).startswith(f"{said}: ")), None)
+            if advice is None:
+                raise
+            raise InstallError(_and(_sentence(what, e), advice)) from None
         reply = storage.command(f"update backup {path}", timeout=COMMAND_SECONDS)
     if "Result: OK" not in reply:
         raise InstallError(_sentence(f"{what} to {path}", _device_reason(reply, sonar)))

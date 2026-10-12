@@ -287,6 +287,11 @@ overwritten: while a file of that name exists, the script tries `backup-<date>-2
 storage stat "/ext/backup-<date>.tar"
 ```
 
+This is the install's first command on the card. A Flipper without a card, or with one it cannot
+read, answers it with `internal error` or `filesystem not ready`, and the script's sentence then
+adds to check that a microSD card, formatted on the Flipper, is in the Flipper. When the answer is
+`access denied`, the sentence adds that the card may be full.
+
 The first name for which the path is not there is used:
 
 ```
