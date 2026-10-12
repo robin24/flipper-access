@@ -289,7 +289,11 @@ The steps, in order:
 
 When a step fails, the script says in one sentence which step it was and the reason the Flipper
 gave, and stops. Running it again is safe: the clips of the voice are overwritten, the folders are
-kept, and the update package is replaced.
+kept, and the update package is replaced. Once the script has said that the voice is on the card, a
+run again may leave out `--voice`, which saves the voice's time. Over USB, that is the line that
+starts with "The voice pack is unpacked", not the earlier "The voice pack is on the card", which
+comes before the unpacking; through a card reader, it is the line "The Flipper sees the card with
+the voice on it".
 
 Through a card reader, the steps go like this:
 
