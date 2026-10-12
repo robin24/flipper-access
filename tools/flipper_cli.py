@@ -24,7 +24,11 @@ import time
 try:
     import serial
 except ImportError:
-    sys.exit("pyserial is missing. Run: .venv/bin/pip install pyserial  (or use .venv/bin/python)")
+    sys.exit(
+        "The Python package pyserial is missing; install it with .venv/bin/pip install pyserial, or with "
+        ".venv\\Scripts\\pip install pyserial on Windows, and run the script with .venv/bin/python, or "
+        ".venv\\Scripts\\python on Windows."
+    )
 
 # What a port that is gone raises. pyserial's SerialException is an OSError, but on a Mac or Linux
 # the call that clears the input buffer is a bare termios call, whose termios.error is not one.
@@ -97,10 +101,22 @@ def open_port(port, timeout=0.1):
     except serial.SerialException as e:
         if e.errno in (errno.EACCES, errno.EPERM):
             sys.exit(
-                f"cannot open {port}: {e}; this computer's user may not use the port, so on Linux add the user to the "
-                "group that owns it, which is dialout on Debian, Ubuntu and Fedora and uucp on Arch, then log in again."
+                f"Could not open {port}: {_port_reason(e)}; this computer's user may not use the port, so on Linux add "
+                "the user to the group that owns it, which is dialout on Debian, Ubuntu and Fedora and uucp on Arch, "
+                "then log in again."
             )
-        sys.exit(f"cannot open {port}: {e}; close qFlipper or any other tool that uses it.")
+        sys.exit(f"Could not open {port}: {_port_reason(e)}; close qFlipper or any other tool that uses it.")
+
+
+def _port_reason(error):
+    """Why a port could not be opened, in the system's words alone. pyserial wraps them in a text
+    that names the port and the error number again: on a Mac and Linux its SerialException carries
+    the error number, whose words are taken; on Windows it has only the text, which ends in the
+    system's error, such as PermissionError(13, 'Access is denied.', None, 5)."""
+    if error.errno:
+        return os.strerror(error.errno)
+    windows = re.search(r"\(\d+, '(.+?)\.?', ", str(error))
+    return windows.group(1) if windows else str(error)
 
 
 def _read_to_prompt(ser, seconds):

@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """tools/flipper_cli.py's port: found by the Flipper's USB id, a port that names Flipper before
-another board with ST's id, others left out; an explicit port, then FLIPPER_PORT, then the id,
-then the Mac's device name; one sentence and exit without any, which names the PIN lock, the
-updater and qFlipper; and opened for one tool alone, so a second open of the same port stops with
-one sentence instead of sharing it, while a port this computer's user may not open gets a sentence
-that names the group to join on Linux instead of qFlipper. The console's open,
-against a stand-in port with the Flipper's console behind it: DTR is dropped for half a second
-and raised, the banner that the new session prints is read to its prompt and is never part of the
-first command's reply, a console that answered nothing until then answers, a console that gives
-no prompt to DTR gets one carriage return, and one that gives none at all, or whose port goes
-away, ends in one sentence with the port closed. Needs pyserial. Run from the project root:
+another board with ST's id, others left out; an explicit port, then FLIPPER_PORT, then the id, then
+the Mac's device name; one sentence and exit without any, which names the PIN lock, the updater and
+qFlipper; and opened for one tool alone, so a second open of the same port stops with one sentence
+instead of sharing it, while a port this computer's user may not open gets a sentence that names the
+group to join on Linux instead of qFlipper; each such sentence starts with a capital letter and
+gives the system's reason once, without pyserial's wrapping, Windows' included; and without
+pyserial, one sentence names the virtual environment's pip in both forms. The console's open,
+against a stand-in port with the Flipper's console behind it: DTR is dropped for half a second and
+raised, the banner that the new session prints is read to its prompt and is never part of the first
+command's reply, a console that answered nothing until then answers, a console that gives no prompt
+to DTR gets one carriage return, and one that gives none at all, or whose port goes away, ends in
+one sentence with the port closed. Needs pyserial. Run from the project root:
 python3 tests/fbt/test_flipper_cli.py"""
 import errno
 import importlib.util
 import os
 import re
+import subprocess
 import sys
 import time
 from types import SimpleNamespace
@@ -91,8 +94,11 @@ else:
         if saved[2] is not None:
             os.environ["FLIPPER_PORT"] = saved[2]
 
+    # Each sentence of open_port starts with a capital letter and gives the system's reason once,
+    # without pyserial's own wrapping of it, which names the port and the error number again
     said = exits(fc.open_port, "/dev/no-such-port")
-    check(said is not None and said.startswith("cannot open /dev/no-such-port") and one_sentence(said),
+    check(said is not None and said.startswith("Could not open /dev/no-such-port: No such file or directory; ")
+          and said.count("/dev/no-such-port") == 1 and "Errno" not in said and one_sentence(said),
           f"a port that is not there, in one sentence: {said}")
     if os.name == "posix":
         # A pseudo-terminal stands in for the device: opened once, a second open is refused
@@ -100,7 +106,8 @@ else:
         name = os.ttyname(slave)
         first = fc.open_port(name)
         said = exits(fc.open_port, name)
-        check(said is not None and "close qFlipper or any other tool that uses it" in said and one_sentence(said),
+        check(said is not None and said.startswith(f"Could not open {name}: ") and said.count(name) == 1
+              and "Errno" not in said and "close qFlipper or any other tool that uses it" in said and one_sentence(said),
               f"a port another tool has is named at once, in one sentence: {said}")
         first.close()
         again = fc.open_port(name)
@@ -122,6 +129,9 @@ else:
 
             fc.serial.Serial = refused
             said = exits(fc.open_port, "/dev/ttyACM0")
+            check(said is not None and said.startswith(f"Could not open /dev/ttyACM0: {os.strerror(code)}; ")
+                  and said.count("/dev/ttyACM0") == 1 and "Errno" not in said,
+                  f"{errno.errorcode[code]}: the system's reason once, without pyserial's wrapping: {said}")
             if code == errno.EBUSY:
                 check(said is not None and "close qFlipper or any other tool that uses it" in said and "dialout" not in said
                       and one_sentence(said), f"a port another program holds: the qFlipper advice: {said}")
@@ -130,8 +140,28 @@ else:
                       and "dialout on Debian, Ubuntu and Fedora" in said and "uucp on Arch" in said and "log in again" in said
                       and "qFlipper" not in said and one_sentence(said),
                       f"{errno.errorcode[code]}: the user may not use the port, and the group to join on Linux: {said}")
+        # On Windows pyserial's exception carries no error number, only its text with the system's
+        def refused_on_windows(port, baudrate, timeout=None, exclusive=None):
+            raise serial.SerialException(f"could not open port {port!r}: PermissionError(13, 'Access is denied.', None, 5)")
+
+        fc.serial.Serial = refused_on_windows
+        said = exits(fc.open_port, "COM5")
+        check(said == "Could not open COM5: Access is denied; close qFlipper or any other tool that uses it.",
+              f"Windows: the system's words alone: {said}")
     finally:
         fc.serial.Serial = saved_serial
+
+    # Without pyserial: one sentence that names the virtual environment's pip, as a Mac or Linux and
+    # as Windows call it, and exit
+    found = subprocess.run(
+        [sys.executable, "-I", "-c",
+         f"import sys; sys.modules['serial'] = None; sys.path.insert(0, {os.path.join(ROOT, 'tools')!r}); import flipper_cli"],
+        capture_output=True, text=True,
+    )
+    said = found.stderr.strip()
+    check(found.returncode == 1 and one_sentence(said) and ".venv/bin/pip install pyserial" in said
+          and ".venv\\Scripts\\pip install pyserial" in said and said[:1].isupper(),
+          f"no pyserial: one sentence with both forms of the venv's pip: {found.returncode}, {said!r}")
 
     # The console's open, against a stand-in port
     import serial

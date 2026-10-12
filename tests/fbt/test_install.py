@@ -229,11 +229,10 @@ class Flipper:
         """flipper_cli.open_port: the port, or its one sentence and exit when it is not there."""
         if self.taken:
             self.taken -= 1
-            sys.exit(f"cannot open {port}: [Errno 35] Could not exclusively lock port {port}: [Errno 35] Resource "
-                     "temporarily unavailable; close qFlipper or any other tool that uses it.")
+            sys.exit(f"Could not open {port}: Resource temporarily unavailable; close qFlipper or any other tool that uses it.")
         if port not in {PORT, *self.aliases} or (self.updated and self.never_back) or self.absent:
             self.absent = max(0, self.absent - 1)
-            sys.exit(f"cannot open {port}: [Errno 2] could not open port {port}; close qFlipper or any other tool that uses it.")
+            sys.exit(f"Could not open {port}: No such file or directory; close qFlipper or any other tool that uses it.")
         connection = Connection(self)
         if self.silent_opens:
             self.silent_opens -= 1

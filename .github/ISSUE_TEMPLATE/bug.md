@@ -24,10 +24,22 @@ folder of a release, this command prints them:
 .venv/bin/python flipper_cli.py "info device"
 ```
 
+On Windows, the same is:
+
+```bash
+.venv\Scripts\python flipper_cli.py "info device"
+```
+
 From a clone of this repository, the command is:
 
 ```bash
 .venv/bin/python tools/flipper_cli.py "info device"
+```
+
+On Windows, the same is:
+
+```bash
+.venv\Scripts\python tools\flipper_cli.py "info device"
 ```
 
 Copy only those two lines, since the rest of `info device` names your Flipper and gives its unique
@@ -48,10 +60,22 @@ From the install's folder of a release:
 .venv/bin/python flipper_cli.py "sr status"
 ```
 
+On Windows:
+
+```bash
+.venv\Scripts\python flipper_cli.py "sr status"
+```
+
 From a clone of this repository:
 
 ```bash
 .venv/bin/python tools/flipper_cli.py "sr status"
+```
+
+On Windows:
+
+```bash
+.venv\Scripts\python tools\flipper_cli.py "sr status"
 ```
 
 ## Anything else

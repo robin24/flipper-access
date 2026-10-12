@@ -184,6 +184,15 @@ is:
 sha256sum -c --ignore-missing SHA256SUMS
 ```
 
+On Windows, `certutil` prints the checksum of one file, which you compare with that file's line in
+`SHA256SUMS`. For the update package:
+
+```bash
+certutil -hashfile flipper-z-f7-update-sonar-0.1.0.tgz SHA256
+```
+
+Do the same for the voice and the install zip, with their names in place of the package's.
+
 Unpack the install zip in the same folder. From a terminal in that folder, on a Mac or Linux:
 
 ```bash
