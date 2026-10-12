@@ -31,9 +31,10 @@ firmware, Momentum and Sonar, so a blank card works too. The steps:
      before, `sr voice on` after), so that it opens no clip that the unpacking replaces; if the
      script stops, the voice comes back by itself.
 4. Send the --package to /ext/update/<name>/ and start it with `update install`.
-5. Wait, up to 15 minutes, while the Flipper restarts, updates itself and restarts again. Then
-   read `info device` again and compare the firmware with --release (the release's release.json)
-   or, without it, with the package's folder name.
+5. Wait, up to 15 minutes, while the Flipper restarts, updates itself and restarts again. A
+   Flipper with a PIN asks for it again when it restarts, and the wait goes on until it is
+   entered. Then read `info device` again and compare the firmware with --release (the
+   release's release.json) or, without it, with the package's folder name.
 6. With --restore, put the internal storage back from a backup with `update restore`.
 7. Remove the older update packages of Sonar from the card, as card_prune.py does.
 
@@ -952,13 +953,17 @@ def _probe(port):
     return storage
 
 
-def wait_for_device(timeout, say, port=None):
+def wait_for_device(timeout, say, port=None, voice=False):
     """Wait for the Flipper to come back after `update install` and return a Storage on its
     console. Its port is missing for most of the update, and comes and goes as it restarts, for
-    as long as timeout seconds; port: the port to wait for, else any Flipper's. An InstallError
-    with one sentence when it is not back in time."""
+    as long as timeout seconds; port: the port to wait for, else any Flipper's. A Flipper with a
+    PIN locks itself again when it restarts, as Momentum and Sonar do by default, and its console
+    is off until the PIN is entered, so the wait goes on meanwhile. An InstallError with one
+    sentence when it is not back in time, which names the PIN beside an update that still runs;
+    voice: the run put a voice pack on the card, so a run again may leave it out."""
     say("Waiting for the Flipper. It restarts, updates itself and restarts again, silent all the while; "
-        f"this takes a few minutes, and at most {_duration(timeout)}.")
+        f"this takes a few minutes, and at most {_duration(timeout)}. A Flipper with a PIN asks for it again when "
+        "it restarts, and this script waits until it is entered.")
     time.sleep(RESTART_SECONDS)
     started = time.monotonic()
     deadline = started + timeout
@@ -970,10 +975,13 @@ def wait_for_device(timeout, say, port=None):
             return storage
         now = time.monotonic()
         if now >= deadline:
-            raise InstallError(
-                f"Could not finish the update: the Flipper did not come back within {_duration(timeout)}; if it is still "
-                "updating, let it finish, then run this script again."
-            )
+            again = ", and leave out --voice, since the voice is on the card already" if voice else ""
+            raise InstallError(_sentence(
+                "finish the update",
+                f"the Flipper did not come back within {_duration(timeout)}, though the firmware may be installed "
+                "already; if it is still updating, let it finish, and if it is locked with its PIN, enter the PIN, "
+                f"then run this script again{again}",
+            ))
         if now >= next_note:
             say(f"Still waiting for the Flipper, {_duration(now - started)} so far.")
             next_note = now + PROGRESS_SECONDS
@@ -1225,7 +1233,8 @@ def _install(args, say):
                 say("Starting the update.")
                 start_update(storage, folder, sonar)
                 say("The Flipper is restarting to install the update.")
-                storage = wait_for_device(WAIT_SECONDS, say, port=args.port or os.environ.get("FLIPPER_PORT"))
+                storage = wait_for_device(WAIT_SECONDS, say, port=args.port or os.environ.get("FLIPPER_PORT"),
+                                          voice=bool(packs))
                 with _step("read the Flipper's device information after the update"):
                     info = read_info(storage)
                 say(describe(info))

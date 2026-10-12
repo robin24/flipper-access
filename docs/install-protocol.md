@@ -615,7 +615,10 @@ connection:
 The Flipper restarts, runs the updater, which unpacks the firmware and the resources, and restarts.
 It may restart more than once: a radio stack update adds restarts and minutes. The console is silent
 or missing during all of it. The script waits for at most 15 minutes, which is 900 seconds, and says
-that it waits and how long that may take.
+that it waits and how long that may take. It also says that a Flipper with a PIN asks for it again
+when it restarts, and that the script waits until it is entered. Momentum and Sonar lock themselves
+with the PIN at every start when one is set, which is Momentum's default, and a locked Flipper's
+console is off, so its port stays missing until the PIN is entered.
 
 The steps of the wait:
 
@@ -638,8 +641,11 @@ info device
 5. When the console is back, the quiet limit is set to 30 seconds again.
 
 While it waits, the script says a line about once a minute, with the time so far. After 900 seconds
-it stops with a sentence that says that the Flipper did not come back and that, if it is still
-updating, the user should let it finish and run the script again.
+it stops with a sentence that says that the Flipper did not come back, though the firmware may be
+installed already, and that the user should let the update finish if it is still running, enter the
+PIN if the Flipper is locked with it, and run the script again. When the run put a voice pack on
+the card, the sentence adds that the next run may leave out `--voice`, since the voice is on the
+card already.
 
 ### The second `info device` and the comparison
 

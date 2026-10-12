@@ -83,8 +83,9 @@ Sonar, and with a blank card too. To build the firmware yourself instead, see Bu
 
 - The Flipper Zero with a microSD card in it, and a USB cable to the computer. The Flipper must be
   unlocked, since a Flipper locked with a PIN closes its console, and on its home screen, since it
-  refuses the backup and the update while an application is open. qFlipper must be closed, since
-  only one program at a time can use the Flipper's port.
+  refuses the backup and the update while an application is open. A Flipper with a PIN asks for
+  it again when it restarts after the update, and the script waits until it is entered. qFlipper
+  must be closed, since only one program at a time can use the Flipper's port.
 - A computer with macOS, Linux or Windows, and Python 3.10 or newer. The script needs one Python
   package, pyserial, and nothing else.
 - A card reader for microSD cards in the computer, if you have one. It is not needed, but the
@@ -224,7 +225,12 @@ The steps, in order:
 6. It sends the update package to the card and starts the update. The Flipper restarts, updates
    itself and restarts again, silent all the while. The script waits for it, up to 15 minutes,
    and says a line about once a minute. Coming from other firmware, the update may also replace
-   the Bluetooth radio's stack, which adds a restart and a few minutes.
+   the Bluetooth radio's stack, which adds a restart and a few minutes. A Flipper with a PIN asks
+   for it again when it restarts, and the script waits until it is entered. When the Flipper is
+   not back within 15 minutes, the script stops, and says that the firmware may be installed
+   already: let the update finish if it is still running, enter the PIN if the Flipper is locked
+   with it, and run the script again. That run may leave out `--voice`, since the voice is on the
+   card by then.
 7. It reads the firmware again and says whether the Flipper runs the release.
 8. It removes Sonar's older update packages from the card. The packages of other firmware, such
    as the official one, stay.

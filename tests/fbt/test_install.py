@@ -9,11 +9,12 @@ command. The checks: describe names Sonar, Momentum and the official firmware; a
 info device, update backup, the voice pack, storage extract, the update package and update install
 in that order, then info device after the wait, and never loader, power, input, sysctl or sr voice
 use; from Sonar the extract is wrapped in sr voice off and sr voice on, from any other firmware
-no sr command is sent; verify against a release.json; the wait for the port; an update command
-refused while an application is open, whose sentence says to press Back until the Flipper says
-Home screen; and every failure, a storage error in an upload among them, ends in one sentence
-that names the step, exit code 1, and no traceback, and the last check is that every failure
-message the checks made has one sentence-ending full stop. The voice through a card reader is
+no sr command is sent; verify against a release.json; the wait for the port, which names the PIN
+that a Flipper asks for again when it restarts; an update command refused while an application is
+open, whose sentence says to press Back until the Flipper says Home screen; and every failure, a
+storage error in an upload among them, ends in one sentence that names the step, exit code 1, and
+no traceback, and the last check is that every failure message the checks made has one
+sentence-ending full stop. The voice through a card reader is
 checked with temporary folders as the volumes, a stand-in user who moves the card when asked and
 presses Enter, and a stand-in card that leaves the stand-in Flipper, whose storage commands then
 say internal error, comes back after the eject, and gets a ._ file beside everything unpacked
@@ -960,6 +961,24 @@ with tempfile.TemporaryDirectory() as tmp:
     check(error is not None and time.monotonic() - started >= 0.3, f"a port that never comes back: {error!r}")
     check(error is not None and "\n" not in str(error) and str(error).endswith("."), f"one sentence: {error}")
     check(any("Still waiting" in line for line in said), f"it says it is still waiting meanwhile: {said[-2:]}")
+    # A Flipper with a PIN locks itself again when it restarts, which turns its console off: the
+    # first line says so, and the sentence at the limit names the lock beside an update that is
+    # still running, and does not send the user through the whole install again
+    check(said and "Flipper with a PIN asks for it again when it restarts" in said[0] and "waits until it is entered" in said[0],
+          f"the wait's first line says that a PIN is asked for again and waited for: {said[:1]}")
+    said = str(error)
+    check(error is not None and "still updating" in said and "locked with its PIN, enter the PIN" in said
+          and "may be installed already" in said and "run this script again" in said and "--voice" not in said,
+          f"the sentence at the limit names the PIN lock and says the firmware may be installed already: {error}")
+    try:
+        install.wait_for_device(0.1, [].append, voice=True)
+        error = None
+    except install.InstallError as e:
+        error = e
+    said = str(error)
+    check(error is not None and "leave out --voice, since the voice is on the card already" in said
+          and len(re.findall(r"[.?!](?=\s|$)", said)) == 1,
+          f"after a voice pack, a run again may leave out --voice, in the same one sentence: {error}")
     # A port named with --port is waited for by its name, without the port list
     flipper = Flipper(SONAR_RELEASE)
     plug(flipper)
@@ -980,6 +999,7 @@ with tempfile.TemporaryDirectory() as tmp:
     code, lines, err = run(flipper, full_run, wait=0.2)
     check(code == 1 and "did not come back" in lines[-1] and no_traceback(lines, err),
           f"a whole run whose Flipper never comes back: {code}, {lines[-1:]}")
+    check("PIN" in lines[-1] and "leave out --voice" in lines[-1], f"after its voice pack, the PIN and --voice are named: {lines[-1:]}")
     check(main_commands(flipper.sent)[-1] == update, f"nothing after update install: {main_commands(flipper.sent)[-2:]}")
 
     # A storage error in an upload: the step and the device's sentence, exit 1, no traceback
