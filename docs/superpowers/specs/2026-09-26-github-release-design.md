@@ -207,9 +207,12 @@ Steps:
    `update restore`.
 3. Put the voice on the card. The script asks which way, through a card reader or over USB,
    and the card reader is the default answer (Robin, 2026-09-28, the review's question 2):
-   - Through a card reader, about a minute for the voice: the script first writes a small
-     marker file to the card over USB, then asks the user to take the microSD card out of the
-     Flipper and put it into the computer's card reader. It finds the card among the mounted
+   - Through a card reader, about 3 minutes for the copy of the voice's 10,537 files and 26
+     seconds for the `._` files on 2026-10-11, and 2 minutes 40 seconds for the computer's whole
+     part on 2026-10-12 (`docs/measurements/2026-10-11-installer-device-checks.txt`): the script
+     first writes a small marker file to the card over USB, then asks the user to take the
+     microSD card out of the Flipper and put it into the computer's card reader. It finds the
+     card among the mounted
      volumes by that marker, unpacks the pack onto it with Python's own tar reader, removes the
      marker, ejects the card, and asks the user to put it back into the Flipper, then waits
      until the console sees the card again. The tar reader copies no metadata, but macOS still
