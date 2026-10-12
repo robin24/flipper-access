@@ -311,15 +311,34 @@ Run the steps from the project folder; mntm-013 stands for the tag to merge.
 A release is made in two parts. The workflow `.github/workflows/release.yml` builds the firmware
 from a pushed tag and leaves a draft release with six assets. This Mac then adds the one voice
 pack, the checksums and `release.json`, and the draft is published by hand. Run the steps from the
-project folder, but for steps 6 and 7, which run in the folder of the download. `sonar-0.1.0`
-stands for the tag and `0.1.0` for its version; for a release candidate the tag is
-`sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
+project folder, but for step 6 and the first part of step 7, which run in the folder of the
+download. `sonar-0.1.0` stands for the tag and `0.1.0` for its version; for a release candidate the
+tag is `sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
 
-1. Tag the fork's commit and push the tag. The fork's checkout must be on the commit that the
-   project records, so `git status` shows no change for `Momentum-Firmware`. Then tag the project
-   with the same name and push that tag, which starts the workflow. The workflow fails before the
-   build unless the fork has the tag on the recorded commit, and it fails if a release of the tag
-   exists already, a draft included.
+1. Write the release's entry in `CHANGELOG.md` first: its version, with the day of the tag in place
+   of `YYYY-MM-DD`, and what the release changes, since the release notes send readers to the
+   changelog at the tag. A release candidate's tag has the entry of the version it leads to, and the
+   final tag the same entry with its own day. Merge the entry into `main` with a pull request, as
+   every change. The project's commit to tag is the merged commit on `main` whose submodule pointer
+   is the fork's commit to tag, so check that commit out, with the submodule on the commit it
+   records:
+
+   ```bash
+   git switch main
+   ```
+
+   ```bash
+   git pull
+   ```
+
+   ```bash
+   git submodule update Momentum-Firmware
+   ```
+
+   `git status` must then show no change for `Momentum-Firmware`. Tag the fork's commit and push
+   the tag, then tag the project with the same name and push that tag, which starts the workflow.
+   The workflow fails before the build unless the fork has the tag on the recorded commit, and it
+   fails if a release of the tag exists already, a draft included.
 
    ```bash
    git -C Momentum-Firmware tag -a sonar-0.1.0 -m "sonar-0.1.0"
@@ -383,17 +402,18 @@ stands for the tag and `0.1.0` for its version; for a release candidate the tag 
    gh release download sonar-0.1.0 --dir /tmp/sonar-0.1.0-check
    ```
 
-   The commands of this step and the next run in that folder:
+   The commands of this step and of step 7, up to its last checks, run in that folder:
 
    ```bash
    cd /tmp/sonar-0.1.0-check
    ```
 
    Check the files against `SHA256SUMS`. Each of the seven assets should say OK; `SHA256SUMS` and
-   `release.json` are not among the checksums:
+   `release.json` are not among the checksums. Every asset was downloaded, so the check has no
+   `--ignore-missing`, and an asset that is missing fails it:
 
    ```bash
-   shasum -a 256 -c --ignore-missing SHA256SUMS
+   shasum -a 256 -c SHA256SUMS
    ```
 
 7. Install the draft's own files on the Flipper, as the README's Install describes, so that the
@@ -423,11 +443,14 @@ stands for the tag and `0.1.0` for its version; for a release candidate the tag 
    .venv/bin/python install.py --package flipper-z-f7-update-sonar-0.1.0.tgz --voice voice-heart-sonar-0.1.0.tar --release release.json
    ```
 
-   The script ends with "The Flipper runs the firmware of the release." and "Done". Then check on
-   the Flipper. `info device` gives the tag as `firmware.version`, `sonar-0.1.0`; as
-   `firmware.commit.hash`, the first 8 characters of the release's commit, `firmware_commit` in
-   `release.json`; `firmware.commit.dirty` false; and `firmware.origin.fork` Sonar. Copy none of
-   its other lines into a committed file, since they name the device:
+   Near its end the script says "The Flipper runs the firmware of the release.", then the lines of
+   the prune: one for each older update package it removes and one with how many it removed, or
+   "There are no older update packages to remove.". Its last line is "Done, after" with the time it
+   took, such as 32 minutes. Then check on the Flipper. `info device` gives the tag as
+   `firmware.version`, `sonar-0.1.0`; as `firmware.commit.hash`, the first 8 characters of the
+   release's commit, `firmware_commit` in `release.json`; `firmware.commit.dirty` false; and
+   `firmware.origin.fork` Sonar. Copy none of its other lines into a committed file, since they
+   name the device:
 
    ```bash
    .venv/bin/python flipper_cli.py "info device"
@@ -449,6 +472,48 @@ stands for the tag and `0.1.0` for its version; for a release candidate the tag 
    ```
 
    Back and Up on the home screen then says "Home screen" in the heart voice.
+
+   Last, the checks of R7 and of section 10 of the release spec, with the project's own virtual
+   environment and tools. They run in the project folder, and `cd -` goes back there from the
+   folder of the download:
+
+   ```bash
+   cd -
+   ```
+
+   The RAM probe restarts the Flipper and opens the core apps one by one. None may crash it, so no
+   line says "DEVICE REBOOTED" or "CONSOLE STOPPED ANSWERING":
+
+   ```bash
+   .venv/bin/python tools/ram_probe.py
+   ```
+
+   The reader's scripted check starts on the home screen and must end with "0 failures":
+
+   ```bash
+   .venv/bin/python tools/sr_drive.py
+   ```
+
+   Then the speech line of `sr status` must say "underruns 0", for all that was spoken since the
+   probe's restart:
+
+   ```bash
+   .venv/bin/python tools/flipper_cli.py "sr status"
+   ```
+
+   The release's elf must turn an address into a line of code. `nm` gives the address of a known
+   function, `screen_reader_is_enabled`, as the first word of its line, such as 0809dcc0:
+
+   ```bash
+   Momentum-Firmware/toolchain/current/bin/arm-none-eabi-nm /tmp/sonar-0.1.0-check/sonar-0.1.0-firmware.elf | grep " screen_reader_is_enabled$"
+   ```
+
+   addr2line, given that address with 0x in front of it in place of 0x0809dcc0, must name
+   `screen_reader_is_enabled` and a line of `screen_reader.c`:
+
+   ```bash
+   Momentum-Firmware/toolchain/current/bin/arm-none-eabi-addr2line -e /tmp/sonar-0.1.0-check/sonar-0.1.0-firmware.elf -f -a 0x0809dcc0
+   ```
 
 8. Read the release notes on the draft's page on GitHub, then publish the draft there by hand. No
    script publishes a release, and a release that is published is not finalised again.
