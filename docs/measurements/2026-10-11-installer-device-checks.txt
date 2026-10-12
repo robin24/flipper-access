@@ -6,7 +6,7 @@ Firmware: 9149fe493 on the device at the start of the first run, the tip of clau
 Installer: tools/install.py at 3dc3cff9b for the first run; at 9b2b22b1a, which has the card reader way of Task 5, for the runs of 15:23 to 16:15 on 2026-10-11; at abc1e2359, the end of Task 5b, for the runs from 17:45 on 2026-10-11 and for the run of 2026-10-12.
 Device: R0skie on /dev/cu.usbmodemflip_R0skie1. Host: a Mac, with the card in a microSD adapter in the Mac's built-in SD card reader, where it mounts as /Volumes/Flipper SD. Card: exFAT, label Flipper SD.
 Pack: voice-heart-sonar-0.0.0.tar, 111.3 megabytes (116,705,280 bytes), 10,604 entries: 67 folders and 10,537 files.
-The logs of the runs were kept outside the repository. Lines quoted from them are verbatim. The log of the first run has no clock but its start and its end; the logs of the runs up to 16:15 on 2026-10-11 have the time of each line; the later logs have only the time of their start, and the times given for those runs are the shell's, noted as the runs went. Console replies are verbatim from the console tools.
+The logs of the runs were kept outside the repository. Lines quoted from them are verbatim. The log of the first run has no clock but its start and its end; the logs of the runs from 15:23 to 17:45 on 2026-10-11 have the time of each line; the logs from 18:02 on, those of the runs of 18:02:59 and 18:04:28 on 2026-10-11 and of the run of 2026-10-12, have only a line with the time of their start, and the times given for those runs are the shell's, noted as the runs went. Console replies are verbatim from the console tools.
 
 Section: The first run, a whole install over USB, 2026-10-11 05:12:00 to 05:44:07
 
@@ -34,7 +34,7 @@ Removed 4 older update packages.
 Done, after 32 minutes.
 The shell's time for the run: real 1926.91 seconds, exit 0 at 05:44:07, which is 32 minutes 7 seconds.
 The log times none of the steps except the wait for the update, whose last line said 6 minutes before the Flipper was back. The 11 and 16 minutes in it are the script's own plans, from the spike's rates, not measurements. The card already held the heart set, so the spike's figures for that case apply to the three transfers: 653 seconds to send the pack, 786 seconds to unpack it over a set that was there, 72 seconds for the update package. With the wait's 6 minutes, 360 seconds, that is 1,871 seconds, about 31 of the 32 minutes; and it is the split that the README gives: about 11 minutes to send the voice, 13 to unpack it, a minute for the package, 6 for the update.
-Afterwards, from Claude's notes of the run and not from the log: sr screen read "Firmware updated, press OK to continue", spoken for 4,029 ms, with no speech underruns. The reader was using espeak by Auto then, so the heart voice was not listened to in this run; that was left for Robin.
+Afterwards, not from the log: at 05:44, right after the install, Claude read the console. sr screen read "Firmware updated, press OK to continue", and sr status said "last utterance: 4029 ms played" and "underruns 0", with the voice set espeak, which Auto had chosen. So the heart voice was not listened to in this run; that was left for Robin.
 
 Section: Finding A, a console that did not answer, 2026-10-11 15:23
 
