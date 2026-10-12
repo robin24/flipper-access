@@ -401,7 +401,9 @@ def voice_over_usb(storage, pack, sonar, say):
     say(f"Sending the voice pack {name}, {_size(size)}, to the card. This takes {_about(size / MB * SEND_SECONDS_PER_MB)}.")
     with _step(f"send the voice pack {name} to the card"):
         storage.send_file(pack, remote, _Progress(say, "{percent} percent of the voice pack is sent."))
-    say("The voice pack is on the card.")
+    # Not "on the card": the voice is in place only after the unpacking, whose line is the one after
+    # which a run again may leave out --voice
+    say("The voice pack is sent; the Flipper unpacks it next.")
     if sonar:
         seconds = mute_seconds(size)
         with _step("turn the Flipper's voice off for the unpacking"):

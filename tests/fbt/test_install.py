@@ -855,6 +855,13 @@ with tempfile.TemporaryDirectory() as tmp:
     check(any("Sonar" in line and "mntm-dev" in line for line in lines[:4]), f"the first lines say what was found: {lines[:4]}")
     check(any("sonar-0.1.0" in line and "Sonar" in line for line in lines), "and what runs after the update")
     check(lines[-1].startswith("Done"), f"the last line says it is done: {lines[-1]}")
+    # The line after the send says that the pack is not unpacked yet, so that it is not taken for
+    # the line after which a run again may leave out --voice, which comes after the unpacking
+    sent_line = "The voice pack is sent; the Flipper unpacks it next."
+    unpacked = [i for i, line in enumerate(lines) if line.startswith("The voice pack is unpacked")]
+    check(sent_line in lines and unpacked and lines.index(sent_line) < unpacked[0]
+          and not [line for line in lines if "voice pack is on the card" in line],
+          f"the send ends with a line that says the unpacking comes next: {[l for l in lines if 'voice pack' in l]}")
     check(all("\r" not in line and line.strip() for line in lines), "plain lines, no carriage returns, none empty")
     check(all(c.is_open is False for c in flipper.connections), "every connection was closed")
     check(all(c.events[:3] == [("dtr", True), ("dtr", False), ("dtr", True)] for c in flipper.connections),
