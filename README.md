@@ -260,9 +260,8 @@ Through a card reader, the steps go like this:
    ```
 
 7. It waits until the Flipper sees the voice, up to 15 minutes, and says a line about once a
-   minute. The Flipper's USB connection can drop for some minutes just after the card goes back in;
-   the script then says that the connection was lost, and waits for it to come back. Then it
-   removes, through the Flipper, any `._` file that is left.
+   minute. If the USB connection drops meanwhile, the script says that the connection was lost,
+   and waits for it to come back. Then it removes, through the Flipper, any `._` file that is left.
 
 On a Mac, macOS may first ask whether the terminal may use the files on a removable volume; allow
 it.

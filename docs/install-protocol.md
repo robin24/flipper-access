@@ -434,9 +434,11 @@ itself.
 
 2. The script closes the console. It opens a new one only after the card is back in the Flipper, as
    step 13 describes. On 2026-10-11, with a console session open while the card went back into the
-   Flipper, `storage stat` found the file 0.67 seconds after the card went in, and a second later
-   the Flipper's USB port vanished and stayed away for about ten minutes, without a restart. The
-   cause is not known yet.
+   Flipper, the `storage stat` that found the file took 0.67 seconds, and the next one, a second
+   later, lost the connection: the Flipper's USB port vanished and stayed away for about ten
+   minutes, without a restart. A faulty USB cable was found to be the cause, and with another cable
+   the Flipper saw the card at once on 2026-10-12. The script keeps the console closed while the
+   card is out, and it keeps waiting for a port that vanishes, since any loose cable does the same.
 
 3. The script tells the user to leave the Flipper plugged in and unlocked while its card is out.
    The Flipper must not lock itself meanwhile, because the console of a Flipper that is locked with
