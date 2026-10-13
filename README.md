@@ -321,15 +321,33 @@ Through a card reader, the steps go like this:
 4. When the computer mounted the card read-only, the script stops before it writes anything. A
    microSD adapter whose lock slider is down does that: push the slider up, towards the contacts,
    put the card back into the Flipper, and run the script again.
-5. It copies the voice onto the card, removes the marker, any marker that an earlier run left, and
+5. It says which card it found and asks whether to copy the voice onto it, before it writes
+   anything to it. The line gives the card's name, where the computer mounted it, its size and its
+   free space, and says that the card holds the marker that this run wrote through the Flipper.
+   Enter alone means yes:
+
+   ```text
+   Found the card "Flipper SD" at /Volumes/Flipper SD, 64.0 gigabytes with 60.1 gigabytes free, holding the marker this run wrote through the Flipper. Copy the voice onto it? [Y/n]
+   ```
+
+   The name is the one the computer gives the card. On Windows it is the drive's label, and a drive
+   without a label is said by its letter alone. The sizes are counted as the card's label counts
+   them, so a card sold as 64 gigabytes is 64.0, and they are left out when the computer does not
+   say them. A drive without this run's marker is never taken, so the question is there for you to
+   see which drive was found before the script writes to it. Y or yes also means yes, in any case.
+   N or no means no: the script writes nothing to the card, ejects it, and stops with one sentence
+   that says that nothing was copied, and that you put the card back into the Flipper and run the
+   script again. Any other answer is asked again. When no one can answer because the input has
+   ended, that counts as no.
+6. It copies the voice onto the card, removes the marker, any marker that an earlier run left, and
    the `._` files that macOS puts beside everything it writes, and ejects the card.
-6. It asks you to put the card back and press Enter:
+7. It asks you to put the card back and press Enter:
 
    ```text
    Put the card back into the Flipper, then press Enter.
    ```
 
-7. It waits until the Flipper sees the voice, up to 15 minutes, and says a line about once a
+8. It waits until the Flipper sees the voice, up to 15 minutes, and says a line about once a
    minute. If the USB connection drops meanwhile, the script says that the connection was lost,
    and waits for it to come back. Then it removes, through the Flipper, any `._` file that is left.
 

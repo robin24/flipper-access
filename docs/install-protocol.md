@@ -273,9 +273,10 @@ Copy the voice through a card reader (faster) or over USB? [R/u]
 An answer that starts with R means the card reader and one that starts with U means USB. Anything
 else is asked again. With `--yes`, nothing is asked and the voice goes over USB. When no one can
 answer because the input has ended, nothing is changed at the first question, and the voice goes
-over USB at the second. The card reader way then asks the user twice more to press Enter: once the
-card is in the computer's card reader, and once it is back in the Flipper. Both are described
-below.
+over USB at the second. The card reader way then asks the user to press Enter twice: once the card
+is in the computer's card reader, and once it is back in the Flipper. Between the two it asks one
+more question, whether to copy the voice onto the card it found, and Enter alone means yes there
+too. All three are described below.
 
 ### The backup
 
@@ -434,7 +435,8 @@ path can be quoted before it sends the first byte.
 This takes the place of the voice over USB, at the same position in the order. It is faster, because
 the card's writes limit the USB way. It needs a card reader on the computer, and the user moves the
 card. The script says each step on its own line, and it asks the user to press Enter after each move
-of the card. No clock runs while the user moves the card. When something fails on this way, the
+of the card, and whether to copy the voice onto the card it found. No clock runs while the user
+moves the card. When something fails on this way, the
 script stops with one sentence that says what to do. It never sends the voice over USB instead by
 itself.
 
@@ -454,7 +456,7 @@ itself.
    ```
 
 2. The script closes the console. It opens a new one only after the card is back in the Flipper, as
-   step 13 describes. On 2026-10-11, with a console session open while the card went back into the
+   step 14 describes. On 2026-10-11, with a console session open while the card went back into the
    Flipper, the `storage stat` that found the file took 0.67 seconds, and the next one, a second
    later, lost the connection: the Flipper's USB port vanished and stayed away for about ten
    minutes, without a restart. A faulty USB cable was found to be the cause, and with another cable
@@ -482,7 +484,7 @@ itself.
 5. When no card was found in time, the script stops with one sentence. It says that no drive with
    the marker file turned up within 30 seconds, to put the card back into the Flipper and run the
    script again, and to answer U for USB if the computer does not show the card. The marker stays
-   on the card then, and the next run through a card reader removes it, as step 9 describes.
+   on the card then, and the next run through a card reader removes it, as step 10 describes.
 
 6. When the card was found, the script first asks the system whether it mounted the volume
    read-only, before it writes anything. On macOS and Linux this is the flag `ST_RDONLY` that
@@ -490,16 +492,57 @@ itself.
    mount the card read-only, as it did on 2026-10-11. The script then stops with one sentence: the
    card is read-only on this computer; on a microSD adapter, push the lock slider up, towards the
    contacts, put the card back into the Flipper, and run the script again. Windows has no `statvfs`,
-   so there the script cannot tell, and the first write that fails gives the sentence of step 8
+   so there the script cannot tell, and the first write that fails gives the sentence of step 9
    instead.
 
-7. Every entry of every pack is checked before any is written. An entry must be a plain file or a
+7. When the volume takes writes, the script says which card it found and asks whether to copy the
+   voice onto it, before it writes anything to it. This is one line, with the answer after it. Enter
+   alone means yes:
+
+   ```
+   Found the card "Flipper SD" at /Volumes/Flipper SD, 64.0 gigabytes with 60.1 gigabytes free, holding the marker this run wrote through the Flipper. Copy the voice onto it? [Y/n]
+   ```
+
+   The line has these parts:
+   - The name, in quotation marks, is the volume's own. On macOS and on Linux it is the last part
+     of the mount path. On Windows it is the drive's label, which the script reads with
+     `GetVolumeInformationW` through `ctypes`, a module of the standard library that the script
+     loads only on Windows. When the volume has no name, or the label cannot be read, the script
+     leaves the name out and the line says only the drive, as in `Found the card at D:\, ...`.
+   - The path is where the computer mounted the card, such as `/Volumes/Flipper SD` or `D:\`.
+   - The size and the free space come from `shutil.disk_usage` for the volume. From one gigabyte up
+     they are said in gigabytes with one decimal and thousands commas. The gigabyte is 1,000,000,000
+     bytes, as a card's label and the Finder count it, so a card sold as 64 gigabytes is said as 64.0
+     gigabytes. Less than that is said in megabytes, as the size of the update package is. When the
+     system does not give the sizes, the script leaves them out and the question is still asked.
+   - The marker is the file of step 1, which only this card holds. A drive without it is never
+     taken, so a wrong card cannot be written to. The question is there for the user, who cannot see
+     which drive was found.
+
+   The script asks through the same function as its other questions. That function gives no answer
+   when the input has ended. The answers are these:
+   - Enter alone, `y` or `yes`, in any case and with spaces round them: the script goes on with
+     step 8.
+   - `n` or `no`, in the same way: nothing is written to the card. The script ejects it, as step 12
+     describes, which writes no file, and stops with one sentence and the exit code 1: "You
+     answered no, so nothing was copied to the card; put the card back into the Flipper and run this
+     script again." The marker of this run stays on the card, and the next run through a card reader
+     removes it, as step 10 describes.
+   - Any other answer: the script says "Answer Y for yes or N for no." and asks the same question
+     again, as it does for the question about the way.
+   - No answer, because the input has ended: the same as no, with the sentence starting "No answer
+     came" instead of "You answered no".
+
+   The read-only check of step 6 comes first, so a card that is read-only is refused without being
+   asked about.
+
+8. Every entry of every pack is checked before any is written. An entry must be a plain file or a
    folder, and the real path of where it would be written, with links and `..` resolved, must stay
    inside the real path of the volume. This also holds for the names that Windows reads
    differently, those with a drive letter such as `C:\x` or with backslashes. A pack with one bad
    entry leaves the card as it was.
 
-8. The packs are written onto the volume in the order of their entries, which is the order of the
+9. The packs are written onto the volume in the order of their entries, which is the order of the
    clips. Each folder entry makes a folder, and each file entry writes a file and replaces one that
    is there. The script copies no dates, modes or owners. It says the progress about once a minute.
 
@@ -510,19 +553,19 @@ itself.
    When the writing fails, every marker file is removed from the volume as far as possible, and the
    sentence ends by saying to put the card back into the Flipper before the script is run again.
 
-9. Every file at the top of the volume whose name starts with `.sonar-install-` is removed: the
-   marker of this run, and any marker that an earlier run left, for example a run that stopped while
-   the card was out of the Flipper. A folder of that name stays. When there were older markers, the
-   script says how many it removed.
+10. Every file at the top of the volume whose name starts with `.sonar-install-` is removed: the
+    marker of this run, and any marker that an earlier run left, for example a run that stopped while
+    the card was out of the Flipper. A folder of that name stays. When there were older markers, the
+    script says how many it removed.
 
-10. macOS puts a 4 KB helper file named `._<name>` beside every file and folder that a process
+11. macOS puts a 4 KB helper file named `._<name>` beside every file and folder that a process
     writes to an exFAT card. It gives each of them the attribute `com.apple.provenance`, which exFAT
     keeps only in such a file. The script removes every file whose name starts with `._` below
     `sr/voices/<set>/` on the volume, for each set that the packs hold, and nothing else. A file
     that cannot be removed is left, and is not an error. The script says how many it removed. Files
     beside the set's folder, such as `sr/voices/._<set>`, are not touched.
 
-11. The card is ejected, so that everything the computer still holds back is written. On macOS the
+12. The card is ejected, so that everything the computer still holds back is written. On macOS the
     script runs this, with a limit of 120 seconds:
 
     ```
@@ -534,13 +577,13 @@ itself.
     to eject the card by hand and press Enter. On other systems it asks the user to eject the card
     safely and press Enter.
 
-12. The script asks, and waits for Enter:
+13. The script asks, and waits for Enter:
 
     ```
     Put the card back into the Flipper, then press Enter.
     ```
 
-13. After Enter, the script waits for the Flipper to see the card, for at most 15 minutes, which is
+14. After Enter, the script waits for the Flipper to see the card, for at most 15 minutes, which is
     900 seconds, as long as the wait after an update. The constant that holds this time is
     `CARD_BACK_SECONDS`. It says that it waits and how long that may take, and then a line about
     once a minute with the time so far. Every 2 seconds it does the next of these steps:
@@ -567,7 +610,7 @@ itself.
     - A port that vanishes, a console that cannot be opened or gives no prompt, and a reply that
       goes quiet or takes too long, close the console, and the wait goes back to waiting for the
       port. The script says that the connection was lost and that it waits for it to come back.
-      This also holds during step 14.
+      This also holds during step 15.
 
     When the time runs out, the script stops with one sentence. It says whether the Flipper's
     console was not back, or whether the Flipper did not see the file, and it keeps the last reason
@@ -577,7 +620,7 @@ itself.
     in the Flipper and that the Flipper is plugged in and unlocked, and to run the script again,
     which is safe.
 
-14. The Flipper may still list some `._` files, because they can be made again when the card is
+15. The Flipper may still list some `._` files, because they can be made again when the card is
     ejected, or because they could not be removed on the computer. The script looks for them
     through the console, with the usual quiet limit of 30 seconds again. For each set, it lists the
     set's folder and then every folder below it, depth first, each with `storage list`, and collects
@@ -599,7 +642,7 @@ itself.
     computer before, so the user can see whether the removal on the computer worked. An error line
     from the Flipper here stops the script with one sentence that names the step.
 
-The console that is open at the end of step 14 is used afterwards for the update.
+The console that is open at the end of step 15 is used afterwards for the update.
 
 ### The update package
 
