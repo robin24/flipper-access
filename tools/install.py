@@ -20,10 +20,14 @@ firmware, Momentum and Sonar, so a blank card works too. The steps:
    asks which; the card reader is the default, and --yes means USB.
    - Through a card reader: the script writes a marker file to the card; you take the microSD card
      out of the Flipper, put it into the computer's card reader and press Enter; the script finds it
-     by the marker, unpacks the packs onto it, removes the marker, any marker an earlier run left,
-     and the `._` files that macOS puts beside everything it writes, and ejects the card. You put
-     the card back and press Enter, and the script waits until the Flipper sees the voice again and
-     removes any `._` file that is left.
+     by the marker, and says which card it found, with its name, where it is mounted, its size and
+     its free space, and asks whether to copy the voice onto it. Enter alone, y or yes means yes: the
+     script unpacks the packs onto the card, removes the marker, any marker an earlier run left, and
+     the `._` files that macOS puts beside everything it writes, and ejects the card. n or no, or no
+     answer, means that nothing is written to the card: the script ejects it and ends the install
+     with a sentence that says to put the card back into the Flipper and run the script again.
+     After the copy you put the card back and press Enter, and the script waits until the Flipper
+     sees the voice again and removes any `._` file that is left.
      A card that does not turn up ends the install with a sentence that says what to do; the voice
      never goes over USB instead by itself.
    - Over USB: send the pack to /ext as one file, unpack it into /ext with `storage extract`, and
@@ -69,6 +73,7 @@ import card_prune  # noqa: E402
 from flipper_storage import EXTRACT_SECONDS_PER_MB, IDLE_SECONDS, PORT_ERRORS, Storage, StorageError  # noqa: E402
 
 MB = 1048576  # a megabyte, as EXTRACT_SECONDS_PER_MB counts it
+GB = 1_000_000_000  # a gigabyte, as a card's label and the Finder count it: a card sold as 64 reads about 64
 UPDATE_DIR = "/ext/update"
 VOICE_DEST = "/ext"  # a voice pack holds sr/voices/<set>/..., so it is unpacked into /ext
 # The seconds the wait for the updated Flipper allows. The updater restarts the Flipper twice, and
@@ -96,6 +101,9 @@ PLATFORM = sys.platform  # darwin, linux or win32
 # pressed Enter to say it is in the card reader; a Mac mounts a card within a few seconds. No clock
 # runs while the user moves the card.
 CARD_LOOK_SECONDS = 30
+# The end of the question about the card found, and all of it that is asked again
+COPY_QUESTION = "Copy the voice onto it? [Y/n]"
+LABEL_CHARS = 261  # the room a Windows drive's label is read into; the longest label has 32 characters
 # The seconds the script waits for the Flipper to see the card with the voice on it, once the user
 # has pressed Enter to say it is back in the Flipper: as long as the wait for the update. On
 # 2026-10-11 the Flipper's USB port vanished within two seconds of the card going in, and stayed
@@ -229,6 +237,15 @@ def _size(size):
     if size >= MB:
         return f"{size / MB:,.1f} megabytes"
     return _count(max(1, round(size / 1024)), "kilobyte")
+
+
+def _card_size(size):
+    """A card's size or free space, said so that the user can tell the card by it: from one gigabyte
+    up in gigabytes with one decimal, counted as the card's label and the Finder count them, so that
+    a card sold as 64 gigabytes reads about 64, and below that as _size says it."""
+    if size >= GB:
+        return f"{size / GB:,.1f} gigabytes"
+    return _size(size)
 
 
 def _about(seconds):
@@ -485,6 +502,77 @@ def volume_read_only(volume, statvfs=getattr(os, "statvfs", None), flag=getattr(
         return bool(statvfs(volume).f_flag & flag)
     except OSError:
         return None
+
+
+disk_usage = shutil.disk_usage  # the computer's word on a volume's size and free space; the tests replace it
+
+
+def _windows_label(drive):
+    """The label of the Windows drive, such as D:\\, or "" when it has none or cannot be read. The
+    standard library's ctypes calls GetVolumeInformationW, and is imported only here, where no other
+    system needs it."""
+    try:
+        import ctypes
+
+        label = ctypes.create_unicode_buffer(LABEL_CHARS)
+        if ctypes.windll.kernel32.GetVolumeInformationW(drive, label, LABEL_CHARS, None, None, None, None, 0):
+            return label.value.strip()
+    except (AttributeError, OSError):  # no windll off Windows; and a drive that does not answer
+        pass
+    return ""
+
+
+def volume_name(volume):
+    """The name the system gives the volume: the last part of its mount path on macOS and Linux, the
+    drive's label on Windows. "" when it has none."""
+    if PLATFORM == "win32":
+        return _windows_label(volume)
+    return os.path.basename(volume.rstrip("/"))
+
+
+def card_question(volume):
+    """The one line that says which card was found at volume and asks whether to copy the voice onto
+    it: its name, where it is mounted, its size and free space, and that it holds the marker that this
+    run wrote through the Flipper. The sizes are left out when the computer does not say them; the
+    name is left out when the volume has none."""
+    name = volume_name(volume)
+    called = f' "{name}"' if name else ""
+    try:
+        usage = disk_usage(volume)
+    except OSError:
+        sizes = ""
+    else:
+        sizes = f", {_card_size(usage.total)} with {_card_size(usage.free)} free"
+    return (f"Found the card{called} at {volume}{sizes}, holding the marker this run wrote through the Flipper. "
+            f"{COPY_QUESTION}")
+
+
+def _confirm_card(volume, say, ask):
+    """Ask, with card_question, whether to copy the voice onto the card at volume, and return when
+    the answer is Enter alone, y or yes, in any case. An answer that is neither yes nor no is asked
+    again, with the answers said, and only with the short question COPY_QUESTION, since the
+    computer's screen reader would read the whole line aloud again. For n or no, and when no one can
+    answer (ask gives None), nothing is written to the card: it is ejected, which writes no file,
+    and an InstallError in one sentence says that nothing was copied and to put the card back and
+    run the script again. The marker stays on the card, and the next run through a card reader
+    removes it."""
+    question = card_question(volume)
+    while True:
+        answer = ask(question)
+        if answer is None:
+            why = "No answer came"
+            break
+        reply = answer.strip().lower()
+        if reply in ("", "y", "yes"):
+            return
+        if reply in ("n", "no"):
+            why = "You answered no"
+            break
+        say("Answer Y for yes or N for no.")
+        question = COPY_QUESTION
+    eject(volume, say, ask)
+    raise InstallError(f"{why}, so nothing was copied to the card; put the card back into the Flipper and run this "
+                       "script again.")
 
 
 def pack_sets(pack):
@@ -830,12 +918,16 @@ def voice_through_reader(storage, packs, say, ask, port=None):
     card; the user takes the card out of the Flipper, puts it into the reader and presses Enter,
     with no clock running meanwhile; the card is looked for among the mounted volumes by the
     marker for CARD_LOOK_SECONDS; a card mounted read-only is refused before anything is written
-    to it; the packs are unpacked onto it, the marker files at its top, this run's and any an
-    earlier run left, and the `._` files under the sets' folders are removed, and it is ejected;
-    the user puts it back and presses Enter; and wait_for_card waits, on port or any Flipper's,
-    until the Flipper sees the voice, and removes the `._` files that are left through a new
-    console. The voice never goes over USB instead: a card that does not turn up, like every other
-    failure, is an InstallError in one sentence that says what to do."""
+    to it; the card is described in one line, its name, its path, its size and free space and the
+    marker, and the user is asked whether to copy the voice onto it, with Enter alone meaning yes,
+    before anything is written to it: n or no, or no answer, writes nothing, ejects the card and
+    ends in an InstallError that says to put it back and run the script again, and an answer that
+    is neither is asked again; the packs are unpacked onto it, the marker files at its top, this
+    run's and any an earlier run left, and the `._` files under the sets' folders are removed, and
+    it is ejected; the user puts it back and presses Enter; and wait_for_card waits, on port or any
+    Flipper's, until the Flipper sees the voice, and removes the `._` files that are left through a
+    new console. The voice never goes over USB instead: a card that does not turn up, like every
+    other failure, is an InstallError in one sentence that says what to do."""
     sets = [name for pack in packs for name in pack_sets(pack)]
     marker = MARKER_PREFIX + secrets.token_hex(4)
     say("Writing a small marker file to the card, so that this computer can tell the card from other drives.")
@@ -853,13 +945,13 @@ def voice_through_reader(storage, packs, say, ask, port=None):
             f"no drive with the marker file turned up within {_duration(CARD_LOOK_SECONDS)}; put the card back into "
             "the Flipper and run this script again, and answer U for USB if this computer does not show the card",
         ))
-    say(f"Found the card at {volume}.")
     if volume_read_only(volume):
         raise InstallError(_sentence(
             "copy the voice onto the card",
             "the card is read-only on this computer; on a microSD adapter, push the lock slider up, towards the "
             "contacts, put the card back into the Flipper, and run this script again",
         ))
+    _confirm_card(volume, say, ask)
     try:
         _copy_to_card(packs, sets, volume, say, ask)
     except InstallError as e:

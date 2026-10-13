@@ -318,10 +318,12 @@ tag is `sonar-0.1.0-rc1` and the version is `0.1.0-rc1`.
 1. Write the release's entry in `CHANGELOG.md` first: its version, with the day of the tag in place
    of `YYYY-MM-DD`, and what the release changes, since the release notes send readers to the
    changelog at the tag. A release candidate's tag has the entry of the version it leads to, and the
-   final tag the same entry with its own day. Merge the entry into `main` with a pull request, as
-   every change. The project's commit to tag is the merged commit on `main` whose submodule pointer
-   is the fork's commit to tag, so check that commit out, with the submodule on the commit it
-   records:
+   final tag the same entry with its own day. The README names the version too, in its commands, in
+   the file names it lists, and in the sentence that says which version the commands are for, so
+   update them with the entry; the host tests, which the build runs, fail when one of them differs.
+   Merge the entry into `main` with a pull request, as every change. The project's commit to tag is
+   the merged commit on `main` whose submodule pointer is the fork's commit to tag, so check that
+   commit out, with the submodule on the commit it records:
 
    ```bash
    git switch main
