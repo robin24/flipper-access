@@ -168,8 +168,9 @@ curl -f -L -O https://github.com/robin24/flipper-access/releases/download/sonar-
 
 The `-f` makes curl stop with an HTTP error when a tag or a file name is wrong, instead of saving
 GitHub's Not Found page under the file's name. For a later release, its tag takes the place of
-`sonar-0.1.0` in these commands. On Windows, the command is `curl.exe` where these commands say
-`curl`, since `curl` in PowerShell is another command.
+`sonar-0.1.0` in these commands. These commands name version 0.1.0, and each release's notes on
+GitHub give the same commands for that release. On Windows, the command is `curl.exe` where these
+commands say `curl`, since `curl` in PowerShell is another command.
 
 To check your downloads, run this command in the same folder:
 
