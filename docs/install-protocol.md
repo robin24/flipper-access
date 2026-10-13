@@ -512,9 +512,10 @@ itself.
    - The path is where the computer mounted the card, such as `/Volumes/Flipper SD` or `D:\`.
    - The size and the free space come from `shutil.disk_usage` for the volume. From one gigabyte up
      they are said in gigabytes with one decimal and thousands commas. The gigabyte is 1,000,000,000
-     bytes, as a card's label and the Finder count it, so a card sold as 64 gigabytes is said as 64.0
-     gigabytes. Less than that is said in megabytes, as the size of the update package is. When the
-     system does not give the sizes, the script leaves them out and the question is still asked.
+     bytes, as a card's label and the Finder count it, so a card sold as 64 gigabytes reads about 64
+     gigabytes, a little less once it is formatted. Less than that is said in megabytes, as the size
+     of the update package is. When the system does not give the sizes, the script leaves them out
+     and the question is still asked.
    - The marker is the file of step 1, which only this card holds. A drive without it is never
      taken, so a wrong card cannot be written to. The question is there for the user, who cannot see
      which drive was found.

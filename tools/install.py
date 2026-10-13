@@ -73,7 +73,7 @@ import card_prune  # noqa: E402
 from flipper_storage import EXTRACT_SECONDS_PER_MB, IDLE_SECONDS, PORT_ERRORS, Storage, StorageError  # noqa: E402
 
 MB = 1048576  # a megabyte, as EXTRACT_SECONDS_PER_MB counts it
-GB = 1_000_000_000  # a gigabyte, as a card's label and the Finder count it: a card sold as 64 gigabytes is 64.0
+GB = 1_000_000_000  # a gigabyte, as a card's label and the Finder count it: a card sold as 64 reads about 64
 UPDATE_DIR = "/ext/update"
 VOICE_DEST = "/ext"  # a voice pack holds sr/voices/<set>/..., so it is unpacked into /ext
 # The seconds the wait for the updated Flipper allows. The updater restarts the Flipper twice, and
@@ -242,7 +242,7 @@ def _size(size):
 def _card_size(size):
     """A card's size or free space, said so that the user can tell the card by it: from one gigabyte
     up in gigabytes with one decimal, counted as the card's label and the Finder count them, so that
-    a card sold as 64 gigabytes is 64.0, and below that as _size says it."""
+    a card sold as 64 gigabytes reads about 64, and below that as _size says it."""
     if size >= GB:
         return f"{size / GB:,.1f} gigabytes"
     return _size(size)

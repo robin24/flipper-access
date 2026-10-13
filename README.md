@@ -333,8 +333,8 @@ Through a card reader, the steps go like this:
 
    The name is the one the computer gives the card. On Windows it is the drive's label, and a drive
    without a label is said by its letter alone. The sizes are counted as the card's label counts
-   them, so a card sold as 64 gigabytes is 64.0, and they are left out when the computer does not
-   say them. A drive without this run's marker is never taken, so the question is there for you to
+   them, so a card sold as 64 gigabytes reads about 64, a little less once it is formatted, and they
+   are left out when the computer does not say them. A drive without this run's marker is never taken, so the question is there for you to
    see which drive was found before the script writes to it. Y or yes also means yes, in any case.
    N or no means no: the script writes nothing to the card, ejects it, and stops with one sentence
    that says that nothing was copied, and that you put the card back into the Flipper and run the
