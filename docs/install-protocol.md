@@ -528,8 +528,9 @@ itself.
      answered no, so nothing was copied to the card; put the card back into the Flipper and run this
      script again." The marker of this run stays on the card, and the next run through a card reader
      removes it, as step 10 describes.
-   - Any other answer: the script says "Answer Y for yes or N for no." and asks the same question
-     again, as it does for the question about the way.
+   - Any other answer: the script says "Answer Y for yes or N for no." and asks again, with only the
+     end of the line, `Copy the voice onto it? [Y/n]`, since the computer's screen reader would read
+     the whole line aloud again. This repeats until the answer is one of the others.
    - No answer, because the input has ended: the same as no, with the sentence starting "No answer
      came" instead of "You answered no".
 

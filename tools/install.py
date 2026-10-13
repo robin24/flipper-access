@@ -101,6 +101,8 @@ PLATFORM = sys.platform  # darwin, linux or win32
 # pressed Enter to say it is in the card reader; a Mac mounts a card within a few seconds. No clock
 # runs while the user moves the card.
 CARD_LOOK_SECONDS = 30
+# The end of the question about the card found, and all of it that is asked again
+COPY_QUESTION = "Copy the voice onto it? [Y/n]"
 LABEL_CHARS = 261  # the room a Windows drive's label is read into; the longest label has 32 characters
 # The seconds the script waits for the Flipper to see the card with the voice on it, once the user
 # has pressed Enter to say it is back in the Flipper: as long as the wait for the update. On
@@ -542,16 +544,18 @@ def card_question(volume):
     else:
         sizes = f", {_card_size(usage.total)} with {_card_size(usage.free)} free"
     return (f"Found the card{called} at {volume}{sizes}, holding the marker this run wrote through the Flipper. "
-            "Copy the voice onto it? [Y/n]")
+            f"{COPY_QUESTION}")
 
 
 def _confirm_card(volume, say, ask):
     """Ask, with card_question, whether to copy the voice onto the card at volume, and return when
     the answer is Enter alone, y or yes, in any case. An answer that is neither yes nor no is asked
-    again, with the answers said. For n or no, and when no one can answer (ask gives None), nothing is
-    written to the card: it is ejected, which writes no file, and an InstallError in one sentence says
-    that nothing was copied and to put the card back and run the script again. The marker stays on
-    the card, and the next run through a card reader removes it."""
+    again, with the answers said, and only with the short question COPY_QUESTION, since the
+    computer's screen reader would read the whole line aloud again. For n or no, and when no one can
+    answer (ask gives None), nothing is written to the card: it is ejected, which writes no file,
+    and an InstallError in one sentence says that nothing was copied and to put the card back and
+    run the script again. The marker stays on the card, and the next run through a card reader
+    removes it."""
     question = card_question(volume)
     while True:
         answer = ask(question)
@@ -565,6 +569,7 @@ def _confirm_card(volume, say, ask):
             why = "You answered no"
             break
         say("Answer Y for yes or N for no.")
+        question = COPY_QUESTION
     eject(volume, say, ask)
     raise InstallError(f"{why}, so nothing was copied to the card; put the card back into the Flipper and run this "
                        "script again.")

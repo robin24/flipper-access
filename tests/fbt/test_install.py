@@ -591,9 +591,13 @@ CARD_FREE_BYTES = 60_100_000_000
 CARD_SIZES = "64.0 gigabytes with 60.1 gigabytes free"
 
 
+ASK_AGAIN = "Copy the voice onto it? [Y/n]"  # what is asked after an answer that is neither yes nor no
+
+
 def is_confirm(question):
-    """Whether question is the one about the card that was found, which ends in [Y/n]."""
-    return question.startswith("Found the card") and question.endswith("[Y/n]")
+    """Whether question is the one about the card that was found, which ends in [Y/n], or the short
+    one that is asked again."""
+    return (question.startswith("Found the card") and question.endswith("[Y/n]")) or question == ASK_AGAIN
 
 
 class Reader:
@@ -1753,16 +1757,20 @@ with tempfile.TemporaryDirectory() as tmp:
               and not any(c.is_open for c in flipper.connections),
               "the console stays closed, and the Flipper is sent nothing more")
 
-    # An answer that is neither is asked again, with the answers said
+    # An answer that is neither is asked again, with the answers said, and only the short question
+    # is asked again: the screen reader reads the long line aloud once
     error, reader, lines, questions, sent, tree, flipper = reader_way(confirm=["maybe", "yep", ""])
     again = [q for q in questions if is_confirm(q)]
-    check(error is None and reader.unpacked == 1 and len(again) == 3 and len(set(again)) == 1
-          and lines.count("Answer Y for yes or N for no.") == 2,
-          f"an unknown answer is asked again, each time with the answers said, until Enter: {error}, {len(again)}, {lines[-8:]}")
+    check(error is None and reader.unpacked == 1 and len(again) == 3 and again[0].startswith("Found the card")
+          and again[1:] == [ASK_AGAIN, ASK_AGAIN] and lines.count("Answer Y for yes or N for no.") == 2,
+          f"an unknown answer is asked again, each time with the answers said, until Enter: {error}, {again}, {lines[-8:]}")
+    check(questions[:2] == [TAKE_OUT, again[0]] and questions[-1] == PUT_BACK and len(reader.confirmations) == 3,
+          f"the whole line is asked once, and the short question after it: {questions}")
     error, reader, lines, questions, sent, tree, flipper = reader_way(confirm=["x", "n"])
-    check(error is not None and "nothing was copied" in str(error) and len([q for q in questions if is_confirm(q)]) == 2
+    again = [q for q in questions if is_confirm(q)]
+    check(error is not None and "nothing was copied" in str(error) and len(again) == 2 and again[1] == ASK_AGAIN
           and reader.unpacked == 0 and reader.ejected == [reader.volume],
-          f"an unknown answer and then no: {error}")
+          f"an unknown answer and then no: {error}, {again}")
 
     # No answer, the input has ended: as no, with a sentence that says so
     for given in ([], ["x"]):
