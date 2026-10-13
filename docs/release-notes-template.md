@@ -41,29 +41,30 @@ archive by itself after the download, and the install needs each file as it was 
 terminal in a new folder, download the four files and `SHA256SUMS`, one command each:
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/flipper-z-f7-update-{{TAG}}.tgz
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/flipper-z-f7-update-{{TAG}}.tgz
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/voice-heart-{{TAG}}.tar
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/voice-heart-{{TAG}}.tar
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/install-{{TAG}}.zip
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/install-{{TAG}}.zip
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/release.json
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/release.json
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/SHA256SUMS
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/{{TAG}}/SHA256SUMS
 ```
 
-On Windows, the command is `curl.exe` where these commands say `curl`, since `curl` in PowerShell is
-another command. `SHA256SUMS` holds the checksums of the update package, the voice and the install
-zip, among others, and the README's Install section says how to check them. Then unpack the install
-zip:
+The `-f` makes curl stop with an HTTP error when a tag or a file name is wrong, instead of saving
+GitHub's Not Found page under the file's name. On Windows, the command is `curl.exe` where these
+commands say `curl`, since `curl` in PowerShell is another command. `SHA256SUMS` holds the
+checksums of the update package, the voice and the install zip, among others, and the README's
+Install section says how to check them. Then unpack the install zip:
 
 ```bash
 unzip install-{{TAG}}.zip

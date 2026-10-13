@@ -147,28 +147,29 @@ cd sonar-0.1.0
 Then download the four files and `SHA256SUMS` into it, one command each:
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/flipper-z-f7-update-sonar-0.1.0.tgz
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/flipper-z-f7-update-sonar-0.1.0.tgz
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/voice-heart-sonar-0.1.0.tar
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/voice-heart-sonar-0.1.0.tar
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/install-sonar-0.1.0.zip
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/install-sonar-0.1.0.zip
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/release.json
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/release.json
 ```
 
 ```bash
-curl -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/SHA256SUMS
+curl -f -L -O https://github.com/robin24/flipper-access/releases/download/sonar-0.1.0/SHA256SUMS
 ```
 
-For a later release, its tag takes the place of `sonar-0.1.0` in these commands. On Windows, the
-command is `curl.exe` where these commands say `curl`, since `curl` in PowerShell is another
-command.
+The `-f` makes curl stop with an HTTP error when a tag or a file name is wrong, instead of saving
+GitHub's Not Found page under the file's name. For a later release, its tag takes the place of
+`sonar-0.1.0` in these commands. On Windows, the command is `curl.exe` where these commands say
+`curl`, since `curl` in PowerShell is another command.
 
 To check your downloads, run this command in the same folder:
 
@@ -391,10 +392,20 @@ Download the package into the folder of the install from a terminal, as under Th
 that no browser unpacks it. For the official 1.4.3:
 
 ```bash
-curl -L -O https://update.flipperzero.one/builds/firmware/1.4.3/flipper-z-f7-update-1.4.3.tgz
+curl -f -L -O https://update.flipperzero.one/builds/firmware/1.4.3/flipper-z-f7-update-1.4.3.tgz
 ```
 
-Then run the script with it and with the backup, named by its path on the card:
+For Momentum, the next command names its release `mntm-012`, the latest one when this was written. A
+later release has the same form, with its own tag in place of `mntm-012` in both places where the
+address holds it, the folder and the file name:
+
+```bash
+curl -f -L -O https://github.com/Next-Flip/Momentum-Firmware/releases/download/mntm-012/flipper-z-f7-update-mntm-012.tgz
+```
+
+Then run the script with the package and with the backup, named by its path on the card. This is for
+the official 1.4.3; for Momentum, name its package, `flipper-z-f7-update-mntm-012.tgz`, after
+`--package`:
 
 ```bash
 .venv/bin/python install.py --package flipper-z-f7-update-1.4.3.tgz --restore /ext/backup-2026-10-11.tar
