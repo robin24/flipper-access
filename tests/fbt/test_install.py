@@ -27,7 +27,12 @@ the look for the card that starts only after Enter and ends in one sentence with
 mounted read-only, the console closed while the card is out, the wait after the card is back for a
 port that stays listed, with internal error taken for not yet, a port that vanishes after the first
 answer and comes back, a console that stops answering, and the time-out with the Flipper's last
-reason, the ._ files removed over the console, and the questions of a run without --yes.
+reason, the ._ files removed over the console, and the questions of a run without --yes. The card
+that was found is asked about, in one line, before anything is written to it: its name (the last part
+of the mount path, or a Windows drive's label), its path, its size and free space in gigabytes, left
+out when the system does not give them, and the marker; Enter, y and yes copy, n and no write
+nothing, eject the card and end the install in one sentence, an answer that is neither is asked
+again, no answer ends like no, and a card that is read-only is refused before any question.
 Needs pyserial. Run from the project root: python3 tests/fbt/test_install.py"""
 import contextlib
 import importlib.util
@@ -567,9 +572,28 @@ def card_path(root, path):
     return os.path.join(root, *path[len("/ext/"):].split("/"))
 
 
+def volume_tree(volume):
+    """Every folder and file on a volume, relative to it, with the size of each file, sorted."""
+    found = []
+    for here, folders, names in os.walk(volume):
+        relative = os.path.relpath(here, volume)
+        found += [(os.path.join(relative, name), None) for name in folders]
+        found += [(os.path.join(relative, name), os.path.getsize(os.path.join(here, name))) for name in names]
+    return sorted(found)
+
+
 # The two things the card reader way asks the user to do, each answered with Enter
 TAKE_OUT = "Take the microSD card out of the Flipper and put it into this computer's card reader, then press Enter."
 PUT_BACK = "Put the card back into the Flipper, then press Enter."
+# The sizes the stand-in card has, 64 gigabytes with 60.1 free, as bytes the way a card's makers count
+CARD_BYTES = 64_000_000_000
+CARD_FREE_BYTES = 60_100_000_000
+CARD_SIZES = "64.0 gigabytes with 60.1 gigabytes free"
+
+
+def is_confirm(question):
+    """Whether question is the one about the card that was found, which ends in [Y/n]."""
+    return question.startswith("Found the card") and question.endswith("[Y/n]")
 
 
 class Reader:
@@ -579,12 +603,18 @@ class Reader:
     volumes as FLIPPER, holding what the card held, on the script's mount_looks-th look. Like macOS,
     the stand-in puts a 4 KB ._ file beside everything unpacked onto it. Asked to put the card back,
     the user does, and the Flipper's storage commands get out_reply for mounting more commands
-    while it mounts the card. The other questions get the next of answers. recreate: the eject makes
-    a ._ file beside every file again, as a Mac that removed them may do. stays: the card stays in
-    the Flipper. never_back: the card stays out."""
+    while it mounts the card. The question about the card that was found gets the next of confirm,
+    and no answer once they are used up; without confirm, it gets Enter. The other questions get
+    the next of answers. recreate: the eject makes a ._ file beside every file again, as a Mac that
+    removed them may do. stays: the card stays in the Flipper. never_back: the card stays out. usage:
+    what the computer says of the card's size, (size, free) in bytes, or an OSError to raise."""
 
-    def __init__(self, root, flipper, mount_looks=1, mounting=3, recreate=False, stays=False, never_back=False):
+    def __init__(self, root, flipper, mount_looks=1, mounting=3, recreate=False, stays=False, never_back=False,
+                 confirm=None, usage=(CARD_BYTES, CARD_FREE_BYTES)):
         self.flipper = flipper
+        self.confirm = None if confirm is None else list(confirm)
+        self.usage = usage
+        self.confirmations = []  # for each question about the card found: the question and what had happened by then
         self.drives = []
         for name in ("Backup", "Camera"):
             drive = os.path.join(root, name)
@@ -624,7 +654,24 @@ class Reader:
             if not self.never_back:
                 self.move_back()
             return ""
+        if is_confirm(question):
+            self.confirmations.append(SimpleNamespace(
+                question=question, unpacked=self.unpacked, ejected=len(self.ejected),
+                marker_there=[n for n in os.listdir(self.volume) if n.startswith(".sonar-install-")],
+                tree=volume_tree(self.volume),
+            ))
+            if len(self.confirmations) > 10:  # a script that never takes the answer is not asked for ever
+                return None
+            if self.confirm is None:
+                return ""
+            return self.confirm.pop(0) if self.confirm else None
         return answers.pop(0) if answers else None
+
+    def disk_usage(self, volume):
+        if isinstance(self.usage, Exception):
+            raise self.usage
+        size, free = self.usage
+        return SimpleNamespace(total=size, used=size - free, free=free)
 
     def card_volumes(self):
         self.looks += 1
@@ -692,9 +739,9 @@ def card_reader(root, flipper, **settings):
     """A Reader in place of this computer's volumes, its eject, the unpacking onto the card and the
     user who answers the questions."""
     reader = Reader(root, flipper, **settings)
-    names = ("card_volumes", "eject", "unpack_to_card", "ask")
+    names = ("card_volumes", "eject", "unpack_to_card", "ask", "disk_usage")
     saved = [getattr(install, name) for name in names]
-    for name, stand_in in zip(names, (reader.card_volumes, reader.eject, reader.unpack, reader.ask)):
+    for name, stand_in in zip(names, (reader.card_volumes, reader.eject, reader.unpack, reader.ask, reader.disk_usage)):
         setattr(install, name, stand_in)
     try:
         yield reader
@@ -1471,7 +1518,8 @@ with tempfile.TemporaryDirectory() as tmp:
         check(len(markers) == 1, f"the marker is written over the console, an empty file: {markers}")
         marker = re.search(r"\.sonar-install-[0-9a-f]{8}", markers[0]).group(0)
         first = flipper.sent.index(markers[0])
-        check(asked == [TAKE_OUT, PUT_BACK], f"the user is asked to move the card and press Enter, out and back: {asked}")
+        check(len(asked) == 3 and asked[0] == TAKE_OUT and is_confirm(asked[1]) and asked[2] == PUT_BACK,
+              f"the user is asked to move the card and press Enter, out and back, with the question about the card between: {asked}")
         leave = line_with(lines, "plugged in and unlocked")
         check(leave is not None and leave[0] > first, f"after the marker the user is told to leave the Flipper plugged in: {leave}")
         looking = line_with(lines, "Looking for the card on this computer")
@@ -1480,7 +1528,9 @@ with tempfile.TemporaryDirectory() as tmp:
         before_enter = [line for _, line in lines[:lines.index(looking)]] if looking else []
         check(not [line for line in before_enter if re.search(r"\bminutes?\b|\bseconds?\b", line)],
               f"and no clock runs while the user moves the card: {before_enter}")
-        check(line_with(lines, "Found the card", reader.volume) is not None, "and the card is found among the volumes")
+        check(len(reader.confirmations) == 1 and reader.volume in reader.confirmations[0].question
+              and line_with(lines, "Found the card") is None,
+              f"and the card is found among the volumes; the question names it and takes the place of a line that says so: {asked[1:2]}")
         check(not os.path.exists(os.path.join(reader.volume, marker)) and f"/ext/{marker}" not in flipper.files,
               "the marker is gone from the volume and so from the card")
         check(reader.ejected == [reader.volume] and reader.unpacked == 1, f"the card is ejected once, after one unpacking: {reader.ejected}")
@@ -1564,9 +1614,191 @@ with tempfile.TemporaryDirectory() as tmp:
               and "put the card back into the Flipper" in said and "run this script again" in said and "\n" not in said,
               f"a read-only card: {error}")
         check(reader.unpacked == 0 and not reader.made and not reader.ejected and asked == [TAKE_OUT]
-              and [n for n in os.listdir(reader.volume) if n.startswith(".sonar-install-")],
-              "nothing is written to it, the marker included, and nothing more is asked")
+              and not reader.confirmations and [n for n in os.listdir(reader.volume) if n.startswith(".sonar-install-")],
+              "nothing is written to it, the marker included, and nothing more is asked, the question about the card least")
         storage.ser.close()
+
+    # The card that was found: its name, its sizes in gigabytes, and the one question that is asked
+    # before anything is written to it (Robin, 2026-10-13)
+    for size, said in ((CARD_BYTES, "64.0 gigabytes"), (CARD_FREE_BYTES, "60.1 gigabytes"), (1_000_000_000, "1.0 gigabytes"),
+                       (1_500_000_000_000, "1,500.0 gigabytes")):
+        check(install._card_size(size) == said, f"{size:,} bytes of a card are said as {said}: {install._card_size(size)}")
+    check(install._card_size(999_999_999) == install._size(999_999_999) and "megabytes" in install._card_size(999_999_999),
+          f"less than a gigabyte is said as before, in megabytes: {install._card_size(999_999_999)}")
+    check(install._size(12_400_000) == "11.8 megabytes" and install._size(300) == "1 kilobyte",
+          f"and the update package's size stays as it was: {install._size(12_400_000)}")
+
+    def usage_of(total, free):
+        return lambda volume: SimpleNamespace(total=total, used=total - free, free=free)
+
+    def failing_usage(volume):
+        raise OSError(errno.EIO, "Input/output error", volume)
+
+    def question_for(volume, platform="darwin", usage=usage_of(CARD_BYTES, CARD_FREE_BYTES), label=""):
+        """install.card_question(volume) as platform would have it, with the sizes from usage and, on
+        Windows, the drive's label."""
+        saved = install.PLATFORM, install.disk_usage, getattr(install, "_windows_label", None)
+        install.PLATFORM, install.disk_usage, install._windows_label = platform, usage, lambda drive: label
+        try:
+            return install.card_question(volume)
+        finally:
+            install.PLATFORM, install.disk_usage, install._windows_label = saved
+
+    tail = "holding the marker this run wrote through the Flipper. Copy the voice onto it? [Y/n]"
+    said = question_for("/Volumes/Flipper SD")
+    check(said == f'Found the card "Flipper SD" at /Volumes/Flipper SD, {CARD_SIZES}, {tail}',
+          f"the question names the card, its path, its size and free space, the marker, and ends in [Y/n]: {said}")
+    check("\n" not in said, "and it is one line")
+    for volume in ("/media/robin/FLIPPER", "/run/media/robin/SONAR CARD/"):
+        said = question_for(volume, "linux")
+        name = volume.rstrip("/").rpartition("/")[2]
+        check(said.startswith(f'Found the card "{name}" at {volume}, {CARD_SIZES}, {tail.split(".")[0]}.'),
+              f"on Linux the name is the last part of the mount path: {said}")
+    said = question_for("D:\\", "win32", label="SONAR")
+    check(said == f'Found the card "SONAR" at D:\\, {CARD_SIZES}, {tail}', f"on Windows the name is the drive's label: {said}")
+    said = question_for("D:\\", "win32", label="")
+    check(said == f"Found the card at D:\\, {CARD_SIZES}, {tail}", f"and without one the drive alone is said: {said}")
+    said = question_for("/Volumes/Flipper SD", usage=failing_usage)
+    check(said == f'Found the card "Flipper SD" at /Volumes/Flipper SD, {tail}',
+          f"when the computer does not say the sizes they are left out: {said}")
+    said = question_for("/Volumes/Flipper SD", usage=usage_of(500_000_000, 400_000_000))
+    check("476.8 megabytes with 381.5 megabytes free" in said, f"a card of less than a gigabyte is said in megabytes: {said}")
+
+    # The name of a Windows drive: GetVolumeInformationW, through ctypes, which is not loaded elsewhere
+    calls_made = []
+
+    def get_volume_information(drive, buffer, size, *rest):
+        calls_made.append((drive, size, rest))
+        buffer.value = "SONAR"
+        return 1
+
+    def fake_ctypes(call):
+        return SimpleNamespace(
+            create_unicode_buffer=lambda size: SimpleNamespace(value=""),
+            windll=SimpleNamespace(kernel32=SimpleNamespace(GetVolumeInformationW=call)),
+        )
+
+    saved_ctypes = sys.modules.get("ctypes")
+    try:
+        sys.modules["ctypes"] = fake_ctypes(get_volume_information)
+        got = install._windows_label("D:\\")
+        sys.modules["ctypes"] = fake_ctypes(lambda *args: 0)
+        refused = install._windows_label("D:\\")
+        sys.modules["ctypes"] = fake_ctypes(lambda *args: (_ for _ in ()).throw(OSError(errno.EIO, "Input/output error")))
+        broken = install._windows_label("D:\\")
+        sys.modules["ctypes"] = SimpleNamespace()  # no windll, as on a Mac
+        elsewhere = install._windows_label("D:\\")
+    finally:
+        if saved_ctypes is None:
+            del sys.modules["ctypes"]
+        else:
+            sys.modules["ctypes"] = saved_ctypes
+    check(got == "SONAR" and calls_made and calls_made[0][0] == "D:\\" and calls_made[0][1] > 32 and calls_made[0][2] == (None, None, None, None, 0),
+          f"the label is what GetVolumeInformationW gives for the drive: {got!r}, {calls_made}")
+    check(refused == "" and broken == "" and elsewhere == "",
+          f"and none when it refuses, fails, or is not there: {refused!r}, {broken!r}, {elsewhere!r}")
+
+    # In the way: the question comes after the card is found and found writable, before anything is
+    # written, and the answers decide
+    def reader_way(confirm=None, packs=None, **settings):
+        """(the error or None, the Reader, the lines said, the questions asked, the commands the Flipper got,
+        the tree of the volume at the end) of voice_through_reader with the answers confirm to the question
+        about the card found."""
+        with tempfile.TemporaryDirectory() as root:
+            flipper = Flipper(SONAR_DEV)
+            storage = console_of(flipper)
+            lines, say = collector(flipper)
+            asked.clear()
+            with card_reader(root, flipper, confirm=confirm, **settings) as reader:
+                try:
+                    console = install.voice_through_reader(storage, packs or [pack], say, reader.ask)
+                    error = None
+                except install.InstallError as e:
+                    console, error = None, e
+            tree = volume_tree(reader.volume)
+            if console is not None:
+                console.ser.close()
+            else:
+                storage.ser.close()
+            return error, reader, [line for _, line in lines], list(asked), list(flipper.sent), tree, flipper
+
+    # Enter, y and yes, in any case with spaces round it, copy
+    for given in ("", "y", "Y", "yes", " YES ", "Yes\t", "  "):
+        error, reader, lines, questions, sent, tree, flipper = reader_way(confirm=[given])
+        asked_once = reader.confirmations[0] if reader.confirmations else None
+        check(error is None and reader.unpacked == 1 and len(reader.confirmations) == 1 and len(reader.ejected) == 1,
+              f"the answer {given!r} copies the voice, after one question: {error}, {len(reader.confirmations)}")
+        check(asked_once is not None and asked_once.unpacked == 0 and asked_once.ejected == 0 and asked_once.marker_there
+              and not [name for name, _ in asked_once.tree if name.startswith("sr")],
+              f"and the question is asked with nothing yet written to the card but the marker: {asked_once}")
+        if given == "":
+            question = asked_once.question
+            check(question == f'Found the card "FLIPPER" at {reader.volume}, {CARD_SIZES}, {tail}' and "\n" not in question,
+                  f"the question names the card, its path, both sizes and the marker, in one line: {question}")
+            check(questions == [TAKE_OUT, question, PUT_BACK], f"between the two moves of the card: {questions}")
+
+    # n and no copy nothing, eject, and end the install in one sentence
+    for given in ("n", "N", "no", " No ", "NO"):
+        error, reader, lines, questions, sent, tree, flipper = reader_way(confirm=[given])
+        said = str(error)
+        check(error is not None and "nothing was copied to the card" in said and "put the card back into the Flipper" in said
+              and "run this script again" in said and "\n" not in said and len(re.findall(r"[.?!](?=\s|$)", said)) == 1,
+              f"the answer {given!r} ends the install in one sentence that says what to do: {error}")
+        check(reader.unpacked == 0 and not reader.made and reader.ejected == [reader.volume]
+              and tree == reader.confirmations[0].tree and len(reader.confirmations[0].marker_there) == 1,
+              f"nothing is written to the card, not even a removal, and it is ejected: {reader.ejected}")
+        check(questions == [TAKE_OUT, reader.confirmations[0].question] and PUT_BACK not in questions,
+              f"and the user is not asked to put the card back: {questions}")
+        check(not [c for c in sent if c.startswith(("sr ", "storage extract"))] and len(flipper.connections) == 1
+              and not any(c.is_open for c in flipper.connections),
+              "the console stays closed, and the Flipper is sent nothing more")
+
+    # An answer that is neither is asked again, with the answers said
+    error, reader, lines, questions, sent, tree, flipper = reader_way(confirm=["maybe", "yep", ""])
+    again = [q for q in questions if is_confirm(q)]
+    check(error is None and reader.unpacked == 1 and len(again) == 3 and len(set(again)) == 1
+          and lines.count("Answer Y for yes or N for no.") == 2,
+          f"an unknown answer is asked again, each time with the answers said, until Enter: {error}, {len(again)}, {lines[-8:]}")
+    error, reader, lines, questions, sent, tree, flipper = reader_way(confirm=["x", "n"])
+    check(error is not None and "nothing was copied" in str(error) and len([q for q in questions if is_confirm(q)]) == 2
+          and reader.unpacked == 0 and reader.ejected == [reader.volume],
+          f"an unknown answer and then no: {error}")
+
+    # No answer, the input has ended: as no, with a sentence that says so
+    for given in ([], ["x"]):
+        error, reader, lines, questions, sent, tree, flipper = reader_way(confirm=given)
+        said = str(error)
+        check(error is not None and said.startswith("No answer came") and "nothing was copied to the card" in said
+              and "put the card back into the Flipper" in said and "run this script again" in said
+              and "\n" not in said and len(re.findall(r"[.?!](?=\s|$)", said)) == 1,
+              f"no answer after {given}: one sentence that says no answer came: {error}")
+        check(reader.unpacked == 0 and reader.ejected == [reader.volume] and tree == reader.confirmations[0].tree
+              and PUT_BACK not in questions, "and nothing is written, the card is ejected, as for no")
+
+    # The computer does not say the card's sizes: they are left out, and the question is still asked
+    error, reader, lines, questions, sent, tree, flipper = reader_way(usage=OSError(errno.EIO, "Input/output error"))
+    question = reader.confirmations[0].question if reader.confirmations else ""
+    check(error is None and reader.unpacked == 1 and "gigabytes" not in question and "free" not in question
+          and f'Found the card "FLIPPER" at {reader.volume}, {tail}' == question,
+          f"sizes that cannot be read are left out, not an error: {error}, {question}")
+
+    # In a whole run: no to the question ends the run before the update, in one sentence, with no traceback
+    for confirm in (["n"], []):
+        with tempfile.TemporaryDirectory() as root:
+            flipper = Flipper(SONAR_DEV, after=SONAR_RELEASE)
+            answers[:] = ["y", "r"]
+            asked.clear()
+            with card_reader(root, flipper, confirm=confirm) as reader:
+                code, lines, err = run(flipper, full_run[:-1])
+            commands = main_commands(flipper.sent)
+            check(code == 1 and "nothing was copied to the card" in lines[-1] and "run this script again" in lines[-1]
+                  and "\n" not in lines[-1] and no_traceback(lines, err) and update not in commands
+                  and not any("Done" in line for line in lines),
+                  f"{confirm} to the question in a whole run: the exit code is 1, one sentence, no update: {code}, {lines[-2:]}")
+            check(reader.unpacked == 0 and reader.ejected == [reader.volume] and PUT_BACK not in asked
+                  and extract not in commands and not [c for c in flipper.sent if c.startswith("sr voice")],
+                  "and nothing was copied to the card, nor sent over USB instead")
+            check(not any(c.is_open for c in flipper.connections), "and no console is left open")
 
     # Markers that earlier runs left at the card's top go too, before the eject; a folder of that name stays
     with tempfile.TemporaryDirectory() as root:
@@ -1890,8 +2122,9 @@ with tempfile.TemporaryDirectory() as tmp:
             with card_reader(root, flipper) as reader:
                 code, lines, err = run(flipper, full_run[:-1])
             check(code == 0, f"a whole run through the card reader with the answers {given}: {code}, {lines[-3:]}")
-            check(asked[0].endswith("Go ahead? [Y/n]") and asked[1:-2] == [way] * (len(given) - 1) and asked[-2:] == [TAKE_OUT, PUT_BACK],
-                  f"the questions: the go-ahead, the way, then the card out and back, each with Enter: {asked}")
+            check(asked[0].endswith("Go ahead? [Y/n]") and asked[1:-3] == [way] * (len(given) - 1)
+                  and asked[-3] == TAKE_OUT and is_confirm(asked[-2]) and asked[-1] == PUT_BACK,
+                  f"the questions: the go-ahead, the way, the card out, the card found, and the card back, each with Enter: {asked}")
             check(reader.unpacked == 1 and len(reader.ejected) == 1, "the voice went through the reader")
             commands = main_commands(flipper.sent)
             check(not [c for c in flipper.sent if c.startswith(("storage extract", 'storage write_chunk "/ext/voice-heart', "sr voice"))],
@@ -1994,6 +2227,9 @@ SENTENCE_END = re.compile(r"[.?!](?=\s|$)")
 several = [m for m in made_errors if len(SENTENCE_END.findall(m)) != 1 or "\n" in m]
 check(len(made_errors) > 30 and not several,
       f"every failure the checks made, {len(made_errors)} in all, is one sentence: {several[:3]}")
+declined = [m for m in made_errors if "nothing was copied to the card" in m]
+check(len(declined) >= 2 and any(m.startswith("No answer came") for m in declined) and not [m for m in declined if m in several],
+      f"and the sentences for a card that the user did not agree to write to are among them: {len(declined)}")
 
 print(f"install: {checks - failures} of {checks} checks passed")
 sys.exit(1 if failures else 0)
