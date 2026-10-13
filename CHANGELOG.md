@@ -4,7 +4,7 @@ The changes in each release of Sonar, the newest first. A release's version is i
 prefix: version 0.1.0 is the tag `sonar-0.1.0`. How to install a release is under Install in the
 README.
 
-## 0.1.0, YYYY-MM-DD
+## 0.1.0, 2026-10-13
 
 The first release. Sonar is a firmware for the Flipper Zero that a blind person can use without
 sight. It is built on Momentum, at Momentum's commit d3f89dfe2, and its screen reader speaks every
