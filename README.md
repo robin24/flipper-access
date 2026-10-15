@@ -1123,6 +1123,14 @@ The fork follows Momentum by merging Momentum's release tags into `screen-reader
 rebases. Before a merge is attempted, `tools/upstream_check.sh` shows what it would meet. The
 whole routine, from the fetch to the tag, is under Merging Momentum in `docs/device-notes.md`.
 
+## Supporting Sonar
+
+Sonar is free, and I make it in my spare time. If you would like to support it, you can do so on
+[my Patreon page](https://www.patreon.com/c/CPTKipp) or on
+[my Ko-fi page](https://ko-fi.com/robin24). A donation is a thank-you and comes with no
+obligations: it buys no support, no features and no say in what comes next, and Sonar stays free
+either way.
+
 ## Licence and credits
 
 The firmware fork is licensed under the GPL-3.0, like Momentum and the official firmware, and so
