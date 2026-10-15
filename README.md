@@ -1125,11 +1125,10 @@ whole routine, from the fetch to the tag, is under Merging Momentum in `docs/dev
 
 ## Supporting Sonar
 
-Sonar is free, and I make it in my spare time. If you would like to support it, you can do so on
+I make Sonar in my spare time. It will always remain free, but donations help to cover its
+development costs and are greatly appreciated. If you would like to support it, you can do so on
 [my Patreon page](https://www.patreon.com/c/CPTKipp) or on
-[my Ko-fi page](https://ko-fi.com/robin24). A donation is a thank-you and comes with no
-obligations: it buys no support, no features and no say in what comes next, and Sonar stays free
-either way.
+[my Ko-fi page](https://ko-fi.com/robin24).
 
 ## Licence and credits
 

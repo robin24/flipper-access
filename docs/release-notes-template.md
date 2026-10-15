@@ -140,6 +140,6 @@ The voice pack has its own terms, in its `LICENSE.txt`: Kokoro's model is under 
 
 ## Supporting Sonar
 
-Sonar is free, and anyone who wants to support it can do so on
-[Robin's Patreon page](https://www.patreon.com/c/CPTKipp) or on
-[Robin's Ko-fi page](https://ko-fi.com/robin24); a donation comes with no obligations.
+Sonar will always remain free, but donations help to cover its development costs and are greatly
+appreciated: you can support it on [Robin's Patreon page](https://www.patreon.com/c/CPTKipp) or on
+[Robin's Ko-fi page](https://ko-fi.com/robin24).
