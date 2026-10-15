@@ -141,7 +141,7 @@ SONAR_RELEASE = info_reply("9149fe49", "false", "screen-reader", "sonar-0.1.0", 
 # firmware.dfu of the rollback package f7-update-1.4.3 in firmware-packages/, not read from the
 # device, and its API version is still a guess, since the full reply was not kept. MOMENTUM is
 # provisional: its commit, version, build date, origin and git address are the strings in the
-# firmware.dfu of f7-update-mntm-012, and its API version is a guess
+# firmware.dfu of f7-update-mntm-012, and its API version and its branch name, release, are guesses
 OFFICIAL = info_reply("8622f1a2", "false", "1.4.3", "1.4.3", "05-12-2025", "86.0", "Official",
                       "https://github.com/flipperdevices/flipperzero-firmware")
 MOMENTUM = info_reply("e1784e74", "false", "release", "mntm-012", "31-12-2025", "87.1", "Momentum",
