@@ -137,3 +137,9 @@ package puts on the card. It is offered here, beside the binaries, for as long a
 
 The voice pack has its own terms, in its `LICENSE.txt`: Kokoro's model is under the Apache License
 2.0, and what the Sonar project adds to the voice is released under CC0 1.0.
+
+## Supporting Sonar
+
+Sonar will always remain free, but donations help to cover its development costs and are greatly
+appreciated: you can support it on [Robin's Patreon page](https://www.patreon.com/c/CPTKipp) or on
+[Robin's Ko-fi page](https://ko-fi.com/robin24).

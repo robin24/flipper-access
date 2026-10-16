@@ -134,11 +134,15 @@ SONAR_DEV = info_reply("9149fe49", "false", "claude/device-checks-2026-10-09", "
                        "Sonar", SONAR_GIT)
 # The same commit built as the release sonar-0.1.0, which is what the release's package installs
 SONAR_RELEASE = info_reply("9149fe49", "false", "screen-reader", "sonar-0.1.0", "11-10-2026", "87.3", "Sonar", SONAR_GIT)
-# Provisional until Task 11 records the real replies: the keys are those of furi_hal_info.c, which
-# official firmware and Momentum share with Sonar; the commit, version, build date, origin and git
-# address are the strings in the firmware.dfu of the two rollback packages in firmware-packages/
-# (f7-update-1.4.3 and f7-update-mntm-012); the API versions are a guess
-OFFICIAL = info_reply("8622f1a2", "false", "release", "1.4.3", "05-12-2025", "86.0", "Official",
+# The keys are those of furi_hal_info.c, which official firmware and Momentum share with Sonar.
+# OFFICIAL was checked against a real official 1.4.3 on 2026-10-13 (docs/measurements/2026-10-13-
+# release-rehearsal.txt): the commit 8622f1a2, the dirty flag, the version, the build date
+# 05-12-2025, the origin Official and the branch name 1.4.3. Its git address is the string in the
+# firmware.dfu of the rollback package f7-update-1.4.3 in firmware-packages/, not read from the
+# device, and its API version is still a guess, since the full reply was not kept. MOMENTUM is
+# provisional: its commit, version, build date, origin and git address are the strings in the
+# firmware.dfu of f7-update-mntm-012, and its API version and its branch name, release, are guesses
+OFFICIAL = info_reply("8622f1a2", "false", "1.4.3", "1.4.3", "05-12-2025", "86.0", "Official",
                       "https://github.com/flipperdevices/flipperzero-firmware")
 MOMENTUM = info_reply("e1784e74", "false", "release", "mntm-012", "31-12-2025", "87.1", "Momentum",
                       "https://github.com/Next-Flip/Momentum-Firmware")

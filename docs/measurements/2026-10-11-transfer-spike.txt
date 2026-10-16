@@ -11,7 +11,7 @@ firmware.build.date           : 09-10-2026
 firmware.origin.fork          : Sonar
 hardware.name                 : R0skie
 Device: /dev/cu.usbmodemflip_R0skie1. Host: a Mac, Python 3.14.7, pyserial 3.5.
-Card, storage info /ext at the start: Label: Flipper SD, Type: EXFAT, 62496768KiB total, 58080768KiB free, 03SD SK64G v8.6, SN:ad3f29e1 07/2026.
+Card, storage info /ext at the start: Label: Flipper SD, Type: EXFAT, 62496768KiB total, 58080768KiB free, 03SD SK64G v8.6 (the card's serial number and the date after it are left out).
 Start: sr status: last crash: at 08086B66 in build 2bf03d17 (the crash recorded earlier), free heap: 118256. sr voice list: samantha (in use), espeak, heart. The settings file: sr_voice_set: with nothing after it, which is Auto. The card already held the heart set at /ext/sr/voices/heart.
 
 Section: The test data
