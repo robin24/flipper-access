@@ -671,6 +671,30 @@ When NFC emulates an ISO15693 card, also called NFC-V, its "Emulating" screen is
 From the first exchange with an NFC reader on, the emulation keeps the speaker, whose timer it
 needs, and the screen reader stays silent until you leave with Back.
 
+### Sub-GHz Read
+
+Read, the first entry of the Sub-GHz app, listens for remotes, key fobs and other devices that
+send on the Sub-GHz band, and lists each signal it can decode. Its screen first says what it is
+doing: "Listening on 433.92 MHz, no signals yet" while it waits on one frequency, "Hopping between
+frequencies, no signals yet" with Hopping turned on in Config, or "Repeater on, resending each
+signal received" with the repeater on. Then come the radio and the modulation, such as "Internal
+radio, modulation AM650", with "Bin RAW on" added when Bin RAW is on. Nothing more is said while
+it waits: the bar of signal strength is a picture, and while hopping the frequency it tries is
+left out, as it changes ten times a second.
+
+Each signal it decodes joins a list, the newest at the bottom, and is read by its name, such as
+"Princeton 5A3C1", with "3 times" added when the same signal came three times. Up and Down move
+through the list. OK opens the selected signal, with Send on OK and Save on Right. Holding OK
+sends the selected signal for as long as OK is held, and holding Right deletes it. Back and Up
+reads the bar at the bottom too: the frequency, the modulation and the number of signals, such as
+"433.92 MHz AM650, 3 signals".
+
+Left opens Config, with the frequency, the modulation, Hopping, Bin RAW, the repeater and more;
+Lock Keyboard is its last entry. A locked Read screen ignores the keys and says "To unlock. press:
+Back 3 times quickly" when one is pressed: three presses of Back within a second unlock it. Back
+leaves Read; with signals in the list it first asks "Discard Signals?", with Continue on Left and
+Stay on Right.
+
 ### The file browser's menus
 
 Down on the home screen opens the file browser, which Momentum calls Archive. Left and Right
