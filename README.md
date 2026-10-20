@@ -695,6 +695,46 @@ Back 3 times quickly" when one is pressed: three presses of Back within a second
 leaves Read; with signals in the list it first asks "Discard Signals?", with Continue on Left and
 Stay on Right.
 
+### Sub-GHz Frequency Analyzer
+
+Frequency Analyzer, further down the Sub-GHz app's menu, looks for the strongest signal on the
+frequencies Read can listen on, and says where it is. It opens with "Frequency Analyzer. No
+signal. Threshold -93 dBm", with Lower threshold on Left and Raise threshold on Right. "No
+signal" becomes "Signal at 433.92 MHz" when it finds one, the frequency rounded to 10 kHz. After
+a signal come the four frequencies found last, the newest first, such as "Recent: 433.92 MHz, 3
+times, selected, 868.35 MHz", where "3 times" says that the same frequency came three times. A
+signal weaker than the threshold is not found. Left lowers it and Right raises it by 1 dB, and
+the new value is said; a lower threshold finds weaker signals, and more noise: at the lowest,
+-97 dBm, noise alone is found now and then. The threshold is kept for the next time.
+
+These words change as signals come and go, but like any change on a screen they are said at most
+once per change delay, three seconds by default, the latest. The big number on the screen also
+changes by a few kHz from one scan to the next, which is why the frequency is rounded. The
+number stays on the screen a few seconds after a signal ends, and so do its words; then the
+screen says "No signal" and the recent frequencies.
+
+Down moves "selected" to the next recent frequency. OK takes the selected frequency, or the one
+found while a signal lasts, as the frequency of Read and Read RAW, and turns Hopping off; holding
+OK opens Read on it. Up changes what a found signal does: sound and vibration, vibration only, or
+nothing. The screen shows it as an icon, which is not read.
+
+### Sub-GHz Read RAW
+
+Read RAW, the second entry of the Sub-GHz app, records the signal on one frequency as it comes,
+without decoding it, into a file. Its screen says the frequency, the modulation, the radio and
+what was recorded, such as "433.92 MHz AM650, internal radio, no samples yet", then "RSSI", the
+label of a graph of signal strength, with Config on Left and Record on OK. Config sets the
+frequency and the modulation, which Read uses too, the sound, and the RSSI threshold below which
+nothing is recorded.
+
+OK starts the recording, and the screen says "recording", with Stop on OK. It says nothing more
+while it records: the count of samples on the screen rises ten times a second. OK or Back stops
+the recording, and the count is said, such as "51 thousand samples", with Erase on Left, Send on
+OK and Save on Right. Erase throws the recording away and goes back to the start, Save asks for a
+name, and Send transmits the recording; holding OK sends it again and again. Back leaves Read
+RAW; with a recording not saved it first asks "Discard Signals?", with Continue on Left and Stay
+on Right.
+
 ### The file browser's menus
 
 Down on the home screen opens the file browser, which Momentum calls Archive. Left and Right
