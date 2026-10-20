@@ -51,7 +51,6 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
    - Size: 2,892 words, in 64 hashed folders, with 0 underruns in the verification.
    - Flash: firmware.bin grew from 869,756 bytes (the spec's baseline at 54794522b, 10,884 spare) to 871,872 bytes (+2,116). That leaves 8,768 bytes spare.
    - Heap: the 8192-byte speech ring cost 4,032 bytes of idle heap (114,552 to 110,520 free). The voice state costs about 700 bytes more; that is an estimate from the Task 2 comparison of idle heap.
-   - Measurements: `docs/measurements/2026-09-24-voice-rollout.txt`.
 2. Animations off by default: done 2026-09-25.
    - Setting: `desktop_anims`, off by default; changing it reboots the device.
    - Idle heap, 30 s after boot: 116,672 and 116,752 bytes free with animations off (two
@@ -71,7 +70,6 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
      whose own clip is missing, and stays muted with the voice off or without a card.
    - Final image after the whole memory plan and the round's final fixes (08e80106f): 862,612
      bytes, 18,028 spare below the BLE stack.
-   - Measurements: `docs/measurements/2026-09-25-stripdown.txt`.
 
 ## Features after the voice
 
@@ -83,7 +81,7 @@ Where phase 3 and the polish round left it, before this plan: firmware.bin was 8
 
 - Repository with Momentum as upstream remote; branch `screen-reader` becomes the main branch of the fork; tags per release.
 - Section 8 of the publishing spec, `docs/superpowers/specs/2026-09-26-github-release-design.md`, now defines the sync procedure for following Momentum.
-- Release artefacts: the update package, the voice pack `heart`, the install zip with `install.py` and its helpers, the firmware's elf and map, the SDK, the source bundle, `SHA256SUMS` and `release.json`. `.github/workflows/release.yml` makes a draft release from a pushed tag, and the pack, the checksums and `release.json` are added on the Mac, as under Making a release in `docs/device-notes.md`. The install script says its progress in plain lines on the computer, for the computer's screen reader.
+- Release artefacts: the update package, the voice pack `heart`, the install zip with `install.py` and its helpers, the firmware's elf and map, the SDK, the source bundle, `SHA256SUMS` and `release.json`. `.github/workflows/release.yml` makes a draft release from a pushed tag, and the pack, the checksums and `release.json` are added on the Mac, as under Making a release in `docs/developer-notes.md`. The install script says its progress in plain lines on the computer, for the computer's screen reader.
 - Licensing: the firmware is GPL-3 like Momentum and the official firmware; the shipped vocabulary must come from a redistributable voice. The release's one set, heart, is made with Kokoro, under Apache 2.0, and what the project adds is CC0 1.0, as Robin decided on 2026-10-11; eSpeak-NG, GPL-3, is a backend for the sets users make. Apple voices are for personal vocabularies only.
 - Documentation for blind users first: install, first boot, the console commands, the voice generator, and the known limits:
   - NFC-V emulation silences the reader.

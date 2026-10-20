@@ -94,7 +94,7 @@ pin = pinned()
 check(pin is not None and re.fullmatch(r"[0-9a-f]{40}", pin) is not None,
       f"tools/momentum-base.txt holds one full commit hash: {pin!r}")
 problem = pin_problem(FIRMWARE)
-check(problem is None, f"{problem}: after a merge from Momentum, pin the merged tag's commit (docs/device-notes.md, "
+check(problem is None, f"{problem}: after a merge from Momentum, pin the merged tag's commit (docs/developer-notes.md, "
       "Merging Momentum)")
 judged = base(FIRMWARE) is not None and subprocess.run(
     ["git", "-C", FIRMWARE, "merge-base", "upstream/dev", "HEAD"], capture_output=True).returncode == 0

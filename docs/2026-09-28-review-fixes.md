@@ -157,7 +157,7 @@ release.
   other tag of the checkout, and fails with one sentence unless HEAD is the tag's commit and
   `git describe` gives the tag (8b646895e). `release.yml` also fails unless the build's
   `version.json` calls itself the tag (910a4c623). The release tags are annotated, as Making a
-  release in `docs/device-notes.md` makes them.
+  release in `docs/developer-notes.md` makes them.
 - R5 and R8: the voice pack is made on the Mac and uploaded to the draft release, and
   `tools/release_finalise.py` then writes `SHA256SUMS` and `release.json`, with the firmware's
   version, its commit and the API version, from the draft's own assets (34befee27).
@@ -254,7 +254,7 @@ settings, as confirmed on 2026-10-08.
 
 ## Checks on the device
 
-Flash the build first, with steps 4 to 7 of the Routine in `docs/device-notes.md`. The console
+Flash the build first, with steps 4 to 7 of the Routine in `docs/developer-notes.md`. The console
 commands below run from the project folder.
 
 Settings without a card, F2: remove the card, reboot, and change the volume with Back and Right.

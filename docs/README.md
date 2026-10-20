@@ -9,8 +9,8 @@ to report a bug and send a change.
   source.
 - `roadmap.md`: why Sonar is a separate firmware, the memory plan, what is done so far, and the
   release mechanics.
-- `device-notes.md`: the working notes for the one device Sonar is developed on, and the
-  developer's routine: flashing, the console commands, crash diagnosis and rolling back.
+- `developer-notes.md`: the developer's routine: the tools, building and flashing, merging
+  Momentum, making a release, the console commands, crash diagnosis and rolling back.
 - `install-protocol.md`: what the install script says to the Flipper's USB console, command by
   command, and how it reads the replies, for a desktop app that does the same install.
 - `release-notes-template.md`: the notes of every release, which the release workflow fills in
@@ -20,8 +20,6 @@ to report a bug and send a change.
   first release, with its findings, marked F, S, G, R and T, and the checks for the device.
 - `2026-09-28-review-fixes.md`: what was done about each finding of that review, how it was checked
   on the device, and what is left.
-- `measurements/`: what the device and the tools reported in each round, as plain text: the RAM
-  probes, the image sizes, the speech timings and the checks run on the device.
 
 ## Specs
 
@@ -58,7 +56,10 @@ The implementation plans, task by task, in `superpowers/plans/`:
 - `2026-10-09-publishing-plan-c.md`: publishing plan C, the install script, the release workflow,
   the public documents, the rehearsal and the first release.
 
-## Build logs
+## Removed records
 
-`superpowers/build-logs/` has one folder per round, with the ledger and its rulings, the briefs
-and the reports.
+The measurement files of each round, `measurements/`, and the build logs of each round,
+`superpowers/build-logs/`, recorded what was run and seen on the device the project was developed
+on. They were removed on 2026-10-20, and so was that device's state from the developer notes,
+which were called `device-notes.md` before. The specs, the plans and the review's fixes record
+still name some of those files; they are in the git history before that day.

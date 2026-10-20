@@ -90,8 +90,7 @@ def recorded(self, *args):
 install.InstallError.__init__ = recorded
 
 # info device, as furi_hal_info.c prints it with "%-30s: %s". The hardware, radio and system lines
-# are the device's of 2026-09-24 (docs/superpowers/build-logs/2026-09-24-clip-voice-spelling/
-# task-1-report.md) with the unique id and the MAC address made up.
+# are a real device's of 2026-09-24 with the unique id and the MAC address made up.
 HARDWARE = [
     ("format.major", "3"), ("format.minor", "3"), ("hardware.model", "Flipper Zero"),
     ("hardware.uid", "0123456789ABCDEF"), ("hardware.otp.ver", "2"), ("hardware.timestamp", "1720072856"),
@@ -128,15 +127,14 @@ def info_reply(commit, dirty, branch, version, date, api, origin, git, boot=0):
 
 
 SONAR_GIT = "https://github.com/robin24/Momentum-Firmware.git"
-# Sonar 9149fe493 as the device reported it on 2026-10-11 (docs/measurements/2026-10-11-transfer-
-# spike.txt) and on 2026-10-09 (docs/device-notes.md: API 87.3, the origin's git address)
+# Sonar 9149fe493 as a device reported it on 2026-10-09 and 2026-10-11: API 87.3, the origin's git
+# address
 SONAR_DEV = info_reply("9149fe49", "false", "claude/device-checks-2026-10-09", "mntm-dev", "09-10-2026", "87.3",
                        "Sonar", SONAR_GIT)
 # The same commit built as the release sonar-0.1.0, which is what the release's package installs
 SONAR_RELEASE = info_reply("9149fe49", "false", "screen-reader", "sonar-0.1.0", "11-10-2026", "87.3", "Sonar", SONAR_GIT)
 # The keys are those of furi_hal_info.c, which official firmware and Momentum share with Sonar.
-# OFFICIAL was checked against a real official 1.4.3 on 2026-10-13 (docs/measurements/2026-10-13-
-# release-rehearsal.txt): the commit 8622f1a2, the dirty flag, the version, the build date
+# OFFICIAL was checked against a real official 1.4.3 on 2026-10-13: the commit 8622f1a2, the dirty flag, the version, the build date
 # 05-12-2025, the origin Official and the branch name 1.4.3. Its git address is the string in the
 # firmware.dfu of the rollback package f7-update-1.4.3 in firmware-packages/, not read from the
 # device, and its API version is still a guess, since the full reply was not kept. MOMENTUM is

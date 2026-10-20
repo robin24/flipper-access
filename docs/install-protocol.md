@@ -390,10 +390,9 @@ storage remove "<remote path>"
 ```
 
 Then the file is read in chunks of 32,768 bytes, which is 32 KB. The size only decides how often the
-computer waits for the prompt, since the device takes a chunk of any size. The measurements in
-`docs/measurements/2026-10-11-transfer-spike.txt` show that 32 KB is as fast as anything larger, and
-that 8 KB takes a quarter longer. For each chunk the command is this, where the number is the length
-of the chunk in bytes:
+computer waits for the prompt, since the device takes a chunk of any size. Measurements of
+2026-10-11 showed that 32 KB is as fast as anything larger, and that 8 KB takes a quarter longer.
+For each chunk the command is this, where the number is the length of the chunk in bytes:
 
 ```
 storage write_chunk "<remote path>" <number of bytes>
@@ -798,8 +797,7 @@ are not compared.
 
 ## Measured figures
 
-The measurements are in `docs/measurements/2026-10-11-transfer-spike.txt`, made on the device
-R0skie, and for the card reader way in `docs/measurements/2026-10-11-installer-device-checks.txt`.
+The figures below were measured on one Flipper and one computer, on 2026-10-11 and 2026-10-12.
 
 - The heart voice pack, 111.3 megabytes, took 653 seconds to send over USB. The unpacking took 964
   seconds on a card that had nothing of the set, and 786 seconds over a set that was there. So the

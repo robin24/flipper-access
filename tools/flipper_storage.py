@@ -30,7 +30,7 @@ from flipper_cli import ANSI, PORT_ERRORS, PROMPT  # exits with one sentence whe
 
 # The bytes of one `storage write_chunk`. The device takes a chunk of any size and appends it to
 # the file, so this only sets how often the host waits for the device's prompt. 32 KB, from the
-# spike of 2026-10-11 (docs/measurements/2026-10-11-transfer-spike.txt): a file of 5,242,880
+# spike of 2026-10-11: a file of 5,242,880
 # bytes took 35.7 seconds in chunks of 8 KB and 28.5 in chunks of 32 KB, and the sizes from 64 KB
 # to 4 MB were no faster. So it is the smallest of the fast sizes, which leaves the fewest bytes
 # behind as keystrokes in the console when a write fails halfway. All but 3 of the heart set's

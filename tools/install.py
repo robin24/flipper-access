@@ -88,8 +88,7 @@ PROGRESS_SECONDS = 60  # at most one progress line in this many seconds of a lon
 COMMAND_SECONDS = 120  # update backup, update install, update restore
 MUTE_MAX_SECONDS = 3600  # the longest timed mute sr voice off takes
 EXTRACT_TIMEOUT_MIN = 600  # the least time an unpacking is given before it counts as stuck
-# Rates measured on 2026-10-11 (docs/measurements/2026-10-11-transfer-spike.txt), for the "this
-# takes about" lines only: 111.3 MB sent in 653 seconds, and EXTRACT_SECONDS_PER_MB has half again
+# Rates measured on 2026-10-11, for the "this takes about" lines only: 111.3 MB sent in 653 seconds, and EXTRACT_SECONDS_PER_MB has half again
 # on top of the measured unpacking
 SEND_SECONDS_PER_MB = 5.9
 UNPACK_SECONDS_PER_MB = EXTRACT_SECONDS_PER_MB / 1.5
@@ -113,8 +112,8 @@ CARD_BACK_SECONDS = 15 * 60
 PORT_STEADY_SECONDS = 5
 EJECT_SECONDS = 120  # the most `diskutil eject` is given
 MARKER_PREFIX = ".sonar-install-"  # the marker on the card is this and 8 hex digits
-# `storage remove` took 37 to 39 milliseconds a file on 2026-10-11 (docs/measurements/
-# 2026-10-11-transfer-spike.txt), for the "this takes about" line only
+# `storage remove` took 37 to 39 milliseconds a file on 2026-10-11, for the "this takes about"
+# line only
 REMOVE_SECONDS_EACH = 0.04
 LOST = "the connection was lost"  # how flipper_storage's sentence for a port that is gone begins
 TIMED_OUT = "the Flipper had not finished"  # and its sentence for a command that took too long

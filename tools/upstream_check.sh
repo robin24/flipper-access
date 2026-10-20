@@ -13,7 +13,7 @@
 # merge or the dry run is clean, 2 on conflicts, 1 on an error, an option without its value, a
 # remote that is missing and a fetch that fails included, each said in one sentence. Tested by tests/fbt/test_upstream_check.py. After a real merge, run
 # tools/strip_js_symbols.py and tools/subghz_manifest.py --verify-upstream, then the host tests
-# and a build; docs/device-notes.md has the whole routine under Merging Momentum.
+# and a build; docs/developer-notes.md has the whole routine under Merging Momentum.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 REPO="$ROOT/Momentum-Firmware"

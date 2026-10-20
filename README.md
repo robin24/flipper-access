@@ -25,8 +25,8 @@ stunned by the overwhelming, positive response from the Fedi community.
 
 Momentum's repository does not accept AI-written contributions, and the reader's memory needs would
 sit behind a build flag there in any case, so Sonar is a separate firmware rather than a pull
-request to Momentum. The specs, plans and build logs under `docs/` are the full record of how it was
-built. My reasoning for the separate firmware is in `docs/roadmap.md`, and `docs/README.md` is the
+request to Momentum. The specs and plans under `docs/` are the record of how it was built. My
+reasoning for the separate firmware is in `docs/roadmap.md`, and `docs/README.md` is the
 index of everything under `docs/`.
 
 ## What changed against Momentum
@@ -1185,7 +1185,7 @@ example, names one.
 
 The fork follows Momentum by merging Momentum's release tags into `screen-reader`, and it never
 rebases. Before a merge is attempted, `tools/upstream_check.sh` shows what it would meet. The
-whole routine, from the fetch to the tag, is under Merging Momentum in `docs/device-notes.md`.
+whole routine, from the fetch to the tag, is under Merging Momentum in `docs/developer-notes.md`.
 
 ## Supporting Sonar
 
