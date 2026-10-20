@@ -7,7 +7,7 @@ firmware writes its log when the Debug flag is on (sysctl debug 1) at the level 
 sysctl log_level. The crash handler prints its registers, thread and stack there before the
 reboot, which the USB console never sees. Lines are written with the Mac's time in front; the
 port is reopened when it disappears (the board re-enumerates when the Flipper reboots).
-Usage: nohup .venv/bin/python tools/uart_log.py docs/measurements/logs/<file>.txt &
+Usage: nohup .venv/bin/python tools/uart_log.py logs/<file>.txt &
 """
 import glob, sys, time
 import serial

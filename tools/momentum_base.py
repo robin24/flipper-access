@@ -4,7 +4,7 @@ test_subghz_manifest.py, and tools/subghz_manifest.py --verify-upstream.
 
 tools/momentum-base.txt pins it: the commit of the Momentum release last merged into the fork.
 The continuous build's checkout is shallow, so it fetches that one commit alone. After a merge
-from Momentum the pin becomes the merged tag's commit (docs/device-notes.md, Merging Momentum);
+from Momentum the pin becomes the merged tag's commit (docs/developer-notes.md, Merging Momentum);
 tests/fbt/test_momentum_base.py fails while the pin is not in the fork's history or is older
 than the merge base with upstream/dev, so a merge that leaves the old pin is noticed."""
 import os
