@@ -57,7 +57,7 @@ With the reader on:
 - **Opening:** one stop plus the count, at any verbosity, such as "1 of 23". A box with `TextBoxFocusStart` opens on the first stop. A box with `TextBoxFocusEnd` opens on the first stop of the newest complete line, or on the last stop if no line is complete.
 - **Afterwards:** position follows the Verbosity setting, as in menus. The Back and Up chord reads it at any time.
 - **Repeated lines:** moving by key onto an identical line still speaks it.
-- **Empty:** a box with no stops gives a note saying "Empty", so a console with no reply isn't silent. This gets checked on the device, and is dropped if it adds noise when a command starts.
+- **Empty:** a box that has had no stops for a second gives a note saying "Empty", so a console with no reply isn't silent. Said at once, it was noise on the device, heard before nearly every command's first line.
 
 New text doesn't move the reader. The model keeps the current stop's byte offset and its first 16 bytes. After `text_box_set_text`, the pass that counts the stops looks for the stop starting with those bytes at or before the old offset, nearest to it, because trimming only moves text towards the start. If none matches, the current stop becomes the first one, the oldest line still kept.
 
@@ -76,7 +76,7 @@ A box with `TextBoxFocusStart` never follows, and its stops are always marked li
 
 What this sounds like in Marauder:
 
-- `list -a`: the lines arrive almost together, so the command echo and then the last line, "3 selected", are likely to be heard. Up then walks back through the networks, one per press. `[4][CH:1] Example-Net -40` is heard as "four C H, one Example Net minus forty". View Log from start reads from the top instead.
+- `list -a`: the app opens this console at the top, so it doesn't follow. The command echo is heard, and Down then walks through the networks, one per press. `[4][CH:1] Example-Net -40` is heard as "four C H, one Example Net minus forty".
 - `select -a 4`: the reply is heard, such as "1 selected, 0 unselected".
 - `scanall`: about one line per 16 seconds is heard. The rest stay readable until the 4 KB limit discards them, and are in the log if saving is on.
 
