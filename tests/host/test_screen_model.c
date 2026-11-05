@@ -1280,6 +1280,259 @@ static void test_up_and_down_buttons(void) {
     CHECK_STR(text, "433.92 MHz. buttons: up Next, down Prev");
 }
 
+/** A string of a text box or a scrolling text, with its reading kind. */
+static void add_reading(
+    SrFrame* f,
+    int y,
+    uint8_t reading,
+    bool focus,
+    unsigned index,
+    unsigned count,
+    const char* text) {
+    add(f, 3, y, SrLayerWindow, SrFontSecondary, false, focus, index, count, text);
+    f->records[f->count - 1].reading = reading;
+}
+
+/** One frame of a text box showing one stop; returns how many announcements it gave. */
+static size_t process_stop(
+    SrModel* m,
+    uint8_t reading,
+    unsigned index,
+    unsigned count,
+    const char* text,
+    bool key,
+    SrAnnouncement* out) {
+    SrFrame f;
+    frame_init(&f, SrLayerWindow);
+    add_reading(&f, 11, reading, true, index, count, text);
+    return sr_model_process(m, &f, 1000, key, out, SR_MAX_ANNOUNCEMENTS);
+}
+
+static void test_join_with_space(void) {
+    SrFrame f;
+    SrScreen s;
+    frame_init(&f, SrLayerWindow);
+    add_reading(&f, 11, SrReadingStop, true, 1, 3, "With compatible");
+    add_reading(&f, 22, SrReadingStop, false, 0, 0, "marauder firmware");
+    f.records[f.count - 1].join = SrJoinSpace;
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 1);
+    CHECK(s.rows[0].kind == SrRowFocus);
+    CHECK_STR(s.rows[0].text, "With compatible marauder firmware");
+    CHECK(s.rows[0].index == 1);
+    CHECK(s.rows[0].count == 3);
+    CHECK(s.reading == SrReadingStop);
+}
+
+static void test_reading_opens_with_position(void) {
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    for(uint8_t verbosity = 0; verbosity <= 2; verbosity++) {
+        SrModel m;
+        sr_model_init(&m, verbosity);
+        size_t n = process_stop(&m, SrReadingLive, 1, 3, "one", false, out);
+        CHECK(n == 1);
+        CHECK(out[0].kind == SrAnnScreen);
+        CHECK_STR(out[0].text, "one, 1 of 3");
+    }
+}
+
+static void test_live_line_is_a_change(void) {
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrModel m;
+    sr_model_init(&m, 1);
+    process_stop(&m, SrReadingLive, 1, 3, "one", false, out);
+    size_t n = process_stop(&m, SrReadingLive, 2, 3, "two", false, out);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnChange);
+    CHECK(!out[0].interrupt);
+    CHECK_STR(out[0].text, "two");
+    // As after a burst of lines
+    n = process_stop(&m, SrReadingLive, 5, 5, "five", false, out);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnChange);
+    CHECK_STR(out[0].text, "five");
+}
+
+static void test_key_moves_are_focus(void) {
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrModel m;
+    sr_model_init(&m, 1);
+    process_stop(&m, SrReadingStop, 1, 3, "one", false, out);
+    size_t n = process_stop(&m, SrReadingStop, 2, 3, "two", true, out);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnFocus);
+    CHECK(out[0].interrupt);
+    CHECK_STR(out[0].text, "two");
+
+    sr_model_init(&m, 2);
+    process_stop(&m, SrReadingStop, 1, 3, "one", false, out);
+    n = process_stop(&m, SrReadingStop, 2, 3, "two", true, out);
+    CHECK(n == 1);
+    CHECK_STR(out[0].text, "two, 2 of 3");
+}
+
+static void test_quiet_while_reading_back(void) {
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrModel m;
+    sr_model_init(&m, 1);
+    process_stop(&m, SrReadingStop, 1, 3, "one", false, out);
+    CHECK(process_stop(&m, SrReadingStop, 1, 3, "two", false, out) == 0);
+}
+
+static void test_repeated_line(void) {
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrModel m;
+    sr_model_init(&m, 1);
+    process_stop(&m, SrReadingStop, 1, 3, "same", false, out);
+    size_t n = process_stop(&m, SrReadingStop, 2, 3, "same", true, out);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "same");
+    // Nowhere further to go: nothing to say
+    CHECK(process_stop(&m, SrReadingStop, 2, 3, "same", true, out) == 0);
+    // A new line the same as the one before isn't spoken again
+    process_stop(&m, SrReadingLive, 3, 3, "same", false, out);
+    CHECK(process_stop(&m, SrReadingLive, 4, 4, "same", false, out) == 0);
+}
+
+static void test_reading_is_not_a_keyboard(void) {
+    SrFrame f;
+    SrScreen s;
+    frame_init(&f, SrLayerWindow);
+    add_reading(&f, 11, SrReadingStop, true, 1, 2, "A1 B2 C3");
+    f.records[f.count - 1].font = SrFontKeyboard;
+    sr_screen_build(&f, &s);
+    CHECK(!s.on_keyboard);
+    CHECK(!s.has_keyboard);
+}
+
+static void test_reading_is_not_the_title(void) {
+    SrFrame f;
+    SrScreen s;
+    frame_init(&f, SrLayerWindow);
+    add_reading(&f, 10, SrReadingOpen, false, 0, 0, "Bold first line");
+    f.records[f.count - 1].font = SrFontPrimary;
+    add_reading(&f, 22, SrReadingOpen, false, 0, 0, "second line");
+    sr_screen_build(&f, &s);
+    CHECK(s.title_row == -1);
+    CHECK(s.reading == SrReadingOpen);
+}
+
+static void test_bare_prompt_stays(void) {
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrModel m;
+    sr_model_init(&m, 1);
+    size_t n = process_stop(&m, SrReadingStop, 2, 2, ">", false, out);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, ">, 2 of 2");
+
+    SrFrame f;
+    SrScreen s;
+    frame_init(&f, SrLayerWindow);
+    add(&f, 3, 30, SrLayerWindow, SrFontSecondary, false, false, 0, 0, ">");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 0);
+}
+
+/** A save prompt's opening, its text in rows, with its position and two buttons. */
+static void opening_frame(SrFrame* f, const char* const* rows, size_t row_count) {
+    frame_init(f, SrLayerWindow);
+    add(f, 0, 10, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Save pcaps?");
+    for(size_t i = 0; i < row_count; i++) {
+        add_reading(f, 22 + (int)i * 11, SrReadingOpen, false, 0, 0, rows[i]);
+    }
+    add_reading(f, 120, SrReadingPosition, false, 0, 0, "4 of 7");
+    add_button(f, 2, 63, 1, "No");
+    add_button(f, 90, 63, 3, "Yes");
+}
+
+static void test_opening_announcement(void) {
+    static const char* const rows[] = {"With compatible marauder", "firmware, you can choose to"};
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame f;
+    SrModel m;
+    sr_model_init(&m, 1);
+    opening_frame(&f, rows, 2);
+    size_t n = sr_model_process(&m, &f, 1000, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnScreen);
+    CHECK_STR(
+        out[0].text,
+        "Save pcaps?. With compatible marauder. firmware, you can choose to. 4 of 7. "
+        "buttons: left No, right Yes");
+}
+
+static void test_position_keeps_its_room(void) {
+    static const char* const rows[] = {
+        "aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aaaa aa",
+        "bbbb bbbb bbbb bbbb bbbb bbbb bbbb bbbb bbbb bb",
+        "cccc cccc cccc cccc cccc cccc cccc cccc cccc cc",
+        "dddd dddd dddd dddd dddd dddd dddd dddd dddd dd",
+    };
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame f;
+    SrModel m;
+    sr_model_init(&m, 1);
+    opening_frame(&f, rows, 4);
+    size_t n = sr_model_process(&m, &f, 1000, false, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    const char* ending = "4 of 7. buttons: left No, right Yes";
+    size_t length = strlen(out[0].text);
+    CHECK(length > strlen(ending));
+    CHECK_STR(out[0].text + length - strlen(ending), ending);
+}
+
+static void test_opening_is_a_new_screen(void) {
+    static const char* const rows[] = {"With compatible marauder"};
+    SrAnnouncement out[SR_MAX_ANNOUNCEMENTS];
+    SrFrame f;
+    SrModel m;
+    sr_model_init(&m, 1);
+    // A stop, then a new page's opening with the same buttons, on the same screen by its rows
+    frame_init(&f, SrLayerWindow);
+    add_reading(&f, 11, SrReadingStop, true, 5, 7, "one");
+    add_button(&f, 2, 63, 1, "No");
+    add_button(&f, 90, 63, 3, "Yes");
+    sr_model_process(&m, &f, 1000, false, out, SR_MAX_ANNOUNCEMENTS);
+    frame_init(&f, SrLayerWindow);
+    add_reading(&f, 11, SrReadingOpen, false, 0, 0, "new page");
+    add_button(&f, 2, 63, 1, "No");
+    add_button(&f, 90, 63, 3, "Yes");
+    size_t n = sr_model_process(&m, &f, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnScreen);
+    CHECK_STR(out[0].text, "new page. buttons: left No, right Yes");
+
+    // The opening, then a key: only the stop
+    sr_model_init(&m, 1);
+    opening_frame(&f, rows, 1);
+    sr_model_process(&m, &f, 1000, false, out, SR_MAX_ANNOUNCEMENTS);
+    frame_init(&f, SrLayerWindow);
+    add(&f, 0, 10, SrLayerWindow, SrFontPrimary, false, false, 0, 0, "Save pcaps?");
+    add_reading(&f, 22, SrReadingStop, true, 5, 7, "folder path");
+    add_button(&f, 2, 63, 1, "No");
+    add_button(&f, 90, 63, 3, "Yes");
+    n = sr_model_process(&m, &f, 1200, true, out, SR_MAX_ANNOUNCEMENTS);
+    CHECK(n == 1);
+    CHECK(out[0].kind == SrAnnFocus);
+    CHECK_STR(out[0].text, "folder path");
+}
+
+static void test_text_below_the_display(void) {
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+    frame_init(&f, SrLayerWindow);
+    add_reading(&f, 40, SrReadingOpen, false, 0, 0, "first");
+    add_button(&f, 90, 62, 3, "Yes");
+    add_reading(&f, 75, SrReadingOpen, false, 0, 0, "second");
+    f.records[f.count - 1].join = SrJoinSpace;
+    sr_screen_build(&f, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "first second. buttons: right Yes");
+}
+
 int main(void) {
     test_normalize();
     test_rows_join_and_sort();
@@ -1322,6 +1575,19 @@ int main(void) {
     test_joined_pieces_read_as_one_word();
     test_up_and_down_buttons();
     test_break_inside_word();
+    test_join_with_space();
+    test_reading_opens_with_position();
+    test_live_line_is_a_change();
+    test_key_moves_are_focus();
+    test_quiet_while_reading_back();
+    test_repeated_line();
+    test_reading_is_not_a_keyboard();
+    test_reading_is_not_the_title();
+    test_bare_prompt_stays();
+    test_opening_announcement();
+    test_position_keeps_its_room();
+    test_opening_is_a_new_screen();
+    test_text_below_the_display();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
