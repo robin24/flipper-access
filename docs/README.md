@@ -35,14 +35,11 @@ The designs, in `superpowers/specs/`:
   voice made with Kokoro, of which a release ships the one set heart, the eSpeak-NG backend for
   the sets users make, the install script, the continuous builds and the upstream merges.
 - `2026-11-05-text-screens-and-marauder-design.md`: reading text boxes and scrolling text one
-  line at a time, live console output, and the pronunciation and labels that WiFi Marauder needs.
+  line at a time, live console output, and the pronunciation that WiFi Marauder needs.
 
 ## Plans
 
 The implementation plans, task by task, in `superpowers/plans/`:
-
-- `2026-11-05-text-screens-and-marauder.md`: reading text boxes and scrolling text one line at a
-  time, live console output, and the pronunciation and labels that WiFi Marauder needs.
 
 - `2026-09-22-screen-reader-phase-1.md`: phase 1, text capture, the screen model and the console
   mirror, without audio.
@@ -60,6 +57,8 @@ The implementation plans, task by task, in `superpowers/plans/`:
   and eSpeak voices, and the pack tool.
 - `2026-10-09-publishing-plan-c.md`: publishing plan C, the install script, the release workflow,
   the public documents, the rehearsal and the first release.
+- `2026-11-05-text-screens-and-marauder.md`: reading text boxes and scrolling text one line at a
+  time, live console output, and the pronunciation that WiFi Marauder needs.
 
 ## Removed records
 

@@ -548,6 +548,43 @@ static void test_cursor_stays_on_what_down_reached(void) {
     CHECK(cursor.index == 2);
 }
 
+static void test_cursor_new_line_as_the_oldest_goes(void) {
+    // A console that drops a line for each it adds: the count stays, but a new line came
+    const char* text = "a\nb\nc\n> ";
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, text, &layout, true);
+    text_stops_cursor_step(&cursor, text, &layout, true, 1);
+    CHECK(cursor.index == 4);
+    text_stops_cursor_refresh(&cursor, "b\nc\nd\n> ", &layout, true);
+    CHECK(cursor.index == 3);
+    CHECK(cursor.offset == 4);
+    CHECK(cursor.following);
+    CHECK(cursor.live);
+}
+
+static void test_cursor_trimmed_while_following(void) {
+    // Marauder halves its store as a line arrives, in the middle of a line
+    const char* text = "one\ntwo\nthree\nfour\n";
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, text, &layout, true);
+    CHECK(cursor.index == 4);
+    text_stops_cursor_refresh(&cursor, "hree\nfour\nfive\n", &layout, true);
+    CHECK(cursor.count == 3);
+    CHECK(cursor.index == 3);
+    CHECK(cursor.offset == 10);
+    CHECK(cursor.following);
+    CHECK(cursor.live);
+
+    // The same, with the reader on the prompt past the newest line
+    text_stops_cursor_open(&cursor, list_text, &layout, true);
+    text_stops_cursor_step(&cursor, list_text, &layout, true, 1);
+    CHECK(cursor.index == 4);
+    text_stops_cursor_refresh(&cursor, "hree\n> x\nfive\n> ", &layout, true);
+    CHECK(cursor.index == 3);
+    CHECK(cursor.offset == 9);
+    CHECK(cursor.live);
+}
+
 static void test_opening_takes_save_prompt(void) {
     CHECK(text_stops_opening_takes(0, 0, 24));
     CHECK(text_stops_opening_takes(1, 24, 27));
@@ -628,6 +665,8 @@ int main(void) {
     test_cursor_shrinks_past_the_end();
     test_cursor_no_complete_line();
     test_cursor_stays_on_what_down_reached();
+    test_cursor_new_line_as_the_oldest_goes();
+    test_cursor_trimmed_while_following();
     test_opening_takes_save_prompt();
     test_opening_step();
     printf("%d checks, %d failures\n", checks, failures);
