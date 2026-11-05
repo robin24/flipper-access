@@ -311,6 +311,295 @@ static void test_group_row(void) {
     CHECK(text_stops_group_row(&rows, 3, false, &two_rows));
 }
 
+static const char list_text[] = "one\ntwo\nthree\n> ";
+
+static void test_cursor_open(void) {
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, list_text, &layout, false);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.count == 4);
+    CHECK(cursor.offset == 0);
+    CHECK(!cursor.following);
+    CHECK(cursor.live);
+
+    text_stops_cursor_open(&cursor, list_text, &layout, true);
+    CHECK(cursor.index == 3);
+    CHECK(cursor.count == 4);
+    CHECK(cursor.offset == 8);
+    CHECK(cursor.following);
+    CHECK(cursor.live);
+
+    text_stops_cursor_open(&cursor, "", &layout, false);
+    CHECK(cursor.index == 0);
+    CHECK(cursor.count == 0);
+    text_stops_cursor_open(&cursor, "", &layout, true);
+    CHECK(cursor.index == 0);
+    CHECK(cursor.count == 0);
+
+    // A long newest line opens on its first stop
+    text_stops_cursor_open(&cursor, twelve_words, &layout, true);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.count == 2);
+    CHECK(cursor.offset == 0);
+}
+
+static void test_cursor_step_and_following(void) {
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, list_text, &layout, true);
+    text_stops_cursor_step(&cursor, list_text, &layout, true, 1);
+    CHECK(cursor.index == 4);
+    CHECK(cursor.offset == 14);
+    CHECK(cursor.following);
+    CHECK(!cursor.live); // unfinished
+    text_stops_cursor_step(&cursor, list_text, &layout, true, -2);
+    CHECK(cursor.index == 2);
+    CHECK(cursor.offset == 4);
+    CHECK(!cursor.following);
+    CHECK(!cursor.live);
+    text_stops_cursor_step(&cursor, list_text, &layout, true, 1);
+    CHECK(cursor.index == 3);
+    CHECK(cursor.following);
+    CHECK(cursor.live);
+}
+
+static void test_cursor_step_clamps(void) {
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, list_text, &layout, false);
+    text_stops_cursor_step(&cursor, list_text, &layout, false, 100);
+    CHECK(cursor.index == 4);
+    CHECK(cursor.offset == 14);
+    text_stops_cursor_step(&cursor, list_text, &layout, false, -100);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.offset == 0);
+    text_stops_cursor_step(&cursor, list_text, &layout, false, 0);
+    CHECK(cursor.index == 1);
+    text_stops_cursor_open(&cursor, "", &layout, true);
+    text_stops_cursor_step(&cursor, "", &layout, true, 100);
+    CHECK(cursor.index == 0);
+    text_stops_cursor_step(&cursor, "", &layout, true, -100);
+    CHECK(cursor.index == 0);
+}
+
+static void test_cursor_follows_new_lines(void) {
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, list_text, &layout, true);
+    text_stops_cursor_refresh(&cursor, "one\ntwo\nthree\nfour\n> ", &layout, true);
+    CHECK(cursor.index == 4);
+    CHECK(cursor.count == 5);
+    CHECK(cursor.following);
+    CHECK(cursor.live);
+}
+
+static void test_cursor_stays_while_reading_back(void) {
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, list_text, &layout, true);
+    text_stops_cursor_step(&cursor, list_text, &layout, true, -1);
+    CHECK(cursor.index == 2);
+    text_stops_cursor_refresh(&cursor, "one\ntwo\nthree\nfour\nfive\n> ", &layout, true);
+    CHECK(cursor.offset == 4);
+    CHECK(cursor.index == 2);
+    CHECK(cursor.count == 6);
+    CHECK(!cursor.following);
+    CHECK(!cursor.live);
+}
+
+static void test_cursor_after_trimming(void) {
+    const char* text = "one\ntwo\nthree\nfour\n";
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, text, &layout, true);
+    text_stops_cursor_step(&cursor, text, &layout, true, -1);
+    text_stops_cursor_refresh(&cursor, "three\nfour\n", &layout, true);
+    CHECK(cursor.offset == 0);
+    CHECK(cursor.index == 1);
+    CHECK(!cursor.following);
+
+    text_stops_cursor_open(&cursor, text, &layout, true);
+    text_stops_cursor_step(&cursor, text, &layout, true, -2);
+    text_stops_cursor_refresh(&cursor, "wo\nthree\nfour\n", &layout, true);
+    CHECK(cursor.offset == 0);
+    CHECK(cursor.index == 1);
+    CHECK(!cursor.following);
+    CHECK(!cursor.live);
+}
+
+static void test_cursor_matches_exactly(void) {
+    TextStopsCursor cursor;
+    // A complete line is not found in a longer one that starts the same
+    text_stops_cursor_open(&cursor, "x\na\nabc\n", &layout, false);
+    text_stops_cursor_step(&cursor, "x\na\nabc\n", &layout, false, 1);
+    CHECK(cursor.offset == 2);
+    text_stops_cursor_refresh(&cursor, "x\nabc\n", &layout, false);
+    CHECK(cursor.offset == 0);
+    CHECK(cursor.index == 1);
+
+    // Among identical lines, the one nearest at or before the old place
+    text_stops_cursor_open(&cursor, "same\nsame\nsame\n", &layout, false);
+    text_stops_cursor_step(&cursor, "same\nsame\nsame\n", &layout, false, 1);
+    text_stops_cursor_refresh(&cursor, "same\nsame\nsame\nsame\n", &layout, false);
+    CHECK(cursor.offset == 5);
+    CHECK(cursor.index == 2);
+
+    // An unfinished line may grow
+    text_stops_cursor_open(&cursor, "one\nSca", &layout, false);
+    text_stops_cursor_step(&cursor, "one\nSca", &layout, false, 1);
+    text_stops_cursor_refresh(&cursor, "one\nScanning\n", &layout, false);
+    CHECK(cursor.offset == 4);
+    CHECK(cursor.index == 2);
+
+    // A line longer than the anchor matches by the anchor
+    const char* long_line = "abcdefghijklmnopqrstuvwxyz\none\n";
+    text_stops_cursor_open(&cursor, long_line, &layout, false);
+    text_stops_cursor_refresh(&cursor, "abcdefghijklmnopqrstuvwxyz\none\ntwo\n", &layout, false);
+    CHECK(cursor.offset == 0);
+    CHECK(cursor.index == 1);
+}
+
+static void test_cursor_replaced_text(void) {
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, list_text, &layout, false);
+    text_stops_cursor_step(&cursor, list_text, &layout, false, 1);
+    text_stops_cursor_refresh(&cursor, "new text", &layout, false);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.offset == 0);
+    CHECK(cursor.count == 1);
+    CHECK(cursor.live);
+}
+
+static void test_cursor_shrinks_past_the_end(void) {
+    char text[201];
+    memset(text, 'a', sizeof(text) - 1);
+    text[200] = '\0';
+    for(size_t i = 10; i < 200; i += 11)
+        text[i] = '\n';
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, text, &layout, false);
+    text_stops_cursor_step(&cursor, text, &layout, false, 1000);
+    CHECK(cursor.offset > 100);
+    text_stops_cursor_refresh(&cursor, "", &layout, false);
+    CHECK(cursor.index == 0);
+    CHECK(cursor.count == 0);
+    CHECK(cursor.offset == 0);
+
+    text_stops_cursor_step(&cursor, text, &layout, false, 0);
+    text_stops_cursor_refresh(&cursor, text, &layout, false);
+    text_stops_cursor_step(&cursor, text, &layout, false, 1000);
+    text_stops_cursor_refresh(&cursor, "one\n", &layout, false);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.offset == 0);
+
+    // Following, the text is reset for a new command
+    text_stops_cursor_open(&cursor, text, &layout, true);
+    text_stops_cursor_refresh(&cursor, "", &layout, true);
+    CHECK(cursor.index == 0);
+    CHECK(cursor.following);
+    text_stops_cursor_refresh(&cursor, "#list\n", &layout, true);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.live);
+    // A step queued against text that has shrunk stays inside it
+    text_stops_cursor_step(&cursor, "#list\n", &layout, true, -100);
+    CHECK(cursor.index == 1);
+}
+
+static void test_cursor_no_complete_line(void) {
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, "Sca", &layout, true);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.following);
+    CHECK(!cursor.live);
+    text_stops_cursor_refresh(&cursor, "Scan", &layout, true);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.following);
+    CHECK(!cursor.live);
+    text_stops_cursor_refresh(&cursor, "Scan\n", &layout, true);
+    CHECK(cursor.index == 1);
+    CHECK(cursor.following);
+    CHECK(cursor.live);
+}
+
+static void test_cursor_stays_on_what_down_reached(void) {
+    // Apps refresh with the same text: Down still reaches the unfinished line and stays there
+    TextStopsCursor cursor;
+    text_stops_cursor_open(&cursor, list_text, &layout, true);
+    text_stops_cursor_step(&cursor, list_text, &layout, true, 1);
+    CHECK(cursor.index == 4);
+    text_stops_cursor_refresh(&cursor, list_text, &layout, true);
+    CHECK(cursor.index == 4);
+    CHECK(cursor.following);
+    CHECK(!cursor.live);
+    // It grows
+    text_stops_cursor_refresh(&cursor, "one\ntwo\nthree\n> x", &layout, true);
+    CHECK(cursor.index == 4);
+    CHECK(!cursor.live);
+    // It is finished: the newest complete line now, spoken
+    text_stops_cursor_refresh(&cursor, "one\ntwo\nthree\n> x\n", &layout, true);
+    CHECK(cursor.index == 4);
+    CHECK(cursor.live);
+    // A new line takes the reader along
+    text_stops_cursor_step(&cursor, "one\ntwo\nthree\n> x\n", &layout, true, 0);
+    text_stops_cursor_refresh(&cursor, "one\ntwo\nthree\n> x\nfive\n", &layout, true);
+    CHECK(cursor.index == 5);
+
+    // The second stop of a long newest line, the same
+    text_stops_cursor_open(&cursor, twelve_words, &layout, true);
+    text_stops_cursor_step(&cursor, twelve_words, &layout, true, 1);
+    CHECK(cursor.index == 2);
+    CHECK(cursor.following);
+    text_stops_cursor_refresh(&cursor, twelve_words, &layout, true);
+    CHECK(cursor.index == 2);
+}
+
+static void test_opening_takes_save_prompt(void) {
+    CHECK(text_stops_opening_takes(0, 0, 24));
+    CHECK(text_stops_opening_takes(1, 24, 27));
+    CHECK(text_stops_opening_takes(2, 51, 28));
+    CHECK(text_stops_opening_takes(3, 79, 21));
+    CHECK(!text_stops_opening_takes(4, 100, 30));
+    // The first stop is always taken
+    CHECK(text_stops_opening_takes(0, 0, 150));
+}
+
+static void test_opening_step(void) {
+    bool opening = true;
+    uint16_t current = 0;
+    text_stops_opening_step(&opening, &current, 4, 7, 1);
+    CHECK(!opening);
+    CHECK(current == 5);
+
+    opening = true;
+    current = 0;
+    text_stops_opening_step(&opening, &current, 4, 7, -1);
+    CHECK(!opening);
+    CHECK(current == 4);
+
+    opening = true;
+    current = 0;
+    text_stops_opening_step(&opening, &current, 1, 1, 1);
+    CHECK(opening);
+    text_stops_opening_step(&opening, &current, 1, 1, -1);
+    CHECK(!opening);
+    CHECK(current == 1);
+
+    opening = false;
+    current = 5;
+    text_stops_opening_step(&opening, &current, 4, 7, -1);
+    CHECK(current == 4);
+    current = 1;
+    text_stops_opening_step(&opening, &current, 4, 7, -1);
+    CHECK(current == 1);
+    current = 7;
+    text_stops_opening_step(&opening, &current, 4, 7, 1);
+    CHECK(current == 7);
+
+    // No stops at all: nothing to move to, and it stays the opening
+    opening = true;
+    current = 0;
+    text_stops_opening_step(&opening, &current, 0, 0, 1);
+    CHECK(opening);
+    text_stops_opening_step(&opening, &current, 0, 0, -1);
+    CHECK(opening);
+    CHECK(current == 0);
+}
+
 int main(void) {
     test_row_breaks_at_space();
     test_row_exact_fit();
@@ -328,6 +617,19 @@ int main(void) {
     test_stop_ends_before_a_silent_rest();
     test_prev_within_a_long_line();
     test_group_row();
+    test_cursor_open();
+    test_cursor_step_and_following();
+    test_cursor_step_clamps();
+    test_cursor_follows_new_lines();
+    test_cursor_stays_while_reading_back();
+    test_cursor_after_trimming();
+    test_cursor_matches_exactly();
+    test_cursor_replaced_text();
+    test_cursor_shrinks_past_the_end();
+    test_cursor_no_complete_line();
+    test_cursor_stays_on_what_down_reached();
+    test_opening_takes_save_prompt();
+    test_opening_step();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
