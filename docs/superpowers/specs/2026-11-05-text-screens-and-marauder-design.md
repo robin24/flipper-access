@@ -38,7 +38,7 @@ Proposed and dropped by Robin's decision: separate list screens, a scan summary,
 
 A stop is the unit that Up and Down move by and that the reader speaks. Stops are built from rows.
 
-- A row is what fits on one line of the display. With the reader on, a row breaks at the last space that fits. A word too long for the width breaks at the width. A row also ends at 60 characters.
+- A row is what fits on one line of the display. With the reader on, a row breaks at the last space that fits. A word too long for the width breaks at the width. A row also ends at 47 characters, the most one tapped string holds.
 - A stop is the rows of one printed line, up to 60 characters and no more rows than the display holds. A longer line becomes several stops, split at a row boundary.
 - Blank lines, and lines of only spaces or dashes, are not stops, because there is nothing to say. They stay on the display in their place, and they don't count in the position.
 - A line is complete when it ends in a newline.
@@ -99,7 +99,7 @@ A save prompt then opens as "Save pcaps? With compatible marauder. firmware, you
 
 - **New hint:** a firmware-only `canvas_tap_hint_reading(canvas, kind)` marks the next string or note, with the kinds stop, live and opening. The kind is carried in a new byte in `CanvasTapRecord` and `SrRecord`, and appears as `SrScreen.reading`.
 - **New join:** `CANVAS_TAP_JOIN_SPACE` and `SrJoinSpace` join a row with one space, because `sr_normalize` strips the space at a break.
-- **`sr_screen_build`:** a reading row is never the title. A reading screen is never a keyboard, so `has_keyboard` and `on_keyboard` stay false even when the text uses the keyboard font. `sr_is_arrow_token` doesn't drop a reading string.
+- **`sr_screen_build`:** a reading row is never the title. A reading screen is never a keyboard, so `has_keyboard` and `on_keyboard` stay false even when the text uses the keyboard font. `sr_is_arrow_token` doesn't drop a reading string. Buttons sort after all other rows, so text reported below the display still follows the text above it.
 - **`sr_screen_changed`:** after the layer, content and title checks, opening text after anything other than opening text is a new screen. A reading screen after a reading screen is otherwise the same screen. Two screens of opening text follow the existing rule about kept rows.
 - **`sr_screen_announcement`:** a reading screen's focus row always carries its position. Opening text's position note keeps its room in the announcement, as the buttons do.
 - **`sr_model_process`, on a reading screen after a reading screen:**
@@ -177,5 +177,5 @@ The crash recorded in `sr status` before this work points to an interrupt handle
 
 - **Firmware:** a pull request on the fork into `screen-reader`, then a pull request in the project to update the submodule pointer.
 - **Compatibility:** no new functions are exported to apps, so existing apps need no rebuild and improve after a flash. Only Marauder is rebuilt, for its labels.
-- **Docs:** the README's "Using it on the device" gets a section on reading text screens and on Marauder. `CHANGELOG.md` and the docs index are updated.
+- **Docs:** the README's "Using it on the device" gets a section on reading text screens and on Marauder. The docs index lists the spec and the plan. `CHANGELOG.md` only changes at a release.
 - **Public repo content:** tests and docs use made-up network names, and no records of Robin's device go in the repo.

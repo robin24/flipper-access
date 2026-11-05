@@ -41,6 +41,9 @@ The designs, in `superpowers/specs/`:
 
 The implementation plans, task by task, in `superpowers/plans/`:
 
+- `2026-11-05-text-screens-and-marauder.md`: reading text boxes and scrolling text one line at a
+  time, live console output, and the pronunciation and labels that WiFi Marauder needs.
+
 - `2026-09-22-screen-reader-phase-1.md`: phase 1, text capture, the screen model and the console
   mirror, without audio.
 - `2026-09-23-screen-reader-phase-2-speech.md`: phase 2, speech through the device's own speaker
