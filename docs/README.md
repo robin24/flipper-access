@@ -34,6 +34,8 @@ The designs, in `superpowers/specs/`:
 - `2026-09-26-github-release-design.md`: publishing: the two repositories, the first release, the
   voice made with Kokoro, of which a release ships the one set heart, the eSpeak-NG backend for
   the sets users make, the install script, the continuous builds and the upstream merges.
+- `2026-11-05-text-screens-and-marauder-design.md`: reading text boxes and scrolling text one
+  line at a time, live console output, and the pronunciation and labels that WiFi Marauder needs.
 
 ## Plans
 
