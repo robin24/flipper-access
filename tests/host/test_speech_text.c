@@ -328,11 +328,11 @@ static void test_rule11_minus(void) {
     expect("TX power -10dBm", "T X power minus ten dee bee em");
     expect("-", "dash");
     expect("- 90", "ninety");
-    expect("Ch-3", "Ch three");
+    expect("Ch-3", "C H three");
     expect("(-5)", "minus five");
     expect("-0.5", "minus zero point five");
     expect("-5-3", "minus five to three");
-    expect("a -b", "a b");
+    expect("a -b", "a dash b");
     expect("RSSI: -70", "R S S I, minus seventy");
 }
 
@@ -589,6 +589,64 @@ static void test_spell_copy(void) {
     CHECK(speech_text_spell_copy("Apps", NULL, 0) == 0);
 }
 
+static void test_marauder_words(void) {
+    // MAC addresses, pair by pair
+    expect("a0:1b:2c:3d:4e:5f", "ay zero, one B, two C, three D, four E, five F");
+    expect("A0:1B:2C:3D:4E:60", "ay zero, one B, two C, three D, four E, six zero");
+    expect("BSSID: a0:1b:2c:3d:4e:5f", "B S S I D, ay zero, one B, two C, three D, four E, five F");
+    expect(
+        "-84 Ch: 2 a0:1b:2c:3d:4e:5f ESSID: Example-Net 31 14",
+        "minus eighty four C H, two ay zero, one B, two C, three D, four E, five F "
+        "E S S I D, Example Net thirty one fourteen");
+    expect("12:34", "twelve thirty four");
+    expect("12:34:56", "twelve thirty four fifty six");
+    // Stop words
+    expect("[+] ADD ITEM", "plus ADD ITEM");
+    expect("ITEMS", "ITEMS");
+    expect("STAGE", "STAGE");
+    expect("TRUE", "TRUE");
+    expect("FALSE", "FALSE");
+    expect("WRITE", "WRITE");
+    expect("BEGIN", "BEGIN");
+    expect("CLOSE", "CLOSE");
+    // Abbreviations
+    expect("list -a", "list dash a");
+    expect("ap", "ay P");
+    expect("ssid", "S S I D");
+    expect("sta", "S T ay");
+    expect("rssi", "R S S I");
+    expect("Ch: 6", "C H, six");
+    expect("pmkid", "P M K I D");
+    expect("bt", "B T");
+    expect("sd", "S D");
+    expect("dns", "D N S");
+    expect("ssh", "S S H");
+    expect("http", "H T T P");
+    expect("https", "H T T P S");
+    expect("smtp", "S M T P");
+    expect("rdp", "R D P");
+    expect("csa", "C S ay");
+    expect("sae", "S ay E");
+    // Joined words
+    expect("stopscan", "stop scan");
+    expect("scanall", "scan all");
+    expect("pcaps", "pea caps");
+    expect("ForcePMKID", "Force P M K I D");
+    expect("ForceProbe", "Force Probe");
+    expect("SavePCAP", "Save pea cap");
+    expect("EnableLED", "Enable L E D");
+    expect("EPDeauth", "E P dee auth");
+    // Dash and hash
+    expect("select -a 4", "select dash a four");
+    expect("-40", "minus forty");
+    expect("- 90", "ninety");
+    expect("#list", "hash list");
+    expect("#1", "number one");
+    expect("#", "number");
+    // The index first in a list row
+    expect("[4][CH:1] Example-Net -40", "four C H, one Example Net minus forty");
+}
+
 int main(void) {
     test_words_and_numbers();
     test_acronyms_and_terms();
@@ -611,6 +669,7 @@ int main(void) {
     test_cut_after_a_whole_word();
     test_beyond_the_rule_list();
     test_spell_copy();
+    test_marauder_words();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
