@@ -15,7 +15,7 @@ The work is right when:
 - Scrolling text in dialogs and info screens is read in whole words, and a short screen sounds the same as today apart from that.
 - Every button and word in Marauder's screens can be named or pronounced recognisably.
 - Other apps using the same modules gain from this and none gets worse.
-- With the reader off, everything behaves exactly as today, except for two button labels in Marauder's log viewer (section 8).
+- With the reader off, everything behaves exactly as today.
 
 Proposed and dropped by Robin's decision: separate list screens, a scan summary, composed commands and renamed menus. A flow problem found during this work is reported to Robin rather than changed.
 
@@ -110,9 +110,9 @@ A save prompt then opens as "Save pcaps? With compatible marauder. firmware, you
 
 The Change delay, the replacing of a waiting change, and the key-recent window work as they do now.
 
-## 8. Marauder's log viewer
+## 8. Buttons with no label
 
-This is the only change in the app, in `wifi_marauder_scene_log_viewer.c`. On middle pages, Left and center have empty labels, so the reader can't name them. They become "Prev" and "Browse". Those are the only changes visible with the reader off. A page boundary can still cut a line in two, and the file name stays unspoken, because the screen doesn't show it either.
+On the middle pages of Marauder's log viewer, Left and center are drawn with no label, so the reader can't name them. Marauder's source is in upstream's Momentum-Apps repository, which the fork only pins, so by Robin's decision of 2026-11-05 the app stays as upstream ships it. Instead, the reader says "button" for any button drawn with no label, in any app, as in "buttons: left button, center button, right 2/3". Nothing changes on the display. A page boundary can still cut a line in two, and the file name stays unspoken, because the screen doesn't show it either.
 
 ## 9. Pronunciation
 
@@ -176,6 +176,6 @@ The crash recorded in `sr status` before this work points to an interrupt handle
 ## 12. Delivery
 
 - **Firmware:** a pull request on the fork into `screen-reader`, then a pull request in the project to update the submodule pointer.
-- **Compatibility:** no new functions are exported to apps, so existing apps need no rebuild and improve after a flash. Only Marauder is rebuilt, for its labels.
+- **Compatibility:** no new functions are exported to apps, so existing apps need no rebuild and improve after a flash.
 - **Docs:** the README's "Using it on the device" gets a section on reading text screens and on Marauder. The docs index lists the spec and the plan. `CHANGELOG.md` only changes at a release.
 - **Public repo content:** tests and docs use made-up network names, and no records of Robin's device go in the repo.

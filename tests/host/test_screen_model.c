@@ -1533,6 +1533,27 @@ static void test_text_below_the_display(void) {
     CHECK_STR(text, "first second. buttons: right Yes");
 }
 
+static void test_unnamed_button(void) {
+    // A button drawn with no label, an arrow alone, is still a button that does something
+    SrFrame f;
+    SrScreen s;
+    char text[SR_ANN_TEXT_MAX];
+    frame_init(&f, SrLayerWindow);
+    add(&f, 3, 20, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "Some text");
+    add_button(&f, 2, 63, 1, "");
+    add_button(&f, 50, 63, 2, "");
+    add_button(&f, 90, 63, 3, "2/3");
+    sr_screen_build(&f, &s);
+    sr_screen_describe(&s, text, sizeof(text));
+    CHECK_STR(text, "Some text. buttons: left button, center button, right 2/3");
+
+    // Empty text without a button hint is still nothing
+    frame_init(&f, SrLayerWindow);
+    add(&f, 3, 20, SrLayerWindow, SrFontSecondary, false, false, 0, 0, "");
+    sr_screen_build(&f, &s);
+    CHECK(s.row_count == 0);
+}
+
 int main(void) {
     test_normalize();
     test_rows_join_and_sort();
@@ -1588,6 +1609,7 @@ int main(void) {
     test_position_keeps_its_room();
     test_opening_is_a_new_screen();
     test_text_below_the_display();
+    test_unnamed_button();
     printf("%d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }

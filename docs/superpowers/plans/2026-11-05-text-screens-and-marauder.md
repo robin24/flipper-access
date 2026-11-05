@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - The app's flows don't change. A flow problem is reported to Robin, not fixed.
-- With the reader off, behaviour is today's, except for the log viewer's "Prev" and "Browse" on middle pages.
+- With the reader off, behaviour is today's.
 - No new functions are exported in the SDK, and `targets/f7/api_symbols.csv` must not change. New hints go in `canvas_i.h`.
 - Every network name and address in a committed file is made up: `Example-Net`, `Other-Net`, `a0:1b:2c:3d:4e:5f`. Nothing from Robin's environment goes in the repo, and no session or device records either.
 - Check the image with `tools/flash_headroom.sh` before every flash. The limit is 880,640 bytes, and 8,428 are spare today. If it doesn't fit, stop and tell Robin.
@@ -662,18 +662,21 @@ git -C /Users/robin/Downloads/flipper-access/Momentum-Firmware commit -m "With t
 
 The commit message ends with the attribution line.
 
-### Task 7: The log viewer's labels and the whole run
+### Task 7: Unnamed buttons and the whole run
+
+Marauder's source is in `applications/external`, a pin of upstream's Momentum-Apps, so by Robin's decision of 2026-11-05 the app stays as it is and the reader names an unnamed button.
 
 **Files:**
-- Modify: `Momentum-Firmware/applications/external/wifi_marauder_companion/scenes/wifi_marauder_scene_log_viewer.c:64-97`
+- Modify: `Momentum-Firmware/applications/services/screen_reader/screen_model.c`
+- Test: `tests/host/test_screen_model.c`
 
 **Interfaces:**
 - Consumes: the firmware from Tasks 1 to 6.
-- Produces: the app with its labels.
+- Produces: no API change.
 
-- [ ] **Step 1: Label the middle page buttons**
+- [ ] **Step 1: Name an unnamed button, test first**
 
-In `wifi_marauder_scene_log_viewer_setup_widget`, the center button is "Browse" on every page, and the two conditional `""` labels go: the Left button's `""` on middle pages becomes "Prev". The page counter stays where it is, on Left on the last page and on Right otherwise.
+`test_unnamed_button`: "Some text" with buttons left "", center "" and right "2/3" describes as "Some text. buttons: left button, center button, right 2/3", and empty text without a button hint gives no row. In `sr_screen_build`, a record with a button hint and empty text gets the text "button".
 
 - [ ] **Step 2: Build everything, check the size, flash the firmware with its resources**
 
@@ -722,11 +725,13 @@ Hand back after each short batch and wait for Robin's answer:
 - [ ] **Step 6: Commit**
 
 ```bash
-git -C /Users/robin/Downloads/flipper-access/Momentum-Firmware add applications/external/wifi_marauder_companion/scenes/wifi_marauder_scene_log_viewer.c
-git -C /Users/robin/Downloads/flipper-access/Momentum-Firmware commit -m "Marauder's log viewer names its middle page buttons, Prev and Browse, so the reader can say them"
+git -C /Users/robin/Downloads/flipper-access/Momentum-Firmware add applications/services/screen_reader/screen_model.c
+git -C /Users/robin/Downloads/flipper-access/Momentum-Firmware commit -m "The reader says button for a button drawn with no label"
+git -C /Users/robin/Downloads/flipper-access add tests/host/test_screen_model.c docs/superpowers/specs/2026-11-05-text-screens-and-marauder-design.md docs/superpowers/plans/2026-11-05-text-screens-and-marauder.md
+git -C /Users/robin/Downloads/flipper-access commit -m "The host tests cover an unnamed button, and the spec and plan say the app stays as upstream ships it"
 ```
 
-The commit message ends with the attribution line.
+Both commit messages end with the attribution line.
 
 ### Task 8: Docs and delivery
 
