@@ -1,6 +1,7 @@
 #!/bin/bash
 # Build and run the host tests for the screen reader with clang: the screen model, the speech
-# helpers, the chords and the throttle; Momentum's settings file, which saves nothing before it
+# helpers, the chords and the throttle; the text stops the text box and scrolling text read by;
+# Momentum's settings file, which saves nothing before it
 # was loaded from the card; the desktop's slideshow view, drawn before its enter and after its
 # exit; tests/host/tar_unpack.c, the firmware's tar reader
 # unpacking as the device does, for the voice pack check; and tests/host/voice_words.c, the words
@@ -104,6 +105,17 @@ if ! "$OUT/test_sr_throttle" > "$OUT/sr_throttle.txt"; then
   exit 1
 fi
 echo "throttle: $(tail -n 1 "$OUT/sr_throttle.txt")"
+
+GUI_MODULES="$ROOT/Momentum-Firmware/applications/services/gui/modules"
+clang "${CFLAGS[@]}" -fsanitize=address,undefined -fno-sanitize-recover=all \
+  -I "$GUI_MODULES" -o "$OUT/test_text_stops" \
+  "$TESTS/test_text_stops.c" "$GUI_MODULES/text_stops.c"
+if ! "$OUT/test_text_stops" > "$OUT/text_stops.txt"; then
+  cat "$OUT/text_stops.txt"
+  echo "text stops checks failed"
+  exit 1
+fi
+echo "text stops: $(tail -n 1 "$OUT/text_stops.txt")"
 
 # Momentum's settings file, lib/momentum/settings.c, against the stand-ins in tests/host/stubs.
 # -fshort-enums as the firmware's arm-none-eabi compiler has it by default: a colour setting is

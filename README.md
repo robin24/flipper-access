@@ -69,6 +69,9 @@ Changed:
   release, while it has no picture loaded, which crashed some boots after an update.
 - `./fbt flash_usb_full` also works on a blank card, whose console lacks the loader command, a
   plugin on the card, that the flash used to close the running app first.
+- With the reader on, text boxes and scrolling text wrap at spaces instead of inside words, and
+  Up and Down move one printed line at a time instead of one row of the display. With the reader
+  off they behave as in Momentum.
 
 The removals were made so that Sub-GHz works with the reader on. It is built into the firmware
 again, not loaded from the card, and no longer crashes the device out of memory.
@@ -735,6 +738,56 @@ name, and Send transmits the recording; holding OK sends it again and again. Bac
 RAW; with a recording not saved it first asks "Discard Signals?", with Continue on Left and Stay
 on Right.
 
+### Text boxes and scrolling text
+
+Long text comes in two kinds of screen, and both read by whole lines as the app printed them,
+in whole words. With the reader on, the display wraps at spaces too. A line of more than about 60
+characters takes several presses. Blank lines, and lines of only dashes, are skipped and aren't
+counted.
+
+A text box fills the screen, and it's what consoles use. It opens with one line and how many there
+are, such as "1 of 23", at any verbosity. Up and Down then read one line per press. After opening,
+the position follows the Verbosity setting, and the chord Back with Up reads it at any time. A
+text box that stays without text for a second says "Empty".
+
+A text box that opens at its end follows new output while you're on its newest finished line. Each
+new line is said as a change on the same screen, so the Change delay applies, the newest line wins
+and nothing is cut off. A line still arriving isn't said, but Down reaches it. Up stops following,
+and the box stays quiet while you read. Down back to the newest line starts following again. A new
+line the same as the one before isn't said again.
+
+Scrolling text shares its screen with a title or buttons, as in an NFC card's Info. It opens with
+as many whole lines as fit, and if more remain, your position before the buttons, such as "4 of
+7". Down reads the next line you haven't heard, and Up reads the last one you heard, alone. From
+then on they move one line at a time.
+
+A button drawn with only an arrow and no label is said as "button", as in "left button".
+
+### WiFi Marauder
+
+The `[ESP32] WiFi Marauder` app works with a WiFi Dev Board. Its screens and steps are as they
+are for everyone, so you type an index to select a target. Its menus read as any other, and its
+consoles and log pages as under Text boxes and scrolling text. MAC addresses are spelled pair by
+pair, and a hidden network shows its MAC address as its name.
+
+List ap opens at the top of its console, with the command and a count, such as "hash list dash a,
+1 of 15". Down then reads one network per press. `[4][CH:1] Example-Net -40` is heard as "four C
+H, one Example Net minus forty": the first number is the index to type, then the channel, the
+name and the signal.
+
+Select ap opens a keyboard that already holds `select -a`. Type the index and choose Save. The
+reply is said, such as "1 selected, 0 unselected". AP Info works the same way, with the index of
+one network, and Up reads its lines back from Security to ESSID.
+
+Scan all follows its output. Speech can't keep up with a busy scan: a line takes about 16 seconds
+to say, so you hear about one line in that time and the rest are skipped. Up reads back what's
+still kept, about the last 4 KB, and with saving on, the log has it all. Back stops the scan.
+
+View Log from start shows a log 4 KB at a time. Right turns to the next page and Left to the one
+before, and each page reads its opening again. A page's end can cut a line in two. On middle pages
+the Left and center buttons have no labels, so they're said as "left button" and "center button":
+Left goes to the page before, and center is Browse, as it's labelled on the first and last pages.
+
 ### The file browser's menus
 
 Down on the home screen opens the file browser, which Momentum calls Archive. Left and Right
@@ -1057,6 +1110,8 @@ resends everything.
   nothing. After a card is formatted on the Flipper, the settings in use are written to it with
   the next change.
 - After a PIN unlock, "Unlocked" and "Home screen" may come in the other order.
+- Speech can't keep up with a console that prints quickly, such as a WiFi Marauder scan. Up reads
+  back what the app still keeps, about the last 4 KB in Marauder.
 - Twice, after a long idle, the first OK that the scripted driver `tools/sr_drive.py` sent on the
   home screen opened the lock menu instead of the main menu. It has not been reproduced since and
   is not explained. Up, not OK, is the default key for the lock menu. Back closes it.

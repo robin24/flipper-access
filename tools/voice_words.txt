@@ -118,3 +118,7 @@ locked
 unlocked
 digits
 quickly
+hash
+targets
+tran
+ssids
